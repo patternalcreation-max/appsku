@@ -4,16 +4,16 @@
   "sourceURL": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/apps-ddg.json",
   "apps": [
     {
-      "name": "DDG MARKED 043",
-      "bundleIdentifier": "com.duckduckgo.mobile.ios",
+      "name": "DDG LITE 044",
+      "bundleIdentifier": "com.patternalcreation.ddglite044",
       "developerName": "patternalcreation-max / DuckDuckGo OSS",
-      "subtitle": "Marked DuckDuckGo unsigned baseline; no Agent patch",
-      "localizedDescription": "Marked unsigned DuckDuckGo iOS baseline from duckduckgo/apple-browsers tag 7.210.0+ios. No native Agent, no probe, no overlay. Display name and version are changed for device-side cache/signing/crash isolation.",
-      "version": "7.210.0-marked.4.3",
+      "subtitle": "Lite marked DDG baseline without extensions",
+      "localizedDescription": "Lite unsigned DuckDuckGo iOS baseline from duckduckgo/apple-browsers tag 7.210.0+ios. No Agent/probe and embedded PlugIns/extensions stripped from IPA. Custom bundle ID for cache/signing isolation.",
+      "version": "7.210.0-lite.4.4",
       "versionDate": "2026-07-29",
-      "versionDescription": "Marked baseline: CFBundleDisplayName=DDG MARKED 043, CFBundleShortVersionString=7.210.0-marked.4.3, build=43. No Agent/probe strings in binary. Xcode 16.4, iPhoneOS SDK 18.5, min iOS 15.0.",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/ddg-v0.4.3/DDG-SUPER.ipa",
-      "size": 155922247,
+      "versionDescription": "Lite isolation build: display=DDG LITE 044, bundle=com.patternalcreation.ddglite044, build=44, PlugIns stripped, no Agent/probe. Xcode 16.4, iPhoneOS SDK 18.5, min iOS 15.0.",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/ddg-v0.4.4/DDG-SUPER.ipa",
+      "size": 106826159,
       "minOSVersion": "15.0"
     }
   ]
