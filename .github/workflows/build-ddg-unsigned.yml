@@ -22,8 +22,10 @@ jobs:
       - name: Clone DuckDuckGo Apple Browsers
         run: |
           set -euxo pipefail
-          git clone --depth 1 https://github.com/duckduckgo/apple-browsers.git ddg
+          DDG_IOS_TAG="7.210.0+ios"
+          git clone --depth 1 --branch "$DDG_IOS_TAG" https://github.com/duckduckgo/apple-browsers.git ddg
           cd ddg
+          echo "DDG upstream tag: $DDG_IOS_TAG"
           git submodule update --init --recursive || true
           git status --short
 
