@@ -3,12 +3,11 @@ name: k3-calculator
 options:
   bundleIdPrefix: com.k3
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "15.0"
 
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
 
 targets:
   k3-calculator:
@@ -32,4 +31,9 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_CFBundleDisplayName: Calculator
+        INFOPLIST_KEY_UIRequiresFullScreen: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_BITCODE: NO
+        SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        ONLY_ACTIVE_ARCH: NO
+        ARCHS: arm64
