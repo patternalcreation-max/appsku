@@ -11,14 +11,25 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app
+        run: |
+          # Prefer stable Xcode 16.x / iPhoneOS 18.x over latest beta/future SDKs.
+          if [ -d /Applications/Xcode_16.4.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.4.app
+          elif [ -d /Applications/Xcode_16.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.3.app
+          elif [ -d /Applications/Xcode_16.2.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          else
+            sudo xcode-select -s /Applications/Xcode.app
+          fi
+          xcodebuild -version
 
       - name: Install xcodegen
         run: brew install xcodegen
