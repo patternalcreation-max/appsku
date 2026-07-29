@@ -1,41 +1,28 @@
-# K3 Calculator 🔢🧊
+# appsku / K3Browser Workspace
 
-Calculator iOS app built with SwiftUI. Auto-builds IPA via GitHub Actions macOS runner.
+Update terakhir: 2026-07-29 16:53 UTC
 
-## Quick start
+Baca dulu sebelum kerja:
 
-1. Fork / push this repo to your GitHub
-2. Go to **Actions** tab → "Build IPA" workflow runs automatically
-3. Download `k3-calculator.ipa` from the workflow artifacts
-4. Add to Feather/KSign via repo URL or manual install
+1. `docs/STACK.md` — source of truth arsitektur, file map, rules, URLs.
+2. `docs/CHANGELOG.md` — state terkini, build terakhir, next actions.
+3. `K3Browser/HERMES_LITE_V04_PLAN.md` — canonical plan Hermes-Lite browser-only runtime.
 
-## Features
+Repo GitHub:
 
-- Standard calculator: +, −, ×, ÷
-- AC, +/−, %
-- Decimal support
-- Expression line (shows full calculation)
-- Dark mode with gradient background
-- Works offline, no internet needed
-
-## Build your own version
-
-```bash
-# Edit the Swift files, then push to trigger rebuild:
-git add .
-git commit -m "update"
-git push
+```txt
+https://github.com/patternalcreation-max/appsku
 ```
 
-GitHub Actions will auto-build a new IPA. Download from Actions tab → latest run → Artifacts.
+Active install repo:
 
-## Repo manifest for Feather/KSign
+```txt
+https://raw.githubusercontent.com/patternalcreation-max/appsku/main/apps-browser.json
+```
 
-Edit `apps.json` — replace `USERNAME/REPO` with your actual GitHub username and repo name. Then add the raw URL as a repo source in Feather/KSign.
+Current shipped app:
 
-## Tech
-
-- SwiftUI + UIKit lifecycle
-- iOS 16.0+
-- XcodeGen for project generation
-- Unsigned IPA (signed at install time by Feather/KSign)
+```txt
+K3Browser v0.4.1 — Hermes-Lite GLM preset fix
+Bundle ID: com.patternalcreation.k3browser
+```
