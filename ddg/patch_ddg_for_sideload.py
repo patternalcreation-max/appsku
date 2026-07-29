@@ -150,6 +150,14 @@ for rel in [
         shutil.rmtree(p)
         print(f"Removed unsupported Xcode 16 asset symbolset: {p}")
 
+# DDG main pins a future Xcode in iOS/.xcode-version and fails the app target
+# late in the build via scripts/assert_xcode_version.sh. For this external
+# sideload build we intentionally use GitHub's public macos-15 Xcode 16.4.
+xcode_version_file = Path("iOS/.xcode-version")
+if xcode_version_file.exists():
+    xcode_version_file.write_text("16.4\n")
+    print(f"Pinned DDG Xcode gate to GitHub runner version in {xcode_version_file}")
+
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
     print("Non-fatal missing patterns, upstream may have changed:")
