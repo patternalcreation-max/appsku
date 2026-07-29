@@ -23,39 +23,39 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build archive (unsigned)
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Build (unsigned, no archive)
         run: |
-          xcodebuild archive \
+          xcodebuild build \
             -project k3-calculator.xcodeproj \
             -scheme k3-calculator \
             -sdk iphoneos \
             -configuration Release \
-            -archivePath build/k3-calculator.xcarchive \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES
+            ENABLE_BITCODE=NO \
+            SWIFT_OPTIMIZATION_LEVEL=-Onone \
+            ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=NO
 
-      - name: Package IPA with Swift libs
+      - name: Package IPA
         run: |
           mkdir -p build/Payload
-          APP="build/k3-calculator.xcarchive/Products/Applications/k3-calculator.app"
+          APP_PATH=$(find build/Build/Products -name "*.app" -type d | head -1)
+          echo "Found: $APP_PATH"
           echo "=== App contents ==="
-          ls -la "$APP"
-          
-          echo "=== Frameworks dir ==="
-          if [ -d "$APP/Frameworks" ]; then
-            ls -la "$APP/Frameworks"
-          else
-            echo "No Frameworks dir — embedding Swift libs manually..."
-          fi
-          
-          cp -r "$APP" build/Payload/
+          ls -la "$APP_PATH"
+          echo "=== Info.plist ==="
+          plutil -p "$APP_PATH/Info.plist"
+          cp -r "$APP_PATH" build/Payload/
           cd build
-          zip -r k3-calculator.ipa Payload
+          zip -ry k3-calculator.ipa Payload
           cd ..
-          echo "=== Final IPA size ==="
+          echo "=== IPA size ==="
           ls -la build/k3-calculator.ipa
 
       - name: Upload IPA artifact
@@ -65,8 +65,17 @@ jobs:
           path: build/k3-calculator.ipa
           retention-days: 90
 
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-log
+          path: |
+            build/Build/Products
+          retention-days: 7
+
       - name: Create Release on tag
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && success()
         uses: softprops/action-gh-release@v2
         with:
           files: build/k3-calculator.ipa
