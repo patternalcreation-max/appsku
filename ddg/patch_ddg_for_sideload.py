@@ -43,6 +43,16 @@ pbx.write_text(s)
 if "DuckSansFont" in s or "native-apps-ducksans" in s:
     raise SystemExit("DuckSans removal incomplete")
 
+# Xcode can still read stale pins from Package.resolved and try to resolve the
+# removed private SSH package. Delete it so Package.resolved is regenerated from
+# the patched packageReferences list.
+resolved = Path("iOS/DuckDuckGo-iOS.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved")
+if resolved.exists():
+    text = resolved.read_text(errors="ignore")
+    if "native-apps-ducksans" in text or "git@github.com:duckduckgo/native-apps-ducksans.git" in text:
+        resolved.unlink()
+        print(f"Deleted stale private SwiftPM lockfile: {resolved}")
+
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
     print("Non-fatal missing patterns, upstream may have changed:")
