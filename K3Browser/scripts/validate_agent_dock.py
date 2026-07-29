@@ -26,7 +26,7 @@ def between(text: str, start: str, end: str) -> str:
 
 def centralized_terminal_result(root: str) -> bool:
     body = between(root, "private var agentResultText: String", "private var agentOverlay")
-    ordered = ["state.agentAnswer", "if case .error(let message)", "state.steps.last", "state.phase.label"]
+    ordered = ["if case .error(let message)", "state.agentAnswer", "state.steps.last", "state.phase.label"]
     positions = [body.find(token) for token in ordered]
     return (
         bool(body)
@@ -91,6 +91,22 @@ def reduce_motion_crossfade(dock: str) -> bool:
     ))
 
 
+def named_actions_and_control_sizes(dock: str) -> bool:
+    actions = between(dock, ".accessibilityActions {", "private func ballDragGesture")
+    return all((
+        'minimumTapSize: CGFloat = 44' in dock,
+        'ballDiameter: CGFloat = 56' in dock,
+        'if hasPendingApproval {\n                Button("Review")' in actions,
+        '} else if phase.isBusy {\n                Button("Open status")' in actions,
+        '} else {\n                Button("Compose")' in actions,
+        'if phase.isBusy {\n                Button("Stop", role: .destructive)' in actions,
+        'Button("Move left")' in actions and 'Button("Move right")' in actions,
+        'Button("Mission Control")' in actions,
+        dock.count("minHeight: minimumTapSize") >= 4,
+        dock.count("width: minimumTapSize") >= 3,
+    ))
+
+
 source = DOCK.read_text(encoding="utf-8") if DOCK.is_file() else ""
 preferences = PREFERENCES.read_text(encoding="utf-8") if PREFERENCES.is_file() else ""
 phase = PHASE.read_text(encoding="utf-8") if PHASE.is_file() else ""
@@ -123,6 +139,7 @@ require("approval badge and explicit review", "if hasPendingApproval" in source 
 require("result peek is readable and durable", all(token in source for token in ("private func resultCapsule", "Text(resultExcerpt)", ".lineLimit(2)", 'Text("Details")', 'accessibilityLabel("Dismiss result")')) and "asyncAfter" not in source)
 require("centralized redacted terminal result fallback", centralized_terminal_result(view))
 require("centralized result mutation self-test", not centralized_terminal_result(view.replace("state.steps.last", "nil as AgentStep?", 1)))
+require("terminal error precedence mutation self-test", not centralized_terminal_result(view.replace("if case .error(let message)", "if case .done", 1)))
 require("terminal result conflict recovery", terminal_conflict_recovery(source))
 require("terminal conflict recovery mutation self-test", not terminal_conflict_recovery(source.replace("else if count == 0 {\n                revealTerminalResultIfEligible()", "else if count == 0 {", 1)))
 require("result semantics distinguish error and success", "isErrorPhase" in source and "K3VisualSystem.Palette.error" in source and "K3VisualSystem.Palette.success" in source)
@@ -131,7 +148,9 @@ require("Reduce Motion uses a real crossfade and conditional geometry", reduce_m
 require("Reduce Motion mutation self-test", not reduce_motion_crossfade(source.replace("? .easeInOut(duration: 0.18)", "? nil", 1)))
 require("compact and AX layout adapts one composer", compact_ax_adaptation(source))
 require("compact layout mutation self-test", not compact_ax_adaptation(source.replace(" || dynamicTypeSize.isAccessibilitySize", "", 1)))
-require("VoiceOver named primary move and contextual actions", all(token in source for token in ('Button("Compose")', 'Button("Open status")', 'Button("Move left")', 'Button("Move right")', 'Button("Stop", role: .destructive)', 'Button("Review")', 'Button("Mission Control")', "moveBall(to: .left)", "moveBall(to: .right)", "if phase.isBusy", "if hasPendingApproval")))
+require("VoiceOver named primary move and contextual actions", named_actions_and_control_sizes(source))
+require("VoiceOver action-condition mutation self-test", not named_actions_and_control_sizes(source.replace("else if phase.isBusy", "else if !phase.isBusy", 1)))
+require("minimum-control-size mutation self-test", not named_actions_and_control_sizes(source.replace("minimumTapSize: CGFloat = 44", "minimumTapSize: CGFloat = 43", 1)))
 require("single root overlay without page resize", view.count("AdaptiveAgentOverlay(") == 1 and view.count("WebViewContainer(webView: state.webView)") == 1 and ".safeAreaInset(edge: .bottom" not in view and ".ignoresSafeArea(.keyboard, edges: .bottom)" in view)
 require("result and conflict passed from root", "resultText: agentResultText" in view and "hasPresentationConflict:" in view)
 require("no legacy shell", all(token not in view + source for token in ("bottomCommandBar", "AgentCockpitView", "showCockpit", "ApprovalTray", "expandedShelf")))

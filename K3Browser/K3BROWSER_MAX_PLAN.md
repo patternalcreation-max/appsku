@@ -281,7 +281,14 @@ Acceptance: malformed/expired/tampered profiles fail closed; out-of-scope always
 
 Acceptance: stale/changed target cannot execute; no JS failure becomes success; every mutating action is exactly-once.
 
-### Release C — v0.7.0 Browser Workstation
+### Release C — v0.7.0 Latest-iOS Magnetic Capsule
+
+- Latest-iOS-only deployment baseline.
+- Page-first Magnetic Capsule with collapsed Ball, compose, active, and durable result surfaces.
+- Modern Mission Control sheet, adaptive 320pt/AX layout, and Reduce Motion crossfade.
+- Runtime, approval authority, redaction, navigation settlement, and one-owner invariants retained.
+
+### Future Release — Browser Workstation (version TBD)
 
 - Multi-tab ownership/session restore.
 - SQLite sessions/runs/events/checkpoints and hash-chained redacted audit log.
@@ -289,14 +296,14 @@ Acceptance: stale/changed target cannot execute; no JS failure becomes success; 
 - Downloads quarantine, Markdown/JSON/CSV/PDF export.
 - Screenshot, Vision OCR, reader/table/card extraction.
 
-### Release D — v0.8.0 Recipes + Memory
+### Future Release — Recipes + Memory (version TBD)
 
 - Typed declarative recipes; no raw JS/shell/dynamic tools.
 - Recipe hash/capability diff and saved exact-scope grants.
 - Site memory and Operator profile fields with provenance/data class.
 - Research plan approval with origin/effect budgets.
 
-### Release E — v1.0 Hermes Relay
+### Future Release — Hermes Relay (version TBD)
 
 - Direct/Relay/Hybrid modes.
 - Versioned capability handshake and signed run nonce.
@@ -335,7 +342,7 @@ XCTest/static validation green
 XcodeGen generation green
 unsigned device build green
 Info.plist version/build verified
-MinimumOSVersion = 15.0
+MinimumOSVersion = 26.0
 PlugIns/extensions = 0
 no .entitlements
 no package dependency

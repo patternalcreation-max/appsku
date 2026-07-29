@@ -43,6 +43,8 @@ def between(text: str, start: str, end: str) -> str:
 
 def terminal_result_plumbing(root: str, dock: str) -> bool:
     fallback = between(root, "private var agentResultText: String", "private var agentOverlay")
+    ordered = ["if case .error(let message)", "state.agentAnswer", "state.steps.last", "state.phase.label"]
+    positions = [fallback.find(token) for token in ordered]
     reveal = between(dock, "private func revealTerminalResultIfEligible()", "private func setSurface")
     approval_change = between(dock, ".onChange(of: pendingApprovalCount)", ".onChange(of: hasPresentationConflict)")
     conflict_change = between(dock, ".onChange(of: hasPresentationConflict)", "@ViewBuilder")
@@ -50,6 +52,7 @@ def terminal_result_plumbing(root: str, dock: str) -> bool:
         "state.agentAnswer" in fallback,
         "if case .error(let message)" in fallback,
         "state.steps.last" in fallback,
+        all(position >= 0 for position in positions) and positions == sorted(positions),
         "case .done, .error:" in fallback,
         fallback.count("Redactor.text(") >= 4,
         "return Redactor.text(state.phase.label)" in fallback,
@@ -88,6 +91,21 @@ def reduce_motion_crossfade(dock: str) -> bool:
     ))
 
 
+def named_actions_and_control_sizes(dock: str) -> bool:
+    actions = between(dock, ".accessibilityActions {", "private func ballDragGesture")
+    return all((
+        'minimumTapSize: CGFloat = 44' in dock,
+        'if hasPendingApproval {\n                Button("Review")' in actions,
+        '} else if phase.isBusy {\n                Button("Open status")' in actions,
+        '} else {\n                Button("Compose")' in actions,
+        'if phase.isBusy {\n                Button("Stop", role: .destructive)' in actions,
+        'Button("Move left")' in actions and 'Button("Move right")' in actions,
+        'Button("Mission Control")' in actions,
+        dock.count("minHeight: minimumTapSize") >= 4,
+        dock.count("width: minimumTapSize") >= 3,
+    ))
+
+
 sources = {name: path.read_text(encoding="utf-8") if path.is_file() else "" for name, path in FILES.items()}
 all_ui = "\n".join(sources[name] for name in ("root", "visual", "chrome", "dock", "approval", "mission"))
 
@@ -105,6 +123,7 @@ check("exclusive local surface modes and busy composer removal", all(token in so
 check("readable result peek and root redacted result plumbing", all(token in sources["dock"] for token in ("private func resultCapsule", "Text(resultExcerpt)", ".lineLimit(2)", 'Text("Details")', 'accessibilityLabel("Dismiss result")')) and terminal_result_plumbing(sources["root"], sources["dock"]))
 check("terminal result recovery mutation self-test", not terminal_result_plumbing(sources["root"], sources["dock"].replace("else if !hasConflict", "else if hasConflict", 1)))
 check("terminal result fallback mutation self-test", not terminal_result_plumbing(sources["root"].replace("state.steps.last", "nil as AgentStep?", 1), sources["dock"]))
+check("terminal error precedence mutation self-test", not terminal_result_plumbing(sources["root"].replace("if case .error(let message)", "if case .done", 1), sources["dock"]))
 
 check("approval API and preview are narrow", approval_is_narrow(sources["approval"]))
 check("approval argument mutation self-test", not approval_is_narrow(sources["approval"] + "\nText(request.call.arguments.description)"))
@@ -129,8 +148,9 @@ check("Reduce Motion uses opacity animation and conditional shared geometry", re
 check("Reduce Motion mutation self-test", not reduce_motion_crossfade(sources["dock"].replace("? .easeInOut(duration: 0.18)", "? nil", 1)))
 check("compact and AX capsule adaptation with one field", compact_capsule_adaptation(sources["dock"]))
 check("compact adaptation mutation self-test", not compact_capsule_adaptation(sources["dock"].replace(" || dynamicTypeSize.isAccessibilitySize", "", 1)))
-check("ball geometry VoiceOver and final persistence", all(token in sources["dock"] for token in ("ballDiameter: CGFloat = 56", "minimumTapSize: CGFloat = 44", "dragThreshold: CGFloat = 8", 'Button("Move left")', 'Button("Move right")', "Persist only the final snapped result")) and "dockPreferences.edge" not in sources["dock"].partition(".onChanged")[2].partition(".onEnded")[0])
-check("explicit named Compose Open status Mission Stop Review collapse actions", all(token in sources["dock"] for token in ('Button("Compose")', 'Button("Open status")', 'Label("Mission Control"', 'Label("Stop"', 'Button("Review")', 'accessibilityLabel("Collapse agent capsule")')))
+check("ball geometry VoiceOver and final persistence", named_actions_and_control_sizes(sources["dock"]) and "dragThreshold: CGFloat = 8" in sources["dock"] and "Persist only the final snapped result" in sources["dock"] and "dockPreferences.edge" not in sources["dock"].partition(".onChanged")[2].partition(".onEnded")[0])
+check("VoiceOver action-condition mutation self-test", not named_actions_and_control_sizes(sources["dock"].replace("else if phase.isBusy", "else if !phase.isBusy", 1)))
+check("minimum-control-size mutation self-test", not named_actions_and_control_sizes(sources["dock"].replace("minimumTapSize: CGFloat = 44", "minimumTapSize: CGFloat = 43", 1)))
 check("no page-resizing agent safe-area inset", ".safeAreaInset(edge: .bottom" not in sources["root"] and ".ignoresSafeArea(.keyboard, edges: .bottom)" in sources["root"] and sources["root"].count("WebViewContainer(webView: state.webView)") == 1 and sources["root"].count("AdaptiveAgentOverlay(") == 1)
 check("single owners", all(sources["root"].count(token) == 1 for token in ("@StateObject private var state = BrowserState()", "@StateObject private var settings = AgentSettings()", "@StateObject private var dockPreferences = DockPreferences()")))
 check("single mutually exclusive presentation router", sources["root"].count(".sheet(") == 1 and ".sheet(item: $activePresentation" in sources["root"] and "queuedPresentation" in sources["root"] and "revealApprovalAfterDismiss" in sources["root"])

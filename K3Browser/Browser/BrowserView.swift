@@ -1077,13 +1077,14 @@ struct BrowserView: View {
     }
 
     private var agentResultText: String {
-        let answer = Redactor.text(state.agentAnswer).trimmingCharacters(in: .whitespacesAndNewlines)
-        if !answer.isEmpty { return answer }
-
+        // A current terminal error must outrank any answer left by an older run.
         if case .error(let message) = state.phase {
             let errorMessage = Redactor.text(message).trimmingCharacters(in: .whitespacesAndNewlines)
             if !errorMessage.isEmpty { return errorMessage }
         }
+
+        let answer = Redactor.text(state.agentAnswer).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !answer.isEmpty { return answer }
 
         switch state.phase {
         case .done, .error:
