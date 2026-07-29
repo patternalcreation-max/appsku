@@ -37,16 +37,25 @@ jobs:
             DEVELOPMENT_TEAM="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES
 
-      - name: Package IPA
+      - name: Package IPA with Swift libs
         run: |
           mkdir -p build/Payload
-          APP_PATH="build/k3-calculator.xcarchive/Products/Applications/k3-calculator.app"
-          echo "App path: $APP_PATH"
-          ls -la "$APP_PATH"
-          cp -r "$APP_PATH" build/Payload/
+          APP="build/k3-calculator.xcarchive/Products/Applications/k3-calculator.app"
+          echo "=== App contents ==="
+          ls -la "$APP"
+          
+          echo "=== Frameworks dir ==="
+          if [ -d "$APP/Frameworks" ]; then
+            ls -la "$APP/Frameworks"
+          else
+            echo "No Frameworks dir — embedding Swift libs manually..."
+          fi
+          
+          cp -r "$APP" build/Payload/
           cd build
           zip -r k3-calculator.ipa Payload
           cd ..
+          echo "=== Final IPA size ==="
           ls -la build/k3-calculator.ipa
 
       - name: Upload IPA artifact

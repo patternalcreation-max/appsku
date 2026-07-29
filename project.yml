@@ -8,6 +8,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: YES
 
 targets:
   k3-calculator:
@@ -31,3 +32,4 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
         INFOPLIST_KEY_CFBundleDisplayName: Calculator
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
