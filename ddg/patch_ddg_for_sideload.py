@@ -65,6 +65,16 @@ if screen_time_cleaner.exists():
         screen_time_cleaner.write_text(t2)
         print(f"Patched unavailable SDK symbol in {screen_time_cleaner}")
 
+# DDG main also uses iOS 26 SwiftUI glass button style. Xcode 16.4's SwiftUI
+# module does not expose it yet, and Swift still type-checks the available branch.
+sync_success = Path("iOS/LocalPackages/SyncUI-iOS/Sources/SyncUI-iOS/Views/SyncSuccessViewV2.swift")
+if sync_success.exists():
+    t = sync_success.read_text()
+    t2 = t.replace(".buttonStyle(.glassProminent)", ".buttonStyle(.plain)")
+    if t2 != t:
+        sync_success.write_text(t2)
+        print(f"Patched unavailable SwiftUI glass style in {sync_success}")
+
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
     print("Non-fatal missing patterns, upstream may have changed:")
