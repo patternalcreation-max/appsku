@@ -13,7 +13,7 @@
       "versionDate": "2026-07-29",
       "versionDescription": "Initial K3Browser WKWebView baseline for Feather/KSign sideloading.",
       "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.1.0/K3Browser.ipa",
-      "size": 0,
+      "size": 111041,
       "minOSVersion": "15.0"
     }
   ]
