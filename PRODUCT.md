@@ -8,7 +8,7 @@ ios
 
 ## Users
 
-Primary user is an operator who works from an iPhone and wants a capable browser agent without depending on a Mac, heavyweight browser fork, or locked SaaS interface. The product should also remain usable as a normal browser when the agent is idle.
+Primary user is an operator who works from a latest-generation iPhone and wants a capable browser agent without depending on a Mac, heavyweight browser fork, or locked SaaS interface. The product remains usable as a normal browser when the agent is idle.
 
 ## Product Purpose
 
@@ -21,25 +21,26 @@ K3Browser owns the execution layer: Swift controls browser state, perception, to
 ## Operating Context
 
 - Installed as an unsigned IPA built by GitHub Actions and signed through Feather/KSign.
-- Used on iPhone in short foreground sessions, with optional handoff of long-running work to a remote Hermes relay.
+- Used on the latest iOS generation in short foreground sessions, with optional handoff of long-running work to a remote Hermes relay.
 - Direct model credentials are stored in the app Keychain.
 - Browser artifacts, runs, recipes, and notes live in the app sandbox and can be exported explicitly.
-- Security-research authority is imported as a platform-neutral Engagement Profile; Immunefi, private programs, and other platforms are data sources, never hardcoded execution paths.
+- Security-research authority is imported as a platform-neutral Engagement Profile; platforms are data sources, never hardcoded execution paths.
 - GitHub repository and active sideload manifest are documented in `docs/STACK.md`.
 
 ## Capabilities and Constraints
 
-Confirmed capabilities include native browsing, structured DOM snapshots, GLM 5.2/OpenAI-compatible inference, a bounded agent loop, typed browser actions, approval UI, action timeline, local notes, and file export.
+Confirmed capabilities include native browsing, structured DOM snapshots, GLM 5.2/OpenAI-compatible inference, a bounded agent loop, typed browser actions, blocking approval UI, action timeline, local notes, file export, and the Magnetic Capsule agent surface.
 
 Binding constraints:
 
-- iOS 15+, SwiftUI, WKWebView, native Apple frameworks.
+- Latest-iOS-only baseline: minimum iOS 26.0 for v0.7.0; no old-iOS fallback requirement.
+- SwiftUI, WKWebView, and native Apple frameworks only.
 - No App Groups, keychain access groups, extensions, NetworkExtension, private APIs, background daemon, iCloud dependency, or external package manager.
-- Build with GitHub Actions `macos-15`, Xcode 16.x, unsigned `xcodebuild build`, manual IPA packaging, and zero PlugIns.
+- Build with GitHub Actions `macos-26`, Xcode 26.6, unsigned `xcodebuild build`, manual IPA packaging, and zero PlugIns.
 - Read-only work may run autonomously. Side effects use explicit capability scopes and fail closed. Passwords, OTP/2FA, payment, destructive account actions, and wallet signing are never silently automated.
 - Engagement scope never exposes secret values to the model, relay, logs, evidence, or exports. Test credentials may be referenced only through local Keychain-backed handles and resolved at the final governed action boundary.
 - WKWebView cannot provide raw HTTPS navigation interception or act as an on-device MITM proxy under the current no-entitlement constraint. K3Browser may observe DOM, resource timing, and page-initiated fetch/XHR; raw traffic capture/replay belongs to an external proxy or optional relay workflow.
-- UI may be redesigned or replaced; shipped UI is evidence, not a binding visual authority. Replacement work must remove the workflow it supersedes.
+- UI may evolve, but replacement work must remove the workflow it supersedes and preserve runtime/authority invariants.
 
 Open decisions to validate through implementation:
 
@@ -55,15 +56,16 @@ Open decisions to validate through implementation:
 
 ## Evidence on Hand
 
-- Current release: K3Browser v0.6.0 Adaptive Native UI build 8.
-- Verified page-first WKWebView workspace, native browser rail, page-resizing Agent Shelf, persisted draggable Agent Ball, blocking approval review, hierarchical Mission Control, exact-SHA/tag Xcode builds, unsigned release pipeline, and IPA internals.
+- Current release: K3Browser v0.7.0 Magnetic Capsule build 9.
+- Verified latest-iOS 26.0 target, stable page-first WKWebView workspace, Magnetic Capsule states, persisted draggable Agent Ball, blocking approval review, `NavigationStack` Mission Control, exact-SHA/tag Xcode 26.6 builds, unsigned release pipeline, and public IPA internals.
+- Exact source/tag SHA: `e0cdcd4e3f0cd818950c2f81c4caa8ad45c12c13`.
 - Existing source and runtime state: `K3Browser/Browser/BrowserView.swift`.
-- Canonical implementation history and constraints: `docs/STACK.md`, `docs/CHANGELOG.md`, and `K3Browser/K3BROWSER_MAX_PLAN.md`.
-- No current automated Swift test target; v0.6 real-device behavior still requires explicit acceptance testing.
+- Canonical implementation history and constraints: `DESIGN.md`, `docs/STACK.md`, `docs/CHANGELOG.md`, and `K3Browser/K3BROWSER_MAX_PLAN.md`.
+- No current automated Swift test target; v0.7 real-device behavior still requires explicit acceptance testing.
 
 ## Product Principles
 
-1. **Browser is the workspace.** Agent controls stay close to the page and never hide the object being operated on.
+1. **Browser is the workspace.** Agent chrome overlays rather than resizes the page.
 2. **Autonomy is scoped, not timid.** Approve a bounded plan or capability once; interrupt only when scope expands or risk changes.
 3. **Typed tools beat prompt tricks.** Every action is validated, logged, replayable where safe, and attributable to a run.
 4. **Local execution, optional remote leverage.** The app remains useful without a relay; Hermes adds durable and multi-agent power rather than becoming a launch dependency.
@@ -73,4 +75,4 @@ Open decisions to validate through implementation:
 
 ## Accessibility & Inclusion
 
-Use native controls and Dynamic Type where practical, maintain VoiceOver labels and visible state, preserve keyboard-safe layouts, and never encode approval risk by color alone.
+Use native controls and Dynamic Type, maintain named VoiceOver actions and visible state, preserve keyboard-safe layouts, respect Reduce Motion, keep controls at least 44pt, and never encode approval/result meaning by color alone.

@@ -1,6 +1,6 @@
 # CHANGELOG.md — appsku / K3Browser Living State
 
-Update terakhir: 2026-07-29 19:12 UTC
+Update terakhir: 2026-07-29 20:23 UTC
 
 > Living doc. Replace current state; do not append indefinitely.
 
@@ -8,83 +8,82 @@ Update terakhir: 2026-07-29 19:12 UTC
 
 ```txt
 Project: appsku / K3Browser
-Release: v0.6.0 Adaptive Native UI, build 8
-Tag: k3browser-v0.6.0
-Source SHA: d384d8b6c067f61b3de85af31051a2df1bc81310
-Status: exact-SHA CI PASS; tag release PASS; IPA internals verified; device acceptance pending
+Release: v0.7.0 Magnetic Capsule, build 9
+Tag: k3browser-v0.7.0
+Source SHA: e0cdcd4e3f0cd818950c2f81c4caa8ad45c12c13
+Status: exact-SHA CI PASS; tag release PASS; public IPA internals verified; device acceptance pending
 Install repo: https://raw.githubusercontent.com/patternalcreation-max/appsku/main/apps-browser.json
-IPA: https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.6.0/K3Browser.ipa
-Size: 641,753 bytes
-SHA-256: b3ebcf17418baa2e21b9ce52ba2a449e9c7c931d5263642c9018e1d6d7b397ac
+IPA: https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.7.0/K3Browser.ipa
+Size: 698,964 bytes
+SHA-256: 2291139329f87cc6c470a0fdafcb84b99a45cddec6c925084fb43ca2f452f320
 ```
 
-## v0.6.0 Adaptive Native UI
+## v0.7.0 Magnetic Capsule
 
-### Browser workspace
+### Page-first agent surface
 
-- Replaced generic top toolbar with a shallow native browser rail.
-- Back, Forward, address/search, Reload/Stop, and stable progress use 44pt targets.
-- WKWebView remains the dominant visual workspace.
-- No fake tabs, library, lock, or unsupported browser capability.
+- Removed the page-resizing Agent Shelf.
+- WKWebView remains stable while agent surfaces overlay it.
+- Ball is the agent; compose, active, and result Capsules are temporary speech.
+- One composer exists only in compose state and leaves hierarchy while busy.
+- Active Peek exposes concise status, Stop, Mission Control, and collapse.
+- Durable Result Peek distinguishes success/error and waits for explicit dismissal or Details.
 
-### Agent Shelf and Ball
+### Compact, keyboard, and accessibility behavior
 
-- Expanded K3 is a bottom safe-area shelf that resizes the page.
-- One command composer only.
-- Run and Stop are mutually exclusive.
-- Agent Ball remains 56pt, draggable, edge-snapping, and persistent.
-- Dynamic Type, Reduce Motion, safe-area clamping, and VoiceOver move actions are enforced.
+- 56pt Ball, 8pt drag threshold, safe-area clamping, edge snap, and final-only position persistence.
+- Compose/active/result layouts adapt at compact width and accessibility Dynamic Type.
+- Controls remain at least 44pt.
+- Named VoiceOver Compose/Open status/Review/Stop/Mission/Move actions.
+- Reduce Motion uses a real opacity crossfade; normal mode uses shared geometry.
+- Browser workspace ignores keyboard resizing while Capsule remains keyboard-safe.
 
-### Approval authority
+### Truthful terminal presentation
 
-- Replaced floating tray treatment with a blocking bottom decision surface.
-- Review context is bounded and scrollable; decisions remain pinned.
-- Exact affirmative labels identify each one-action authority.
-- Background page/Dock leave touch and accessibility trees while pending.
-- VoiceOver announcement, explicit focus-to-Deny, and Escape-to-Deny are present.
-- Indigo CTA improves contrast; orange remains a risk accent.
-- Mission Control and Share use one presentation router; approval reveals only after active presentation dismissal.
+- Centralized redacted result fallback covers done/error paths without `agentAnswer`.
+- Current terminal error outranks stale output from an older run.
+- Result completion behind Mission/Share/approval is deferred and revealed after the conflict clears.
+- Mutation gates cover result precedence, conflict recovery, compact/AX layout, Reduce Motion, VoiceOver conditions, and minimum control size.
 
-### Mission Control
+### Approval and Mission Control
 
-- Replaced four-way segmented dashboard with native hierarchical lists/forms.
-- Root destinations: Current Run, Activity, Page Snapshot, Manual Tools, Agent Settings.
-- Manual tools still stage normal approval.
-- API key remains a SecureField backed by the existing Keychain flow.
-- No second command composer.
+- Approval closure invariants remain intact: preview/reason only, no raw arguments, pinned decisions, explicit Deny, one-time tool approval, no outside dismissal, announcement, focus-to-Deny, Escape-to-Deny, and blocked background accessibility.
+- Approval hierarchy now leads with the exact action; orange risk accent is one hairline.
+- Mission Control uses `NavigationStack` with medium/large detents and no second composer.
+- One router serializes Mission Control, Share, and approval.
 
-### Quality system
+### Latest-iOS release baseline
 
-- Added `K3VisualSystem.swift` and canonical `DESIGN.md`.
-- Added deterministic `validate_ui_architecture.py` with mutation gates.
-- GitHub Actions now runs Release A, A.5, Dock, and UI validators before Xcode build.
+- Minimum iOS: 26.0.
+- Build runner: GitHub Actions `macos-26`.
+- Compiler: Xcode 26.6 (`DTXcodeBuild 17F113`).
+- SDK: `iphoneos26.5`.
+- No Xcode 27 beta dependency.
 
 ## Verification evidence
 
 ```txt
-Initial 3-lens UI council: complete
-Swift/iOS15 compile-plausibility review: PASS
-Native UX/accessibility review: blockers found and fixed
-Approval/presentation authority review: blockers found and fixed
-Focused closure review: APPROVED
-Local deterministic gates: PASS
-Exact-SHA CI 30483116606: PASS
-Tag release CI 30483243293: PASS
-IPA Info.plist/Mach-O/app-code-dylib/zero-PlugIns inspection: PASS
+Local Release A/A.5/Magnetic Capsule/UI mutation gates: PASS
+Final source review: initial blockers found; exact blockers fixed
+Exact-SHA CI 30487937170: PASS
+Tag release CI 30488078408: PASS
+Tag target equals e0cdcd4e3f0cd818950c2f81c4caa8ad45c12c13
+IPA version/build/bundle/minimum OS/SDK/Mach-O/zero-PlugIns inspection: PASS
+Launch stub: arm64 Mach-O, 72,688 bytes, SHA-256 0c8f81eeb1a06057be7e9688dbcc2697dc93ec1030b1ceed7b023d9ea0fecc85
+App-code dylib: 3,019,848 bytes, SHA-256 603774136f19dd9309f60da5a8d557c91a2eff80c3e31fcf296dfd2721de0ef2
 ```
-
-The Xcode 16 package uses a stable 71,800-byte launch stub plus `K3Browser.debug.dylib` for app code. The v0.6 app-code dylib differs from v0.5 and grew from 2,215,840 to 2,565,008 bytes, proving the new UI binary is present.
 
 ## Device acceptance pending
 
-1. Install through Feather/KSign.
+1. Install v0.7.0 through Feather/KSign.
 2. Run `ini web apa`; expect a final answer without approval.
-3. Run one gated action and verify approval presentation/resume.
-4. Test 320pt/AX5/VoiceOver, Light/Dark, keyboard, Reduce Motion, Ball persistence, Stop, redirects, and timeout recovery.
+3. Run one gated action; verify sheet dismissal → approval → exact one-time decision → resume.
+4. Reproduce stale-result test: finish success, remove API key, run again; current error must replace old success.
+5. Test 320/375/390/430pt widths, AX5, Light/Dark, VoiceOver actions/focus/Escape, keyboard, Reduce Motion, Ball persistence, Stop, deferred result, redirects, and timeout recovery.
 
 ## Known limitations
 
 - No automated Xcode unit/UI test target.
-- Real WKWebView callback ordering, SwiftUI layout, hit testing, and assistive-technology behavior require device verification.
+- Real WKWebView callback ordering, SwiftUI layout/hit testing, keyboard geometry, and assistive-technology behavior still require device verification.
 - WKWebView does not provide complete HAR/CDP/MITM/raw HTTPS interception under current constraints.
 - DDG fork path remains abandoned.

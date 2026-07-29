@@ -1,6 +1,6 @@
 # K3Browser Agent UI Redesign Guide — Magnetic Capsule
 
-Status: **IMPLEMENTED IN SOURCE — XCODE CI / DEVICE VERIFICATION PENDING**
+Status: **SHIPPED / VERIFIED — K3Browser v0.7.0 build 9**
 Updated: 2026-07-29
 Target policy: **latest public iOS only; old-iOS compatibility is not a product requirement**
 

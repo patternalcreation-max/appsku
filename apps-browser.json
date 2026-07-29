@@ -7,14 +7,14 @@
       "name": "K3 Browser",
       "bundleIdentifier": "com.patternalcreation.k3browser",
       "developerName": "patternalcreation-max",
-      "subtitle": "Adaptive native operator browser",
-      "localizedDescription": "Native SwiftUI + WKWebView operator browser for iPhone. v0.6 introduces the K3 adaptive native UI: quiet browser rail, page-resizing Agent Shelf, persisted draggable Agent Ball, blocking approval review, hierarchical Mission Control, and accessibility-aware presentation routing—while preserving the verified run, navigation, redaction, persistence, and Engagement Authority foundations.",
-      "version": "0.6.0",
+      "subtitle": "Latest-iOS Magnetic Capsule browser",
+      "localizedDescription": "Native SwiftUI + WKWebView operator browser for the latest iOS generation. v0.7 replaces the page-resizing Agent Shelf with a page-first Magnetic Capsule: a movable Agent Ball morphs into compose, active-status, and durable result surfaces without resizing the webpage. Blocking approval authority, Mission Control, redaction, immutable run identity, exact navigation settlement, and engagement scope enforcement remain intact.",
+      "version": "0.7.0",
       "versionDate": "2026-07-29",
-      "versionDescription": "Adaptive Native UI: page-first browser rail, one command composer, bottom Agent Shelf, movable Agent Ball, scrollable authority review with pinned decisions, single Mission/Share presentation router, Dynamic Type, VoiceOver, Reduce Motion, and deterministic UI architecture gates.",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.6.0/K3Browser.ipa",
-      "size": 641753,
-      "minOSVersion": "15.0"
+      "versionDescription": "Magnetic Capsule UI: latest-iOS-only baseline, full-size WKWebView workspace, collapsed Agent Ball, one keyboard-safe composer, active Stop/status peek, durable result peek, modern Mission Control sheet, 320pt/AX layout adaptation, VoiceOver actions, and Reduce Motion crossfade.",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.7.0/K3Browser.ipa",
+      "size": 698964,
+      "minOSVersion": "26.0"
     }
   ]
 }
