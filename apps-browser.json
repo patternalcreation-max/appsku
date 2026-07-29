@@ -13,7 +13,7 @@
       "versionDate": "2026-07-29",
       "versionDescription": "Max Agent polish: adds API connection test/status, save status, and copy AI answer. Keeps Keychain API storage, OpenAI-compatible Ask Page, snapshot, forms/links extraction, selector fill/click, custom JS probe.",
       "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.3.1/K3Browser.ipa",
-      "size": 0,
+      "size": 258687,
       "minOSVersion": "15.0"
     }
   ]
