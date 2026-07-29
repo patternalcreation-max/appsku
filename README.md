@@ -1,28 +1,32 @@
 # appsku / K3Browser Workspace
 
-Update terakhir: 2026-07-29 16:53 UTC
+Update terakhir: 2026-07-29 18:36 UTC
 
-Baca dulu sebelum kerja:
+Baca sebelum kerja:
 
-1. `docs/STACK.md` — source of truth arsitektur, file map, rules, URLs.
-2. `docs/CHANGELOG.md` — state terkini, build terakhir, next actions.
-3. `K3Browser/HERMES_LITE_V04_PLAN.md` — canonical plan Hermes-Lite browser-only runtime.
+1. `PRODUCT.md` — product truth dan hard boundaries.
+2. `docs/STACK.md` — source of truth arsitektur, release, paths, dan gates.
+3. `docs/CHANGELOG.md` — current state dan next acceptance tests.
+4. `K3Browser/K3BROWSER_MAX_PLAN.md` — canonical MAX architecture plan.
 
-Repo GitHub:
+## Current release
 
 ```txt
-https://github.com/patternalcreation-max/appsku
+K3Browser v0.5.0 PEAK — build 7
+Bundle ID: com.patternalcreation.k3browser
+Min iOS: 15.0
 ```
 
-Active install repo:
+Install repo:
 
 ```txt
 https://raw.githubusercontent.com/patternalcreation-max/appsku/main/apps-browser.json
 ```
 
-Current shipped app:
+Direct IPA:
 
 ```txt
-K3Browser v0.4.1 — Hermes-Lite GLM preset fix
-Bundle ID: com.patternalcreation.k3browser
+https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.5.0/K3Browser.ipa
 ```
+
+Release status: source reviews PASS, Linux validators PASS, GitHub Actions Xcode build PASS, IPA structure verified. Real-device acceptance is still required.

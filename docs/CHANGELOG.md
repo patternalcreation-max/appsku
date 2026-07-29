@@ -1,203 +1,82 @@
 # CHANGELOG.md — appsku / K3Browser Living State
 
-Update terakhir: 2026-07-29 16:53 UTC
+Update terakhir: 2026-07-29 18:36 UTC
 
-> Living doc: replace/update this file as state changes. Keep concise.
+> Living doc. Replace current state; do not append indefinitely.
 
 ## Current state
 
 ```txt
 Project: appsku / K3Browser
-Local: /root/k3-calculator
-Repo: https://github.com/patternalcreation-max/appsku
-Active manifest: apps-browser.json
-Install URL: https://raw.githubusercontent.com/patternalcreation-max/appsku/main/apps-browser.json
-Latest shipped: K3Browser v0.4.1 build 6
+Release: v0.5.0 PEAK, build 7
+Tag: k3browser-v0.5.0
+Status: GitHub Actions build/release PASS; IPA structure verified; device acceptance pending
+Install repo: https://raw.githubusercontent.com/patternalcreation-max/appsku/main/apps-browser.json
+IPA: https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.5.0/K3Browser.ipa
+Size: 576,821 bytes
+SHA-256: a05e7f8edb31a76516314f7b1958439147bf646078e8ff66337e473ea93792b5
 ```
 
-## Latest verified release
+## v0.5.0 PEAK
+
+Shipped one substantive build combining Release A, Release A.5, and adaptive agent shell.
+
+### Runtime foundation
+
+- Immutable run context and UUID.
+- Cancellation and stale async-callback rejection.
+- Exact `WKNavigation` identity and bounded settlement for direct/JS-triggered navigation.
+- HTTPS-only model endpoint.
+- Centralized redaction across errors, model/parser excerpts, previews, logs, notes, and exports.
+- Current input values/hidden fields excluded from structured snapshots.
+- Keychain-backed secret storage; persistence and export success are reported truthfully.
+
+### Engagement Authority
+
+- Platform-neutral Engagement Profiles with operator activation.
+- Active scope binds immutable UUID + canonical hash.
+- Deny-first, fail-closed domain/path matching.
+- Exact/wildcard semantics and canonical path hardening, including C1 controls.
+- Serialized, bounded, regular-file-only persistence using one nonblocking descriptor.
+
+### Native operator shell
+
+- Full-page WKWebView remains the workspace.
+- Adaptive Agent Dock replaces the legacy bottom command bar.
+- Dock collapses to a draggable, edge-snapping Agent Ball.
+- Collapsed state and final position persist; drag frames do not write continuously.
+- One agent composer only.
+- Mission Control replaces the duplicate cockpit workflow.
+- Existing approval tray remains run-bound, auto-shows, and can be reopened from Dock.
+- Keyboard/Dynamic Type height is strictly bounded and scrollable.
+
+## Verification evidence
 
 ```txt
-Tag: k3browser-v0.4.1
-Direct IPA: https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.4.1/K3Browser.ipa
-Size: 353,639 bytes
-App dir: Payload/K3Browser.app
-Display: K3 Browser
-Bundle ID: com.patternalcreation.k3browser
-Version: 0.4.1
-Build: 6
-MinimumOSVersion: 15.0
-DTSDKName: iphoneos18.5
-DTXcode: 1640
-PlugIns/extensions: 0
+Release A focused review: APPROVED
+Release A.5 focused review: APPROVED
+Dock/Ball focused review: PASS
+BrowserView integration review: PASS
+Linux validators: PASS
+GitHub Actions #19 foundation compile: PASS
+GitHub Actions #20 v0.5.0/build 7 compile: PASS
+GitHub Actions #21 tag release: PASS
+IPA zip/Info.plist/Mach-O/zero-PlugIns inspection: PASS
 ```
 
-Raw manifest verified after commit:
+Linux validators are source-invariant/semantic-mirror checks. They do not replace Xcode or real-device behavior.
 
-```txt
-version 0.4.1
-downloadURL https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.4.1/K3Browser.ipa
-size 353639
-```
+## Device acceptance pending
 
-## What changed recently
+1. Install through Feather/KSign.
+2. Run `ini web apa`; expect a final answer without approval.
+3. After baseline passes, run one gated search and verify approval/resume.
+4. Verify Dock/Ball drag, relaunch persistence, keyboard/Dynamic Type, Stop, redirects, and timeout recovery.
 
-### K3Browser v0.4.1
+## Known limitations
 
-Fixed GLM/Z.AI endpoint problem after user saw:
-
-```txt
-⚠️ LLM error — unsupported URL
-```
-
-Root cause:
-
-```txt
-App/user endpoint used base /v4 URL, but Z.AI needs /chat/completions suffix.
-```
-
-Patch:
-
-```txt
-Default baseURL = https://api.z.ai/api/coding/paas/v4/chat/completions
-Default model = glm-5.2
-AgentSettings.normalizedChatURLString() appends /chat/completions when user enters /v4 or /v1 base
-Settings button: Use GLM 5.2 / Z.AI preset
-callLLM() and testConnection() both use settings.chatURL()
-```
-
-User later got:
-
-```txt
-HTTP 401: {"error":{"code":"1000","message":"身份验证失败。"}}
-```
-
-Diagnosis:
-
-```txt
-URL/header/model correct; key invalid/mis-pasted.
-Local test with ~/.hermes/.env ZAI_API_KEY returned HTTP 200 against same endpoint.
-User pasted new API key and confirmed it worked.
-```
-
-### K3Browser v0.4.0
-
-Implemented Hermes-Lite browser runtime:
-
-```txt
-bottom command bar
-agent loop max 6 steps
-Stop Agent
-DOM Snapshot V2
-JSON tool-call parser
-tool executor
-approval tray Run once / Deny
-action timeline
-local memory notes
-export log/files
-gated browser tools
-```
-
-CI issues fixed:
-
-```txt
-Swift string escape in JS snapshot regex
-Result<AgentResponse, String> invalid; replaced with AgentParseResult
-```
-
-### K3Browser v0.3.x
-
-Baseline before Hermes-Lite:
-
-```txt
-v0.3.0: Keychain API key, OpenAI-compatible Ask Page, snapshot/forms/links, fill/click selector, custom JS
-v0.3.1: API Test button/status and copy AI answer
-```
-
-### K3Browser v0.1/v0.2
-
-```txt
-v0.1.0: launch-safe WKWebView baseline proved sideload pipeline works
-v0.2.0: Agent Snapshot panel with page title/url/text/links/forms copy/share
-```
-
-## Current known behavior to test on device
-
-User confirmed app/API key can work after new API key. Next tests:
-
-### Read-only command
-
-```txt
-Open any page
-Command: ini web apa
-Expected: final answer, no approval needed
-```
-
-### Gated DuckDuckGo search
-
-```txt
-Open https://duckduckgo.com
-Command: Find the search box and search for K3Browser Hermes Lite.
-Expected:
-▶️ Started
-👁 Observed page
-💭 Thinking
-⏸ Needs approval fill_selector
-Run once
-⚙️ Running fill_selector
-⏸ Needs approval submit/click/open
-Run once
-observe result
-```
-
-If GLM returns non-JSON/parser error, next patch should tune `systemPrompt`/`agentPrompt` and maybe add tolerant extraction for JSON embedded in prose.
-
-## Current source/doc state
-
-Important docs now exist:
-
-```txt
-README.md
-docs/STACK.md
-docs/CHANGELOG.md
-K3Browser/HERMES_LITE_V04_PLAN.md
-K3Browser/AGENT_BROWSER_ROADMAP.md
-K3Browser/.hermes/plans/2026-07-29_161425-k3browser-v0.4.0-hermes-lite-plan.md
-K3Browser/docs/plans/2026-07-29-v0.4.0-hermes-lite-ux-product-plan.md
-```
-
-Note: `/root/.hermes/plans/2026-07-29_161411-k3browser-v040-hermes-lite-swift-plan.md` was created by a planner subagent outside repo; canonical repo plan is `K3Browser/HERMES_LITE_V04_PLAN.md`.
-
-## DDG decision state
-
-DDG path is abandoned unless explicitly reopened.
-
-Reason:
-
-```txt
-DDG no-agent/probe/LITE builds still force-closed on iPhone.
-3-agent debug converged on App Groups/keychain/NetworkExtension/browser entitlement coupling.
-Custom K3Browser WKWebView path is proven launch-safe and much smaller.
-```
-
-## Active risks / blockers
-
-```txt
-No current build blocker.
-Runtime behavior depends on GLM returning strict JSON for agent loop.
-BrowserView.swift is monolithic (~850 lines); refactor later after device runtime stabilizes.
-GitHub API artifacts/logs need auth; public annotations now expose compiler errors.
-Feather/KSign may cache manifests; remove/re-add source if old version shown.
-```
-
-## Next actions
-
-Priority order:
-
-```txt
-1. User tests v0.4.1 with valid ZAI key.
-2. If read-only command fails with parser error, patch prompt/parser tolerance.
-3. If gated search works, improve UX: Edit approval, clearer final output, better timeline.
-4. Split BrowserView.swift into modules only after runtime confirmed.
-5. Add v0.5 features: tabs/session restore, OCR/screenshot, workflow recipes, Hermes relay optional.
-```
+- No automated Xcode unit/UI test target.
+- Real WKWebView callback ordering and runtime hit testing require device verification.
+- WKWebView does not provide complete HAR/CDP/MITM/raw HTTPS interception under current constraints.
+- Optional relay, durable evidence bundles, recipes, checkpoints, and broader Mission Control depth remain future slices.
+- DDG fork path remains abandoned.

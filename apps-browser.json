@@ -7,13 +7,13 @@
       "name": "K3 Browser",
       "bundleIdentifier": "com.patternalcreation.k3browser",
       "developerName": "patternalcreation-max",
-      "subtitle": "Native WKWebView browser baseline",
-      "localizedDescription": "Native iOS WKWebView browser for sideloading. No DDG entitlements, no extensions, no app groups. Includes Hermes-Lite browser runtime: observe page, reason with AI, parse tool-call JSON, approve risky browser actions, execute WKWebView tools, log every step, save memory notes, and export results.",
-      "version": "0.4.1",
+      "subtitle": "Native mobile operator browser",
+      "localizedDescription": "Native SwiftUI + WKWebView operator browser for iPhone. v0.5 PEAK adds an adaptive Agent Dock and draggable persisted Agent Ball, single Mission Control workspace, run-bound navigation, centralized redaction, secure local persistence, and platform-neutral Engagement Profiles for authorized research.",
+      "version": "0.5.0",
       "versionDate": "2026-07-29",
-      "versionDescription": "Hermes-Lite GLM preset fix: defaults to Z.AI GLM 5.2 chat completions endpoint, auto-normalizes /v4 endpoints to /chat/completions, and adds Use GLM 5.2 preset button.",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.4.1/K3Browser.ipa",
-      "size": 353639,
+      "versionDescription": "PEAK foundation: adaptive Dock/Ball, single command composer, Mission Control, immutable run identity, exact navigation settlement, fail-closed snapshot/redaction policy, and deny-first authorized engagement scope enforcement.",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.5.0/K3Browser.ipa",
+      "size": 576821,
       "minOSVersion": "15.0"
     }
   ]

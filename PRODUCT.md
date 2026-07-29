@@ -39,7 +39,7 @@ Binding constraints:
 - Read-only work may run autonomously. Side effects use explicit capability scopes and fail closed. Passwords, OTP/2FA, payment, destructive account actions, and wallet signing are never silently automated.
 - Engagement scope never exposes secret values to the model, relay, logs, evidence, or exports. Test credentials may be referenced only through local Keychain-backed handles and resolved at the final governed action boundary.
 - WKWebView cannot provide raw HTTPS navigation interception or act as an on-device MITM proxy under the current no-entitlement constraint. K3Browser may observe DOM, resource timing, and page-initiated fetch/XHR; raw traffic capture/replay belongs to an external proxy or optional relay workflow.
-- UI may be redesigned or replaced; current v0.4.1 UI is not a binding visual authority.
+- UI may be redesigned or replaced; shipped UI is evidence, not a binding visual authority. Replacement work must remove the workflow it supersedes.
 
 Open decisions to validate through implementation:
 
@@ -55,11 +55,11 @@ Open decisions to validate through implementation:
 
 ## Evidence on Hand
 
-- Working release: K3Browser v0.4.1 build 6.
-- Verified launch-safe custom WKWebView shell and unsigned sideload pipeline.
+- Working release: K3Browser v0.5.0 PEAK build 7.
+- Verified launch-safe custom WKWebView shell, adaptive Dock/Ball integration, GitHub Actions Xcode compile, unsigned release pipeline, and IPA structure.
 - Existing source and runtime state: `K3Browser/Browser/BrowserView.swift`.
-- Canonical implementation history and constraints: `docs/STACK.md`, `docs/CHANGELOG.md`, and `K3Browser/HERMES_LITE_V04_PLAN.md`.
-- No current automated Swift test target; device behavior beyond the verified release still requires explicit acceptance testing.
+- Canonical implementation history and constraints: `docs/STACK.md`, `docs/CHANGELOG.md`, and `K3Browser/K3BROWSER_MAX_PLAN.md`.
+- No current automated Swift test target; v0.5 real-device behavior still requires explicit acceptance testing.
 
 ## Product Principles
 
