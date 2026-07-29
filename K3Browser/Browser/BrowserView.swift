@@ -148,6 +148,11 @@ struct AgentResponse {
     let kind: Kind
 }
 
+enum AgentParseResult {
+    case success(AgentResponse)
+    case failure(String)
+}
+
 struct AgentStep: Identifiable {
     let id = UUID()
     let icon: String
@@ -485,7 +490,7 @@ final class BrowserState: NSObject, ObservableObject {
         phase = .stopped
     }
 
-    func parseAgentResponse(_ text: String) -> Result<AgentResponse, String> {
+    func parseAgentResponse(_ text: String) -> AgentParseResult {
         var raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let start = raw.range(of: "```") {
             raw = String(raw[start.upperBound...])
