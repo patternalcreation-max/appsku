@@ -55,11 +55,11 @@ Open decisions to validate through implementation:
 
 ## Evidence on Hand
 
-- Working release: K3Browser v0.5.0 PEAK build 7.
-- Verified launch-safe custom WKWebView shell, adaptive Dock/Ball integration, GitHub Actions Xcode compile, unsigned release pipeline, and IPA structure.
+- Current release: K3Browser v0.6.0 Adaptive Native UI build 8.
+- Verified page-first WKWebView workspace, native browser rail, page-resizing Agent Shelf, persisted draggable Agent Ball, blocking approval review, hierarchical Mission Control, exact-SHA/tag Xcode builds, unsigned release pipeline, and IPA internals.
 - Existing source and runtime state: `K3Browser/Browser/BrowserView.swift`.
 - Canonical implementation history and constraints: `docs/STACK.md`, `docs/CHANGELOG.md`, and `K3Browser/K3BROWSER_MAX_PLAN.md`.
-- No current automated Swift test target; v0.5 real-device behavior still requires explicit acceptance testing.
+- No current automated Swift test target; v0.6 real-device behavior still requires explicit acceptance testing.
 
 ## Product Principles
 

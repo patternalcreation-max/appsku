@@ -7,13 +7,13 @@
       "name": "K3 Browser",
       "bundleIdentifier": "com.patternalcreation.k3browser",
       "developerName": "patternalcreation-max",
-      "subtitle": "Native mobile operator browser",
-      "localizedDescription": "Native SwiftUI + WKWebView operator browser for iPhone. v0.5 PEAK adds an adaptive Agent Dock and draggable persisted Agent Ball, single Mission Control workspace, run-bound navigation, centralized redaction, secure local persistence, and platform-neutral Engagement Profiles for authorized research.",
-      "version": "0.5.0",
+      "subtitle": "Adaptive native operator browser",
+      "localizedDescription": "Native SwiftUI + WKWebView operator browser for iPhone. v0.6 introduces the K3 adaptive native UI: quiet browser rail, page-resizing Agent Shelf, persisted draggable Agent Ball, blocking approval review, hierarchical Mission Control, and accessibility-aware presentation routing—while preserving the verified run, navigation, redaction, persistence, and Engagement Authority foundations.",
+      "version": "0.6.0",
       "versionDate": "2026-07-29",
-      "versionDescription": "PEAK foundation: adaptive Dock/Ball, single command composer, Mission Control, immutable run identity, exact navigation settlement, fail-closed snapshot/redaction policy, and deny-first authorized engagement scope enforcement.",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.5.0/K3Browser.ipa",
-      "size": 576821,
+      "versionDescription": "Adaptive Native UI: page-first browser rail, one command composer, bottom Agent Shelf, movable Agent Ball, scrollable authority review with pinned decisions, single Mission/Share presentation router, Dynamic Type, VoiceOver, Reduce Motion, and deterministic UI architecture gates.",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.6.0/K3Browser.ipa",
+      "size": 641753,
       "minOSVersion": "15.0"
     }
   ]
