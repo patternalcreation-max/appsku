@@ -1,0 +1,98 @@
+name: Build K3Browser IPA
+
+on:
+  push:
+    branches: [main]
+    tags: ['k3browser-v*']
+    paths:
+      - 'K3Browser/**'
+      - '.github/workflows/build-k3browser.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_16.4.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.4.app
+          elif [ -d /Applications/Xcode_16.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.3.app
+          elif [ -d /Applications/Xcode_16.2.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          else
+            sudo xcode-select -s /Applications/Xcode.app
+          fi
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: K3Browser
+        run: xcodegen generate
+
+      - name: Build app unsigned
+        working-directory: K3Browser
+        run: |
+          set +e
+          xcodebuild build \
+            -project K3Browser.xcodeproj \
+            -scheme K3Browser \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            ENABLE_BITCODE=NO \
+            ARCHS=arm64 2>&1 | tee build_output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          grep -i "error:" build_output.log || true
+          exit $EXIT_CODE
+
+      - name: Inspect and package IPA
+        working-directory: K3Browser
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find build/Build/Products -path "*Release-iphoneos/*.app" -type d | head -1)
+          test -n "$APP_PATH"
+          echo "APP_PATH=$APP_PATH"
+          plutil -p "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/K3Browser"
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          cd build
+          zip -ry K3Browser.ipa Payload
+          ls -lah K3Browser.ipa
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k3browser-build-log
+          path: K3Browser/build_output.log
+          retention-days: 14
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: K3Browser-ipa
+          path: K3Browser/build/K3Browser.ipa
+          retention-days: 90
+
+      - name: Create Release on tag
+        if: startsWith(github.ref, 'refs/tags/') && success()
+        uses: softprops/action-gh-release@v2
+        with:
+          files: K3Browser/build/K3Browser.ipa
+          generate_release_notes: true
