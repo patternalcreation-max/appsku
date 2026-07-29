@@ -6,6 +6,7 @@ Applied inside a freshly checked-out upstream repo by GitHub Actions.
 - Leaves app code intact; DDG falls back to system font.
 """
 from pathlib import Path
+import re
 import shutil
 
 pbx = Path("iOS/DuckDuckGo-iOS.xcodeproj/project.pbxproj")
@@ -43,10 +44,11 @@ for old, new in replacements.items():
 # unsigned sideload build EXPANDED_CODE_SIGN_IDENTITY is empty, causing keychain
 # lookup failure. Patch the generated shell script text in project.pbxproj to
 # copy GRDB but skip codesign when no identity is present.
-old_grdb_sign = '''# Sign the framework directory contents\n/usr/bin/codesign \\\n    --force \\\n    --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \\\n    --timestamp\\=none \\\n    --preserve-metadata\\=identifier,entitlements,flags \\\n    --generate-entitlement-der \"${grdb_install_dir}\"\n'''
-new_grdb_sign = '''# Sign the framework directory contents only for signed builds\nif [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ] && [ \"${EXPANDED_CODE_SIGN_IDENTITY}\" != \"-\" ]; then\n/usr/bin/codesign \\\n    --force \\\n    --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \\\n    --timestamp\\=none \\\n    --preserve-metadata\\=identifier,entitlements,flags \\\n    --generate-entitlement-der \"${grdb_install_dir}\"\nelse\n    echo \"Skipping GRDB codesign for unsigned sideload build\"\nfi\n'''
-if old_grdb_sign in s:
-    s = s.replace(old_grdb_sign, new_grdb_sign)
+grdb_pattern = r'# Sign the framework directory contents.*?--generate-entitlement-der.*?\\\\n'
+grdb_replacement = '# Sign the framework directory contents skipped for unsigned sideload build\\necho \\\"Skipping GRDB codesign for unsigned sideload build\\\"\\n'
+s2, grdb_count = re.subn(grdb_pattern, grdb_replacement, s, count=1, flags=re.S)
+if grdb_count:
+    s = s2
     print("Patched GRDB framework codesign phase for unsigned build")
 else:
     missing.append("GRDB codesign shell phase")
