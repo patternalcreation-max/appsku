@@ -4,16 +4,16 @@
   "sourceURL": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/apps-ddg.json",
   "apps": [
     {
-      "name": "DDG SUPER Native Agent",
+      "name": "DDG SUPER Stable",
       "bundleIdentifier": "com.duckduckgo.mobile.ios",
       "developerName": "patternalcreation-max / DuckDuckGo OSS",
-      "subtitle": "DuckDuckGo iOS with native Agent button",
-      "localizedDescription": "Unsigned DuckDuckGo iOS build from duckduckgo/apple-browsers tag 7.210.0+ios. v0.4.1 adds a launch-safe delayed native Agent button plus internal DOM probe for page snapshot/copy/share.",
-      "version": "7.210.0-native.4.1",
+      "subtitle": "Stable DuckDuckGo unsigned sideload build",
+      "localizedDescription": "Stable unsigned DuckDuckGo iOS build from duckduckgo/apple-browsers tag 7.210.0+ios. No native Agent patch. Use this to verify base DDG launches cleanly.",
+      "version": "7.210.0-stable.3.3",
       "versionDate": "2026-07-29",
-      "versionDescription": "Native Agent MVP hotfix: delayed Agent button after viewDidAppear, alert-style snapshot panel, JS DOM probe, page title/URL/text/link/form snapshot, Copy Snapshot, Share. Xcode 16.4, iPhoneOS SDK 18.5, min iOS 15.0.",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/ddg-v0.4.1/DDG-SUPER.ipa",
-      "size": 155927994,
+      "versionDescription": "Stable baseline: verified DDG unsigned IPA, no Agent overlay/probe. Xcode 16.4, iPhoneOS SDK 18.5, min iOS 15.0.",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/ddg-v0.3.3/DDG-SUPER.ipa",
+      "size": 155923992,
       "minOSVersion": "15.0"
     }
   ]
