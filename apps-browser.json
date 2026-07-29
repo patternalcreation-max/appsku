@@ -13,7 +13,7 @@
       "versionDate": "2026-07-29",
       "versionDescription": "Hermes-Lite browser runtime: agent loop, JSON tool-call parser, DOM Snapshot V2, approval tray, action timeline, local memory notes, export log/files, bottom command bar, and gated browser tools.",
       "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.4.0/K3Browser.ipa",
-      "size": 0,
+      "size": 351591,
       "minOSVersion": "15.0"
     }
   ]
