@@ -41,6 +41,7 @@ jobs:
       - name: Patch DDG for external unsigned sideload build
         working-directory: ddg
         run: |
+          mkdir -p ../ddg-logs
           python3 ../builder/ddg/patch_ddg_for_sideload.py
           cat > iOS/Configuration/ExternalDeveloper.xcconfig <<'EOF'
           // External sideload build config for patternalcreation-max
@@ -56,10 +57,6 @@ jobs:
           CODE_SIGN_IDENTITY =
           EOF
 
-      - name: List schemes
-        working-directory: ddg/iOS
-        run: xcodebuild -list -project DuckDuckGo-iOS.xcodeproj
-
       - name: Build unsigned app
         working-directory: ddg/iOS
         run: |
@@ -70,6 +67,8 @@ jobs:
             -sdk iphoneos \
             -configuration Release \
             -derivedDataPath build \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -77,14 +76,14 @@ jobs:
             ENABLE_BITCODE=NO \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=NO \
-            | tee build_output.log
+            2>&1 | tee ../../ddg-logs/build_output.log
 
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ddg-build-log
-          path: ddg/iOS/build_output.log
+          name: ddg-build-diagnostics
+          path: ddg-logs
           retention-days: 7
 
       - name: Package unsigned IPA
