@@ -53,6 +53,18 @@ if resolved.exists():
         resolved.unlink()
         print(f"Deleted stale private SwiftPM lockfile: {resolved}")
 
+# Current DDG main references a WebKit constant that exists only in newer SDKs.
+# GitHub macos-15 currently exposes Xcode 16.4 / iPhoneOS 18.5, so the symbol is
+# unavailable at compile time. WKWebsiteDataStore data type constants are String
+# values; keep the same runtime value without requiring the SDK symbol.
+screen_time_cleaner = Path("SharedPackages/ScreenTimeDataCleaner/Sources/ScreenTimeDataCleaner/ScreenTimeDataCleaner.swift")
+if screen_time_cleaner.exists():
+    t = screen_time_cleaner.read_text()
+    t2 = t.replace("WKWebsiteDataTypeScreenTime", '"WKWebsiteDataTypeScreenTime"')
+    if t2 != t:
+        screen_time_cleaner.write_text(t2)
+        print(f"Patched unavailable SDK symbol in {screen_time_cleaner}")
+
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
     print("Non-fatal missing patterns, upstream may have changed:")
