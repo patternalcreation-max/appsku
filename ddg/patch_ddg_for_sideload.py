@@ -172,6 +172,155 @@ for xcode_version_file in [Path(".xcode-version"), Path("iOS/.xcode-version")]:
         xcode_version_file.write_text("16.4\n")
         print(f"Pinned DDG Xcode gate to GitHub runner version in {xcode_version_file}")
 
+
+
+# v0.4.0-native: add a native SUPERAGENT browser adapter MVP.
+# This is intentionally small and reload-safe: Swift owns the UI panel/button;
+# a tiny internal WKUserScript only exposes DOM text extraction on every page.
+tab = Path("iOS/DuckDuckGo/TabViewController.swift")
+if tab.exists():
+    t = tab.read_text()
+    if "ddgSuperAgentButton" not in t:
+        t = t.replace(
+            "    private(set) var webView: WKWebView!\n",
+            "    private(set) var webView: WKWebView!\n"
+            "    private var ddgSuperAgentButton: UIButton?\n"
+        )
+        t = t.replace(
+            "        configuration.userContentController = userContentController\n        userContentController.delegate = self\n",
+            "        configuration.userContentController = userContentController\n"
+            "        userContentController.delegate = self\n"
+            "        installDDGSuperAgentProbe(on: userContentController)\n"
+        )
+        t = t.replace(
+            "        borderView.insertSelf(into: webView)\n        borderView.updateForAddressBarPosition(appSettings.currentAddressBarPosition)\n    }\n",
+            "        borderView.insertSelf(into: webView)\n"
+            "        borderView.updateForAddressBarPosition(appSettings.currentAddressBarPosition)\n"
+            "        installDDGSuperAgentNativeButton()\n"
+            "    }\n"
+        )
+        marker = "\n    private func addObservers() {\n"
+        native = r'''
+
+    private func installDDGSuperAgentProbe(on userContentController: WKUserContentController) {
+        let source = """
+        (function() {
+            if (window.__DDG_SUPERAGENT_NATIVE_PROBE__) { return; }
+            window.__DDG_SUPERAGENT_NATIVE_PROBE__ = {
+                version: "0.4.0-native",
+                extract: function() {
+                    var body = document.body;
+                    var text = body && body.innerText ? body.innerText : "";
+                    var links = Array.prototype.slice.call(document.querySelectorAll("a[href]"), 0, 80).map(function(a) {
+                        return { text: (a.innerText || a.textContent || "").trim().slice(0, 120), href: a.href };
+                    });
+                    var forms = Array.prototype.slice.call(document.querySelectorAll("input, textarea, select, button"), 0, 120).map(function(el) {
+                        return {
+                            tag: el.tagName,
+                            type: el.getAttribute("type") || "",
+                            name: el.getAttribute("name") || "",
+                            id: el.id || "",
+                            placeholder: el.getAttribute("placeholder") || "",
+                            text: (el.innerText || el.value || "").slice(0, 80)
+                        };
+                    });
+                    return JSON.stringify({
+                        ok: true,
+                        url: location.href,
+                        title: document.title,
+                        text: text.slice(0, 24000),
+                        textLength: text.length,
+                        links: links,
+                        forms: forms,
+                        capturedAt: new Date().toISOString()
+                    });
+                }
+            };
+        })();
+        """
+        let script = WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        userContentController.addUserScript(script)
+    }
+
+    private func installDDGSuperAgentNativeButton() {
+        guard ddgSuperAgentButton == nil else { return }
+        let button = UIButton(type: .system)
+        button.setTitle("⚡ Agent", for: .normal)
+        button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
+        button.backgroundColor = UIColor.systemIndigo.withAlphaComponent(0.92)
+        button.tintColor = .white
+        button.layer.cornerRadius = 18
+        button.layer.shadowColor = UIColor.black.cgColor
+        button.layer.shadowOpacity = 0.25
+        button.layer.shadowRadius = 8
+        button.layer.shadowOffset = CGSize(width: 0, height: 3)
+        button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(ddgSuperAgentButtonTapped), for: .touchUpInside)
+
+        webViewContainer.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.trailingAnchor.constraint(equalTo: webViewContainer.safeAreaLayoutGuide.trailingAnchor, constant: -14),
+            button.bottomAnchor.constraint(equalTo: webViewContainer.safeAreaLayoutGuide.bottomAnchor, constant: -18),
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 36)
+        ])
+        ddgSuperAgentButton = button
+    }
+
+    @objc private func ddgSuperAgentButtonTapped() {
+        let js = """
+        (window.__DDG_SUPERAGENT_NATIVE_PROBE__ && window.__DDG_SUPERAGENT_NATIVE_PROBE__.extract)
+          ? window.__DDG_SUPERAGENT_NATIVE_PROBE__.extract()
+          : JSON.stringify({ ok: false, error: "probe_not_ready", url: location.href, title: document.title });
+        """
+        webView.evaluateJavaScript(js) { [weak self] result, error in
+            DispatchQueue.main.async {
+                self?.presentDDGSuperAgentPanel(rawResult: result as? String, error: error)
+            }
+        }
+    }
+
+    private func presentDDGSuperAgentPanel(rawResult: String?, error: Error?) {
+        var title = "DDG Native Agent"
+        var message = "Probe ready."
+        if let error {
+            message = "JS probe error: \(error.localizedDescription)"
+        } else if let rawResult,
+                  let data = rawResult.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let pageTitle = (json["title"] as? String) ?? "Untitled"
+            let url = (json["url"] as? String) ?? ""
+            let text = (json["text"] as? String) ?? ""
+            let textLength = (json["textLength"] as? Int) ?? text.count
+            let linksCount = (json["links"] as? [[String: Any]])?.count ?? 0
+            let formsCount = (json["forms"] as? [[String: Any]])?.count ?? 0
+            title = "⚡ Agent: Page Snapshot"
+            let preview = String(text.prefix(1400))
+            message = "Title: \(pageTitle)\nURL: \(url)\nText: \(textLength) chars\nLinks: \(linksCount) · Inputs: \(formsCount)\n\n\(preview)"
+        }
+
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "Copy Snapshot", style: .default) { _ in
+            UIPasteboard.general.string = message
+        })
+        alert.addAction(UIAlertAction(title: "Share", style: .default) { [weak self] _ in
+            let vc = UIActivityViewController(activityItems: [message], applicationActivities: nil)
+            self?.present(vc, animated: true)
+        })
+        alert.addAction(UIAlertAction(title: "Close", style: .cancel))
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = ddgSuperAgentButton ?? view
+            popover.sourceRect = ddgSuperAgentButton?.bounds ?? view.bounds
+        }
+        present(alert, animated: true)
+    }
+'''
+        t = t.replace(marker, native + marker)
+        tab.write_text(t)
+        print(f"Injected DDG native Agent button/probe into {tab}")
+    else:
+        print("DDG native Agent button/probe already present")
+
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
     print("Non-fatal missing patterns, upstream may have changed:")
