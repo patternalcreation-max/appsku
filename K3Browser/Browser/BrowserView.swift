@@ -203,8 +203,8 @@ enum KeychainStore {
 
 final class AgentSettings: ObservableObject {
     @Published var apiKey: String = ""
-    @Published var baseURL: String = UserDefaults.standard.string(forKey: "agent.baseURL") ?? "https://api.openai.com/v1/chat/completions"
-    @Published var model: String = UserDefaults.standard.string(forKey: "agent.model") ?? "gpt-4o-mini"
+    @Published var baseURL: String = UserDefaults.standard.string(forKey: "agent.baseURL") ?? "https://api.z.ai/api/coding/paas/v4/chat/completions"
+    @Published var model: String = UserDefaults.standard.string(forKey: "agent.model") ?? "glm-5.2"
     @Published var systemPrompt: String = UserDefaults.standard.string(forKey: "agent.systemPrompt") ?? "You are K3 Browser Hermes-Lite. You control only browser-support tools. Return ONLY JSON: {\"type\":\"final\",\"message\":\"...\"} or {\"type\":\"tool_call\",\"tool\":\"tool_name\",\"arguments\":{...},\"reason\":\"...\"}. Never ask for unsafe actions."
     @Published var status: String = "Not tested"
     @Published var isTesting = false
@@ -212,6 +212,7 @@ final class AgentSettings: ObservableObject {
     init() { apiKey = KeychainStore.load(account: "agent.apiKey") }
 
     func save() {
+        baseURL = normalizedChatURLString(baseURL)
         _ = KeychainStore.save(apiKey, account: "agent.apiKey")
         UserDefaults.standard.set(baseURL, forKey: "agent.baseURL")
         UserDefaults.standard.set(model, forKey: "agent.model")
@@ -219,10 +220,30 @@ final class AgentSettings: ObservableObject {
         status = "Saved locally"
     }
 
+    func useGLM52Preset() {
+        baseURL = "https://api.z.ai/api/coding/paas/v4/chat/completions"
+        model = "glm-5.2"
+        status = "GLM 5.2 preset loaded"
+        save()
+    }
+
+    func normalizedChatURLString(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if trimmed.hasSuffix("/chat/completions") { return trimmed }
+        if trimmed.hasSuffix("/v4") || trimmed.hasSuffix("/v1") || trimmed.contains("/api/coding/paas/v4") {
+            return trimmed + "/chat/completions"
+        }
+        return trimmed
+    }
+
+    func chatURL() -> URL? {
+        URL(string: normalizedChatURLString(baseURL))
+    }
+
     func testConnection() {
         save()
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "Missing API key"; return }
-        guard let url = URL(string: baseURL) else { status = "Bad API URL"; return }
+        guard let url = chatURL() else { status = "Bad API URL"; return }
         isTesting = true
         status = "Testing..."
         var req = URLRequest(url: url)
@@ -594,7 +615,7 @@ final class BrowserState: NSObject, ObservableObject {
     func exportLog() { exportText(title: "k3-agent-run", body: steps.map { "- \($0.icon) **\($0.title)**: \($0.detail)" }.joined(separator: "\n"), ext: "md") }
 
     func callLLM(messages: [[String: String]], settings: AgentSettings, completion: @escaping (Result<String, Error>) -> Void) {
-        guard let url = URL(string: settings.baseURL) else { completion(.failure(NSError(domain: "K3", code: 1, userInfo: [NSLocalizedDescriptionKey: "Bad API URL"]))); return }
+        guard let url = settings.chatURL() else { completion(.failure(NSError(domain: "K3", code: 1, userInfo: [NSLocalizedDescriptionKey: "Bad API URL"]))) ; return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"; req.timeoutInterval = 90
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -818,8 +839,13 @@ struct AgentCockpitView: View {
     var settingsView: some View {
         Form {
             Section("API") {
+                Button("Use GLM 5.2 / Z.AI preset", action: settings.useGLM52Preset)
                 SecureField("API Key", text: $settings.apiKey)
                 TextField("Base URL", text: $settings.baseURL).autocapitalization(.none).disableAutocorrection(true)
+                Text("GLM default: https://api.z.ai/api/coding/paas/v4/chat/completions")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .textSelection(.enabled)
                 TextField("Model", text: $settings.model).autocapitalization(.none).disableAutocorrection(true)
                 TextEditor(text: $settings.systemPrompt).frame(height: 120)
                 HStack { Button("Save", action: settings.save).buttonStyle(.borderedProminent); Button(settings.isTesting ? "Testing" : "Test", action: settings.testConnection).buttonStyle(.bordered).disabled(settings.isTesting) }
