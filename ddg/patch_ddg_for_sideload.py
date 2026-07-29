@@ -193,11 +193,12 @@ if tab.exists():
             "        installDDGSuperAgentProbe(on: userContentController)\n"
         )
         t = t.replace(
-            "        borderView.insertSelf(into: webView)\n        borderView.updateForAddressBarPosition(appSettings.currentAddressBarPosition)\n    }\n",
-            "        borderView.insertSelf(into: webView)\n"
-            "        borderView.updateForAddressBarPosition(appSettings.currentAddressBarPosition)\n"
-            "        installDDGSuperAgentNativeButton()\n"
-            "    }\n"
+            "        super.viewDidAppear(animated)\n        // The email manager is pulled from the main view controller, so reconnect it now, otherwise, it's nil\n",
+            "        super.viewDidAppear(animated)\n"
+            "        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in\n"
+            "            self?.installDDGSuperAgentNativeButtonIfReady()\n"
+            "        }\n"
+            "        // The email manager is pulled from the main view controller, so reconnect it now, otherwise, it's nil\n"
         )
         marker = "\n    private func addObservers() {\n"
         native = r'''
@@ -207,7 +208,7 @@ if tab.exists():
         (function() {
             if (window.__DDG_SUPERAGENT_NATIVE_PROBE__) { return; }
             window.__DDG_SUPERAGENT_NATIVE_PROBE__ = {
-                version: "0.4.0-native",
+                version: "0.4.1-native",
                 extract: function() {
                     var body = document.body;
                     var text = body && body.innerText ? body.innerText : "";
@@ -242,28 +243,25 @@ if tab.exists():
         userContentController.addUserScript(script)
     }
 
-    private func installDDGSuperAgentNativeButton() {
-        guard ddgSuperAgentButton == nil else { return }
+    private func installDDGSuperAgentNativeButtonIfReady() {
+        guard ddgSuperAgentButton == nil, isViewLoaded, view.window != nil, webView != nil else { return }
         let button = UIButton(type: .system)
-        button.setTitle("⚡ Agent", for: .normal)
+        button.setTitle("Agent", for: .normal)
         button.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .semibold)
-        button.backgroundColor = UIColor.systemIndigo.withAlphaComponent(0.92)
+        button.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.90)
         button.tintColor = .white
         button.layer.cornerRadius = 18
-        button.layer.shadowColor = UIColor.black.cgColor
-        button.layer.shadowOpacity = 0.25
-        button.layer.shadowRadius = 8
-        button.layer.shadowOffset = CGSize(width: 0, height: 3)
-        button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(ddgSuperAgentButtonTapped), for: .touchUpInside)
 
-        webViewContainer.addSubview(button)
+        view.addSubview(button)
         NSLayoutConstraint.activate([
-            button.trailingAnchor.constraint(equalTo: webViewContainer.safeAreaLayoutGuide.trailingAnchor, constant: -14),
-            button.bottomAnchor.constraint(equalTo: webViewContainer.safeAreaLayoutGuide.bottomAnchor, constant: -18),
-            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 36)
+            button.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -14),
+            button.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -18),
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 72),
+            button.heightAnchor.constraint(equalToConstant: 36)
         ])
+        view.bringSubviewToFront(button)
         ddgSuperAgentButton = button
     }
 
@@ -299,7 +297,7 @@ if tab.exists():
             message = "Title: \(pageTitle)\nURL: \(url)\nText: \(textLength) chars\nLinks: \(linksCount) · Inputs: \(formsCount)\n\n\(preview)"
         }
 
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .actionSheet)
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Copy Snapshot", style: .default) { _ in
             UIPasteboard.general.string = message
         })
@@ -308,10 +306,6 @@ if tab.exists():
             self?.present(vc, animated: true)
         })
         alert.addAction(UIAlertAction(title: "Close", style: .cancel))
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = ddgSuperAgentButton ?? view
-            popover.sourceRect = ddgSuperAgentButton?.bounds ?? view.bounds
-        }
         present(alert, animated: true)
     }
 '''
