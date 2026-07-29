@@ -1,382 +1,431 @@
-# K3Browser MAX Implementation Plan
+# K3Browser MAX — Capability, Settings & UI Roadmap
 
-> **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
+Updated: 2026-07-29
+Status: **council-approved product/architecture direction; implementation not started**
+Current anchor: **K3Browser v0.7.0 build 9, immutable tag `k3browser-v0.7.0`**
 
-**Goal:** Turn K3Browser into an iPhone-first autonomous operator browser and generic authorized security-research workstation with a draggable adaptive Agent Ball/Dock, typed local tool execution, durable settings/soul/memory, evidence-grade research artifacts, and an optional Hermes remote brain—without hardcoding any bounty platform, target, vulnerability class, exploit, or platform rule.
+## Council record
 
-**Architecture:** The iPhone is the execution and approval authority. A bounded on-device runtime owns WKWebView, snapshots, typed tools, redaction, policy, approvals, secrets, engagement scope, and artifacts. An optional user-owned Hermes relay may plan, delegate, schedule, use MCP/terminal, and return proposals or artifacts, but every browser effect is revalidated and executed locally. Imported scope/rules, page content, model output, and relay output are untrusted proposals until the operator reviews and activates an exact normalized profile digest. K3 records operator-declared authorization and enforced controls; it does not claim to independently prove legal authorization.
+This roadmap replaces the stale pre-v0.7 plan. It was shaped through:
 
-**Tech Stack:** Swift 5, SwiftUI, UIKit, WKWebView, Foundation, Security/Keychain, SQLite3, Vision, PDFKit where needed, XcodeGen, GitHub Actions macOS 15/Xcode 16.x, unsigned IPA.
+- four independent GLM 5.2 passes: tools/runtime, settings/data, latest-iOS UI, authority/failure modes;
+- one GLM 5.2 convergence pass;
+- one concise SuperGrok adversarial review;
+- one GLM 5.2 adjudication pass;
+- final source-grounded moderator corrections.
+
+The council produced about 158k characters before distillation. External reports remain temporary review artifacts and are not product truth. This document is the single living MAX roadmap.
+
+## Verdict
+
+K3Browser should become a **page-first mobile operator workstation**, not a larger chatbot and not a Mission Control dashboard mall.
+
+MAX means:
+
+1. richer perception and extraction;
+2. stable typed interaction against live page identity;
+3. useful persistent artifacts, evidence, and resumable checkpoints;
+4. low-friction autonomy for read/scroll/wait work;
+5. strict per-effect authority for navigation, mutation, capture, downloads, and relay work;
+6. truthful on-device versus relay capability boundaries.
+
+Before adding interactive tools, fix the remaining substrate: stringly arguments, substring risk classification, approval bound only to run, selectors without stable references, and Engagement scope not wired into execution.
 
 ---
 
-## 1. Product contract
+## 1. Shipped truth: v0.7.0
 
-K3Browser MAX is not a chatbot overlay. The page is the workspace. The user gives a goal; K3 inspects, plans, acts within a bounded capability envelope, checks the outcome, and delivers reusable artifacts.
+### Already shipped
 
-### Efficiency and simplification gates
+- latest-iOS 26.0 native SwiftUI + WKWebView app;
+- one `WKWebView`, `BrowserState`, active-run coordinator, composer, and presentation router;
+- Magnetic Capsule states: collapsed Ball, compose, active peek, persistent result peek;
+- sanitized DOM snapshots: text, headings, buttons, input metadata, links, forms, tables;
+- 19 known tools;
+- direct OpenAI-compatible/GLM model calls;
+- file-backed notes and Markdown/JSON/CSV exports through Share Sheet;
+- blocking one-time approval UI;
+- cancellation, navigation identity, timeout, stale-callback rejection, redaction;
+- Engagement Profile/store/scope-matcher foundation;
+- six model turns maximum, one tool proposal per model turn, foreground only.
 
-- One composer, one active-run coordinator, one settings owner, and one durable source of truth per data class.
-- New UI replaces superseded controls in the same change; no hidden legacy cockpit/composer remains as a second workflow.
-- Scope matching, redaction, hashing, diffing, budgets, persistence, and validation are deterministic local code and never consume an LLM call.
-- Direct mode handles foreground page work. Relay is used only for capabilities the device cannot perform efficiently or truthfully: long-running jobs, delegation, terminal/MCP, desktop browser, raw HTTP/DNS/TLS, heavy source analysis, or scheduled work.
-- Persist immutable artifacts once by content hash and reference them from runs/findings; do not duplicate snapshot bodies across stores.
-- Derived UI state is recomputed from canonical runtime/storage state, not separately persisted.
-- Every new abstraction must remove a concrete duplication, security ambiguity, or measured bottleneck. Premature service layers and generic frameworks are rejected.
-- Release A/A.5/Dock/Mission Control ships as one verified v0.5 PEAK build. No intermediate tag, IPA, or manifest churn.
+### Shipped limitations that MAX must remove
 
-### Binding rules
+- tool arguments flatten to `[String:String]`;
+- `classify()` relies on tool/argument substring matching;
+- approval is not bound to page generation, canonical origin, argument digest, or live target fingerprint;
+- approved DOM targets are not re-resolved at commit time;
+- Engagement scope is not yet on the browser-tool execution path;
+- no stable element references, visual perception, downloads, evidence store, recipes, sessions, relay, or SQLite event store;
+- file-backed notes have no metadata index;
+- no automated Swift/XCTest target yet.
 
-- One primary goal composer only.
-- Current v0.4.1 UI may be replaced completely.
-- Browser canvas receives most of the viewport.
-- The agent control morphs between an expanded bottom dock and a draggable floating ball.
-- The ball snaps to the nearest safe left/right edge and persists its normalized position.
-- Read-only public research may run autonomously inside explicit budgets.
-- Side effects are authorized by deterministic local policy, never by prompt text or relay output.
-- Secrets never enter snapshots, model payloads, logs, memory, recipes, exports, or relay messages.
-- Imported engagement rules remain an inactive draft until the operator reviews unresolved clauses and activates the exact normalized digest locally.
-- Scope is deny-by-default. Explicit exclusions win; redirects and popup targets are revalidated; `*.example.com` matches subdomains only and requires a separate exact rule for the apex.
-- A bounded plan may authorize repeated unchanged actions. K3 pauses only when target, method, effect, auth context, data class, rate, destination, or scope expands.
-- Effective risk comes from the local tool registry and resolved live effect; inbound page/model/file/recipe/relay risk labels are ignored.
-- No new entitlements, extensions, App Groups, NetworkExtension, private APIs, background daemon, or third-party packages.
+---
 
-## 2. UI direction: Adaptive Agent Dock
+## 2. Non-negotiable architecture
 
-### Expanded dock states
+### Device authority
 
-```text
-Idle:       [Back] [Page title / Search or URL] [Tabs] [K3]
-Compose:    [Close] [Tell K3 what you need…] [Run]
-Running:    [Stop] [Step N/M · human-readable status] [Inspect]
-Approval:   approval tray above dock; page remains visible
-Completed:  [Done] [Artifact/result title] [Open]
-```
+Swift runtime owns browser lifecycle, run/action identity, page identity, snapshots, typed-tool registry, budgets, scope, redaction, approvals, commit, persistence, and settlement. Model, page, injected script, file, recipe, and relay only provide untrusted data or proposals.
 
-### Collapsed Agent Ball
+### Two gates
 
-- 52–58 pt circular native material control; touch target at least 44 pt.
-- Drag anywhere inside the current safe viewport; on release, spring-snap to nearest left/right edge.
-- Persist `edge`, normalized vertical position, and collapsed preference in UserDefaults.
-- Re-clamp after rotation, keyboard changes, safe-area changes, and Dynamic Type changes.
-- Tap expands the dock. Long press opens quick actions: New Goal, Inspect Page, Stop, Library.
-- Badge semantics: blue working, amber approval with count/text accessibility label, red failed, green completed.
-- Never steal focus or cover a pending approval. During approval, ball expands or anchors the tray.
-- Honor Reduce Motion with fade/instant transitions.
+1. **Dispatch gate:** decode typed schema; verify active run, capability version, canonical origin, effective scope, budgets, static effect descriptor, and approval policy.
+2. **Commit gate:** atomically consume a single-use approval token; verify expiry, run/action/page/origin/argument digest; re-resolve the live target; compare target fingerprint and live field/form classification; then execute.
 
-### Main surfaces
+Mismatch consumes or invalidates approval and returns a replan error. Authority never broadens silently.
 
-1. **Browser Workspace** — WKWebView, compact top security/title strip, target highlight, adaptive dock.
-2. **Mission Control** — goal, plan, current checkpoint, approval, result/artifacts, readable timeline, diagnostics disclosure.
-3. **Tabs** — tab owner (`user`/`agent`), origin, screenshot, run status, artifacts.
-4. **Library** — Runs, Notes, Files, Recipes, Bookmarks, Site Memory.
-5. **Settings** — Model, Soul, Autonomy, Data, Relay, Privacy, Advanced.
-6. **Research Workspace** — Engagement, Scope Inspector, Auth Contexts, Test Notebook, Evidence Vault, Findings, and Report Builder inside Mission Control; never a second composer.
+### Device-owned page identity
 
-## 3. Settings, soul, and persistence
+Use a native navigation generation owned by `WKNavigationDelegate` and URL observation. Same-document instrumentation may provide hints, but never authority. A sanitized snapshot records the current navigation generation plus its own snapshot ID. Snapshot capture does not itself advance navigation generation.
 
-### Storage ownership
+Commit protection combines:
 
-| Data | Store | Rule |
+- run ID and action ID;
+- native navigation generation;
+- canonical origin;
+- snapshot ID;
+- stable element reference;
+- strict live target fingerprint.
+
+### Typed static registry
+
+Replace substring classification with a compiled descriptor per tool:
+
+- typed input and result schemas;
+- effect class;
+- settlement class;
+- default approval policy;
+- scope requirement;
+- timeout and budgets;
+- redaction and evidence policy;
+- replay policy;
+- descriptor version.
+
+Live DOM analysis occurs at commit, not inside a fantasy dynamic registry at dispatch.
+
+### Bounded autonomy
+
+An approved immutable plan may automatically execute only:
+
+- page reads;
+- extraction;
+- bounded scroll;
+- bounded wait/settlement;
+- bounded local temporary observations.
+
+Unknown future actions are never pre-approved. Navigation, click, fill, select, submit, capture retention, download, export/share, external relay, or scope expansion pauses for the relevant approval.
+
+---
+
+## 3. MAX tool registry
+
+### Execution boundaries
+
+| Boundary | Credible capability | Hard limit |
 |---|---|---|
-| Provider API keys, relay token | Keychain | This-device-only; never copied into DB/log/export |
-| Small UI preferences | UserDefaults | Dock edge/position, appearance, selected model ID, autonomy preset |
-| Soul/persona | Application Support JSON | Versioned, atomic write, user-editable; cannot override core policy |
-| Engagement profiles | Application Support JSON | Platform-neutral, versioned, hash-validated, activated only by explicit operator gesture |
-| Sessions/runs/events/approvals/checkpoints | SQLite3 | Append events + materialized state; pending approvals invalid after relaunch |
-| Memory, recipes, metadata | SQLite3 | Provenance, trust label, quotas, content hash |
-| Findings/evidence chain | SQLite3 + Application Support/Evidence | Redact before canonical hash; bound to engagement, origin, run, tool, and page epoch |
-| Notes/files/screenshots/downloads | Application Support/Files | Atomic writes, opaque IDs, DB metadata, quota and cleanup |
-| Temporary run artifacts | Caches/Run/<runID> | Reclaimable; promote explicitly to Library |
+| Native Swift | policy, storage, Vision OCR, PDF, files, Keychain, budgets, WKDownload, model/relay clients | no terminal, daemon, or raw system traffic interception |
+| WKWebView JS invoked by Swift | DOM snapshot, element inspection, interaction, scrolling | page context is untrusted; no arbitrary model-authored JS |
+| Document-start instrumentation | SPA hints, mutation/settlement hints, page fetch/XHR observation where compatible | partial/spoofable; not raw HAR/CDP/MITM |
+| Hermes relay/external proxy | long-running analysis, terminal/MCP, raw HTTP/DNS/TLS, scheduled work | output is an untrusted proposal; cannot commit device effects |
+
+### Effect policy legend
+
+- **AUTO:** automatic within run/origin/time/byte budgets.
+- **PLAN:** automatic only inside an approved immutable read/scroll/wait manifest.
+- **APPROVE:** one exact action, one token.
+- **ALWAYS:** approval cannot be delegated to a plan.
+- **SCOPED:** active Engagement Profile must permit the page/effect.
+- **NO-REPLAY:** a new proposal and live validation are required.
+
+### A. Page perception and inspection
+
+| Tools | Stage | Policy | Result/evidence |
+|---|---|---|---|
+| `snapshot_page`, `extract_text`, `extract_links`, `extract_forms`, `extract_tables` | shipped; re-type in Peak 1 | AUTO/PLAN; SCOPED when engagement active | sanitized snapshot/extraction IDs |
+| `inspect_element(ref)` | next credible | AUTO/PLAN | role, label, tag, safe attributes, bounds, fingerprint; never current value |
+| `find_in_page(query, mode)` | next credible | AUTO/PLAN | stable element refs and excerpts |
+| `extract_records(schema, root_refs)` | later | AUTO/PLAN | bounded structured records; declarative schema only |
+| `compare_snapshots(a,b)` | later | AUTO/PLAN | deterministic redacted diff and citations |
+| `inspect_page_metadata` | later | AUTO/PLAN | origin, canonical URL, document metadata, script/form/resource-origin summary |
+| `observe_page_requests` | experimental on-device | AUTO/PLAN + visible limitation label | only instrumented page fetch/XHR/resource timing; never claims raw traffic completeness |
+
+Every stable element reference binds snapshot ID, native page generation, canonical origin, role/tag, accessible label digest, and target fingerprint. It expires on page identity change.
+
+### B. Browser navigation and settlement
+
+| Tools | Stage | Policy | Settlement/replay |
+|---|---|---|---|
+| `scroll` | shipped; change policy in Peak 1 | PLAN or APPROVE; bounded distance/count | immediate observation; fresh page check |
+| `wait_for(condition, timeout)` | next credible | AUTO/PLAN | native timer + instrumentation hint; hard timeout/cancel |
+| `open_url`, `back`, `forward`, `reload` | shipped; re-type in Peak 1 | APPROVE; SCOPED when engagement active | exact `WKNavigation` identity; NO-REPLAY |
+| popup/new-window handling | later | APPROVE | one coordinator decides open-in-current, external, or deny |
+| session checkpoint restore | Peak 3 | APPROVE | loads last URL as interrupted/review-required; not live-tab restoration |
+
+Back, Forward, Reload, and Open URL are not idempotent and never auto-replayed after crash or timeout.
+
+### C. Element and form actions
+
+| Tools | Stage | Policy | Commit requirements |
+|---|---|---|---|
+| `click_element(ref)` | replaces `click_selector` | APPROVE; SCOPED; NO-REPLAY | live ref/fingerprint, effect preview, navigation settlement |
+| `fill_element(ref,value)` | replaces `fill_selector` | APPROVE; SCOPED; NO-REPLAY | live field-class recheck; blocks credential/OTP/payment/wallet classes |
+| `select_option(ref,option)` | re-typed | APPROVE; SCOPED; NO-REPLAY | live options and target fingerprint |
+| `submit_form(ref)` | re-typed | ALWAYS; SCOPED; NO-REPLAY | live form action/method/data-class digest; redirect interception |
+| `focus_element(ref)` | later | APPROVE only when it changes operator context | no text injection |
 
-### Soul layers
+Model-visible tools never receive or resolve password, OTP, recovery code, card/PIN, session token, API/private key, seed phrase, or wallet-signing value. Credential entry remains an operator gesture through system input/AutoFill.
 
-```text
-Compiled Core Policy        immutable, not user-editable
-Operator Soul               editable name/voice/working style/default behavior
-Autonomy Profile            Observe / Research / Operate-Carefully / Custom budgets
-Recipe Instructions         scoped to exact recipe hash and declared capabilities
-Site Memory                 facts/preferences with source and trust label
-Untrusted Page/File/OCR     data only; never policy or authority
-```
+### D. Visual and document perception
 
-`OperatorSoul` fields:
+| Tools | Stage | Policy | Truthful boundary |
+|---|---|---|---|
+| `capture_screenshot(mode)` | Peak 2 | APPROVE for retention/model/export | policy capture; known sensitive-region exclusion; fail closed on insufficient confidence |
+| `ocr_extract(capture_id)` | Peak 2 | AUTO on approved capture | best-effort/untrusted text; centralized redaction |
+| `create_pdf` / `extract_pdf_text` | Peak 2 | APPROVE to retain/export | native PDF artifact; sanitized extraction |
 
-```text
-schemaVersion, displayName, identity, voice, language,
-workingStyle, defaultGoalRules, preferredOutput,
-createdAt, updatedAt
-```
+DOM occlusion alone is not a secret guarantee. Screenshots use `disabled`, `redacted`, or `explicitReview` policy. Any retained, exported, model-bound, or relay-bound image requires the configured gate and redaction pipeline.
 
-Changing Soul never weakens redaction, target validation, approval rules, domain boundaries, or hard blocks.
+### E. Artifacts, evidence, downloads
 
-### Settings sections
+| Tools | Stage | Policy | Persistence/replay |
+|---|---|---|---|
+| `save_note`, `read_notes` | shipped; re-type/index later | bounded local save AUTO; reads AUTO | file-backed; safe filename only in timeline |
+| `export_markdown/json/csv/pdf` | CSV/JSON/MD shipped; PDF later | APPROVE | atomic temp file + Share Sheet; NO-REPLAY |
+| `save_finding` | Peak 2 | AUTO for redacted textual finding within quota; approval when sensitive artifact attached | SQLite ID + provenance |
+| `save_evidence` | Peak 2 | policy by artifact class | redacted content hash + prior hash + run/page/tool binding |
+| `accept_download` | Peak 2 | APPROVE | `WKDownload` from navigation/user gesture only; quarantine; no auto-open |
+| arbitrary agent URL fetch/download | experimental relay-only | APPROVE + SCOPED | never disguised as WKWebView download |
 
-- **Model:** Direct/Relay/Hybrid, trusted endpoint presets, model, connectivity test.
-- **Soul:** identity, tone, language, working rules, reset/export/import without secrets.
-- **Autonomy:** preset, read budgets, approved plan defaults, cross-origin behavior, Stop semantics.
-- **Data:** storage usage, notes/runs/recipes, retention, export, selective delete.
-- **Privacy:** what may go to model/relay, snapshot redaction preview, history query stripping.
-- **Relay:** endpoint trust, token Keychain, capability handshake, last sync.
-- **Advanced:** diagnostics, raw tool details, test fixtures; manual selectors live here only.
+### F. History, recipes, and relay
 
-## 4. Runtime trust model
+| Tools | Stage | Policy | Boundary |
+|---|---|---|---|
+| `search_runs`, `read_run`, `list_artifacts` | Peak 3 | AUTO local | redacted SQLite/files only |
+| `save_recipe` | Peak 3 | APPROVE | typed immutable manifest + capability versions; no JS/shell |
+| `dry_run_recipe` | Peak 3 | AUTO | resolves current scope/targets/effects without commit |
+| `run_recipe` | Peak 3 | APPROVE manifest; side effects pause per action | fresh page identity, scope, budgets, and approvals; never blind replay |
+| `delegate_to_relay` | Peak 4 | APPROVE + SCOPED + time/byte budget | redacted task package; async task ID; device remains authority |
+| external HTTP/DNS/TLS probe | Peak 4 relay only | ALWAYS + active Engagement scope | evidence returned as untrusted external observation |
 
-### Control plane
+No on-device exploit/scanner suite is exposed before scope, evidence, budget, relay, and report contracts exist.
 
-Authority comes only from user gesture, user goal, compiled local policy, and a locally approved capability plan.
+---
 
-### Data plane
+## 4. Settings MAX
 
-DOM, OCR, PDF, downloads, imported notes/recipes, model output, and relay output are untrusted data. They may propose but never authorize actions.
+Every visible control must map to an implemented runtime read point. Conditional sections stay absent until their capability ships.
 
-### Typed proposal envelope
+| Section | Controls | Storage | Applies |
+|---|---|---|---|
+| **Model & Operator** | provider preset, HTTPS endpoint, model, Keychain API key, connection test, name/persona/style/output language | Keychain + UserDefaults + versioned JSON | next run; test immediate |
+| **Browser** | search engine, external-link handling, popup behavior when implemented, clear website data, download review policy when implemented | UserDefaults + `WKWebsiteDataStore` action | next navigation or immediate destructive action |
+| **Agent Behavior** | response detail, default run step/page/time budgets, read-only/scroll/wait autonomy preset | versioned JSON | next run; descriptor-enforced |
+| **Authority** | read-only effective capability/approval summary, next-run step/page/time budget defaults, active budget use | computed + versioned JSON | next run/revalidation; never pre-approves an effect |
+| **Engagement** | import, review, activate/deactivate profile; scope inspector; window/budget status | atomic hashed App Support JSON | explicit gesture; immediate revalidation |
+| **Data & Privacy** | storage use, retention, export all, selective delete, screenshot policy, read-only redaction preview | UserDefaults + SQLite/files actions | immediate/next capture |
+| **Appearance & Accessibility** | reset Ball position, haptics, operator detail density; system Dark Mode/Dynamic Type/Reduce Motion status | UserDefaults + system environment | immediate presentation only |
+| **Relay** | endpoint, Keychain token, capability handshake, last status, disconnect | Keychain + versioned JSON | appears only in Peak 4; next relay task |
+| **Diagnostics** | connection test, runtime/schema versions, effective tool descriptors, migration status, redacted log export, verbose safe previews | computed + UserDefaults | never alters authority |
 
-Every proposal includes protocol version, run ID, plan ID, call ID, sequence, capability version, typed arguments, tab ID, origin, navigation epoch, snapshot digest, target fingerprint, reason, and expiry.
+### Never a setting
 
-### Two deterministic gates
+- global Approve All;
+- disable redaction;
+- show/copy raw secrets;
+- arbitrary JavaScript or shell;
+- bypass scope/commit validation;
+- background daemon;
+- claim raw interception, secure page, or OCR safety without evidence;
+- model/page/relay-defined tool installation;
+- “Hybrid mode” before relay handshake exists;
+- control for an unimplemented runtime feature.
 
-1. **Dispatch validation:** schema, run/plan/budget, canonical URL/origin, data class, predicted effect.
-2. **Commit-time validation:** active run, single-use nonce, non-expired approval, same tab/origin/epoch, target re-resolution/fingerprint, live field/form metadata, navigation/download interception.
+Destructive settings such as clearing site data, deleting evidence, or rotating/removing credentials require specific confirmation and truthful completion.
 
-Mismatch means invalidate and re-plan. Never silently broaden scope.
+---
 
-## 5. Autonomy model
+## 5. UI MAX
 
-### Automatic inside budget
+### Browser Rail
 
-- Sanitized snapshot, article/text/link/form/table extraction.
-- Local screenshot and OCR after sensitive-region redaction.
-- Same-origin GET research covered by an approved plan.
-- Agent-owned tab creation/close within plan limits.
-- Temporary artifacts and checkpoints.
-- Local history metadata reads with stripped queries.
+Retain a shallow native rail:
 
-### Approve bounded plan once
+- Back;
+- Forward;
+- canonical address/search field;
+- Reload or Stop Loading;
+- conditional session/checkpoint control only after Peak 3;
+- conditional download status only while a real download exists.
 
-A research plan may grant exact origins, GET-only navigation, maximum tabs/pages/runtime/bytes, allowed data classes, local artifact writes, and stop criteria. Any domain/effect/data-class expansion pauses for amendment.
+No fake lock, tab count, network capture, security score, or unsupported button.
 
-### Per-effect approval
+### Magnetic Capsule
 
-- Fill/click/submit, server-state mutation, origin expansion.
-- Upload/download/open file, clipboard, share/export.
-- User-owned tab navigation/close.
-- Reading user-selected files or sending artifacts to relay.
-- Endpoint/relay host change or imported recipe first run/hash change.
+Retain exactly four modes:
 
-### Manual takeover / hard block
+1. **Collapsed Ball:** agent identity; draggable; persistent status/approval/result semantics.
+2. **Compose:** the only command composer.
+3. **Active Peek:** current step, safe tool label, progress/budget, Stop, Details.
+4. **Result Peek:** truthful redacted result/error, evidence/artifact count, Details, explicit dismiss.
 
-Password, OTP/2FA/recovery codes, session/API/private keys, cards/PIN, wallet signing/seed, payments, transfers/swaps, destructive account/security changes, legal signature, CAPTCHA bypass, executable/profile/certificate installation.
+Result state remains persistent until viewed/dismissed; green is only truthful completion. Approval-needed uses orange plus text/VoiceOver semantics. No `planPeek` mode.
 
-Authorized research does not send these values through the model. Where program rules allow authenticated testing, the model may propose a typed action containing a local `SecretHandle`; only the device policy engine can resolve that handle from Keychain at commit time after scope and approval checks. Raw secret values never enter prompts, logs, evidence, relay payloads, or exports.
+### Approval Review
 
-## 5A. Generic authorized security-research capability
+The existing blocking authority surface handles both:
 
-Security research is a capability layer, not an Immunefi mode and not an unrestricted safety bypass.
+- one exact effect; or
+- one immutable read/scroll/wait plan manifest.
 
-### Engagement authority
+It shows safe preview, target origin, resolved target description, scope state, budget, expiry, and reason. Plan review adds Amend/Approve/Decline inside the same authority surface. Raw arguments and secrets never render. Any target/effect drift invalidates the review.
 
-- `EngagementProfile` is imported and activated only by explicit operator gesture.
-- It records program label/type, policy-document hash, in-scope and deny-first out-of-scope assets, path/protocol rules, testing window, forbidden actions, effect/rate/time budgets, and operator authorization declaration.
-- Platform reference is optional free text. No platform URL, API, taxonomy, or submission flow is hardcoded.
-- Core policy remains immutable. The profile supplies constrained capability grants that the local policy engine evaluates; page/model/recipe/relay data cannot modify scope or budgets.
-- No engagement: general browser policy. Active + in scope: only granted research tools are exposed. Active + out of scope: research tools are disabled and actions fail closed.
-
-### Research primitives
-
-- Scope indicator in the address bar and Agent Ball; out-of-scope state cannot be represented by color alone.
-- Finding notebook persists across runs: hypothesis, category, affected asset, repro steps, impact, severity reasoning, status, and evidence references.
-- Evidence chain is distinct from the runtime audit log. Every redacted observation records engagement/run/tab/origin/page epoch, timestamp, tool, canonical argument digest, previous hash, and entry hash.
-- Evidence/report artifacts are generic Markdown/JSON/PDF or a self-contained bundle. Program-specific templates are user-imported data.
-- On-device observation may use DOM, screenshots/OCR, Resource Timing, and a compatibility-tested document-start wrapper for page-initiated fetch/XHR.
-- WKWebView cannot intercept raw HTTPS browser navigation or provide system-wide MITM under the no-entitlement constraint. Full raw traffic capture/replay is external-proxy or relay territory.
-
-### Research hard boundaries
-
-- Deny-first scope matching; out-of-scope research effects never execute.
-- Testing-window expiry, profile hash mismatch, missing operator declaration, or exhausted budget invalidates the grant.
-- Secret values never enter model/relay/log/evidence/export. Auth automation requires typed `SecretHandle` resolution on-device.
-- Program-forbidden actions, destructive effects without an explicit grant, uncontrolled rate/stress testing, and authority expansion remain blocked.
-
-## 6. P0 defects to remove before expanding tools
-
-1. Snapshot currently leaks input values through generic `inputs[].text`.
-2. Page text is mixed with instructions without a trust boundary.
-3. Policy scans model arguments instead of the resolved live target.
-4. Approval is not bound to run/tab/origin/page/target/expiry.
-5. Navigation tools report success before commit/settle.
-6. Stop does not cancel network work or reject stale callbacks.
-7. `.acting("")` equality fails to detect actual busy state.
-8. Tool args lose types in `[String:String]`.
-9. JS and selector errors can be mislabeled success.
-10. Logs/previews may persist raw values and model responses.
-11. Editable system prompt conflates persona with immutable policy.
-12. No durable session/event/checkpoint model or automated test target exists.
-
-## 7. Release train
-
-### Release A — v0.5.0 MAX Foundation + Adaptive Dock
-
-**Objective:** remove critical trust leaks, establish run identity and settings/soul storage, and ship the new signature control without expanding risky tools.
-
-Files to create:
-
-```text
-Browser/AppModel/AppSettings.swift
-Browser/AppModel/OperatorSoul.swift
-Browser/AppModel/DockPreferences.swift
-Browser/Runtime/RunContext.swift
-Browser/Runtime/RuntimePhase.swift
-Browser/Runtime/RuntimeEvent.swift
-Browser/Runtime/RuntimeCoordinator.swift
-Browser/Tools/JSONValue.swift
-Browser/Tools/ToolModels.swift
-Browser/Safety/Redactor.swift
-Browser/Safety/PromptPolicy.swift
-Browser/PagePerception/SnapshotSanitizer.swift
-Browser/UI/AdaptiveAgentDock.swift
-Browser/UI/AgentBall.swift
-Browser/UI/MissionControlView.swift
-Browser/UI/SettingsRootView.swift
-```
-
-Files to modify:
-
-```text
-Browser/BrowserView.swift
-project.yml
-.github/workflows/build-k3browser.yml
-apps-browser.json (only after verified release IPA)
-```
-
-Acceptance:
-
-- Input values never appear in sanitized snapshot/model/log fixtures.
-- Immutable core policy and editable Soul are separate.
-- Every callback is rejected unless `runID` matches active run.
-- `phase.isBusy` works for every busy associated-value state.
-- Stop cancels active URLSession task and invalidates callbacks/approval.
-- One command composer remains.
-- Dock expands/collapses; ball drags, snaps, clamps, and persists position.
-- Existing read-only and approval workflows remain reachable.
-- CI builds unsigned; IPA has zero PlugIns and no entitlement file.
-
-### Release A.5 — Engagement Authority Foundation (ships in the same v0.5 PEAK build)
-
-- Versioned `EngagementProfile` model, atomic local persistence, profile hash validation, activation/deactivation, and operator declaration.
-- Deny-first origin/path scope matcher with explicit wildcard semantics and testing-window/budget checks.
-- Neutral/in-scope/out-of-scope status exposed to the adaptive dock and Mission Control.
-- No active probing tools yet; this release creates authority and UX boundaries before Release B expands tools.
-
-Acceptance: malformed/expired/tampered profiles fail closed; out-of-scope always beats in-scope; page/model/relay cannot mutate profile; no platform name or endpoint is required by the schema.
-
-### Release B — v0.6.0 Typed Tools + Bound Approval
-
-- `JSONValue`/typed per-tool arguments and strict results.
-- Target resolver and target fingerprints.
-- Single-use approval token bound to run/tab/origin/epoch/snapshot/target/expiry.
-- Human effect previews, Edit, Show Target.
-- Navigation coordinator and popup/redirect/download interception.
-- Bundled adversarial HTML fixtures and XCTest target.
-
-Acceptance: stale/changed target cannot execute; no JS failure becomes success; every mutating action is exactly-once.
-
-### Release C — v0.7.0 Latest-iOS Magnetic Capsule
-
-- Latest-iOS-only deployment baseline.
-- Page-first Magnetic Capsule with collapsed Ball, compose, active, and durable result surfaces.
-- Modern Mission Control sheet, adaptive 320pt/AX layout, and Reduce Motion crossfade.
-- Runtime, approval authority, redaction, navigation settlement, and one-owner invariants retained.
-
-### Future Release — Browser Workstation (version TBD)
-
-- Multi-tab ownership/session restore.
-- SQLite sessions/runs/events/checkpoints and hash-chained redacted audit log.
-- Notes/Files/Runs Library.
-- Downloads quarantine, Markdown/JSON/CSV/PDF export.
-- Screenshot, Vision OCR, reader/table/card extraction.
-
-### Future Release — Recipes + Memory (version TBD)
-
-- Typed declarative recipes; no raw JS/shell/dynamic tools.
-- Recipe hash/capability diff and saved exact-scope grants.
-- Site memory and Operator profile fields with provenance/data class.
-- Research plan approval with origin/effect budgets.
-
-### Future Release — Hermes Relay (version TBD)
-
-- Direct/Relay/Hybrid modes.
-- Versioned capability handshake and signed run nonce.
-- Durable remote research/delegation/cron/webhook/MCP/terminal jobs.
-- Redacted task packages and artifact sync.
-- Relay returns answers/artifacts/proposals only; local device remains execution authority.
-
-## 8. Verification matrix
-
-### Pure tests
-
-- Runtime state transition table and terminal states.
-- Stale callback from run A after run B starts.
-- Stop during model request, snapshot, approval, execution, and navigation wait.
-- JSONValue nested round-trip and strict argument validation.
-- Redaction for password, OTP, card, token, hidden input, query token, log preview.
-- Soul save/load/migrate/reset and inability to override policy.
-- Dock normalized position clamp/snap math across representative safe-area sizes.
-- Engagement wildcard/path/deny precedence, expiry, profile hash, declaration, and budget tests.
-- `SecretHandle` payload contains only an opaque identifier and never serializes the resolved value.
-
-### Adversarial fixtures
-
-- Visible/ARIA/alt/table/PDF prompt injection.
-- Sensitive values present before snapshot.
-- Target changes after approval.
-- Same selector moved to different form.
-- Cross-origin redirect, popup, download, custom scheme.
-- JS throw, invalid selector, delayed navigation, SPA route mutation.
-- Old relay response/replayed call ID.
-
-### Release gates
-
-```text
-XCTest/static validation green
-XcodeGen generation green
-unsigned device build green
-Info.plist version/build verified
-MinimumOSVersion = 26.0
-PlugIns/extensions = 0
-no .entitlements
-no package dependency
-manifest version/downloadURL/size verified from raw GitHub
-manual device: read-only goal, approval, deny, stop, dock drag/collapse, Soul persistence
-```
-
-## 9. Falsification criteria
-
-The direction is wrong if:
-
-- K3 still feels like a chat panel attached to a browser.
-- More than one primary composer remains.
-- Idle dock covers more than roughly 15% of the viewport or the ball cannot be moved away from content.
-- Keyboard or safe area hides Stop/approval.
-- A stale callback or approval can affect a newer run/page.
-- Any sensitive field value reaches model, log, memory, export, or relay.
-- A page, recipe, model, or relay can expand its own authority.
-- An out-of-scope URL can execute a research tool, or a tampered/expired engagement remains active.
-- Evidence tampering is not detected, or a report cites evidence that cannot be reproduced to a page epoch/tool digest.
-- Read-only research triggers approval fatigue.
-- Final results disappear into a timeline instead of becoming artifacts.
-- Release adds signing fragility, PlugIns, entitlements, or external packages.
-
-## 10. Immediate execution order
-
-1. Add characterization/static safety tests for current snapshot/prompt/runtime invariants.
-2. Implement run identity, real busy state, cancellation generation, and immutable goal context.
-3. Implement centralized redaction and sanitized snapshot construction.
-4. Split immutable core policy from editable Operator Soul.
-5. Implement settings storage ownership and migrations.
-6. Add EngagementProfile persistence, deny-first scope matcher, and inactive/in-scope/out-of-scope status without adding probe tools.
-7. Build Adaptive Agent Dock + draggable snapping Agent Ball with engagement/status badges.
-8. Replace duplicate composer/cockpit shell with Mission Control while preserving existing tools.
-9. Run static checks; commit Release A/A.5 source.
-10. Push main, tag `k3browser-v0.5.0`, verify CI/release IPA.
-11. Inspect IPA and publish manifest only after verified artifact.
+### Mission Control: thin core
+
+Always-visible destinations:
+
+1. **Current Run** — goal, phase, step/budget, Stop.
+2. **Timeline** — redacted safe previews, results, timestamps, citations.
+3. **Inspect** — sanitized snapshot, find, read-only element metadata, snapshot diff when available.
+4. **Settings** — hierarchical native forms.
+
+Conditional destinations appear only after backing stores/runtime exist:
+
+- **Library:** notes, exports, run history, session checkpoints;
+- **Evidence:** findings, evidence chain, artifact preview/report export;
+- **Engagement:** active profile, scope inspector, budget/window status;
+- **Recipes:** manifests, capability diff, dry-run result;
+- **Downloads:** quarantine/review state.
+
+Mission Control has no second composer and no element-to-action shortcut that bypasses normal approval. Use native `NavigationStack`, lists, disclosure, search, and sheets—not dashboard-card stacks.
+
+### Latest-iOS quality contract
+
+- page frame identical across Ball/Capsule states;
+- compact 320pt and AX5 layouts;
+- VoiceOver named actions and predictable focus;
+- hardware/software keyboard safe;
+- 44pt minimum controls;
+- Dark Mode, Increased Contrast, Reduce Motion crossfade;
+- 150–300ms purposeful native motion;
+- presentation router serializes Mission, Share, capture review, download review, and approval;
+- target highlight appears only for truthful inspect/approval context and never implies authorization.
+
+---
+
+## 6. Persistence ownership
+
+| Data | Owner |
+|---|---|
+| API keys and relay token | Keychain, this-device-only |
+| Ball position, haptics, display/detail preferences | UserDefaults |
+| Soul, autonomy profile, Engagement profiles, relay config | versioned atomic App Support JSON |
+| Runs, events, approvals, snapshot metadata, findings, evidence, recipes, indexes | SQLite from Peak 2 onward |
+| Existing notes | remain file-backed; SQLite adds metadata/search index only |
+| Screenshots, PDFs, downloads, evidence attachments | Application Support files with opaque IDs and quotas |
+| Temporary run output | per-run Caches; promoted explicitly |
+
+### Recovery truth
+
+Peak 1 stores a minimal redacted interrupted-run checkpoint as versioned atomic App Support JSON: run ID, sanitized last URL, phase, step count, last completed safe-step summary, and timestamp. It contains no raw arguments, current form values, approval token, or replay payload. Full event/timeline persistence begins only with SQLite in Peak 2.
+
+After crash/relaunch:
+
+- show “Interrupted — review required”;
+- reload last URL only after operator choice;
+- show only the minimal checkpoint in Peak 1; show a persisted timeline only after Peak 2;
+- invalidate pending approvals;
+- never auto-replay an incomplete side effect.
+
+K3 cannot restore live WKWebView form values, JS context, scroll state, Service Worker state, or exact page memory after process death. UI must say so.
+
+---
+
+## 7. Four PEAK releases after v0.7
+
+No version number is assigned until a slice passes its exit gates.
+
+### PEAK 1 — Authority Foundation
+
+**Deliver:** typed `JSONValue`; per-tool schemas/results; static descriptors; device-owned page identity; stable refs/fingerprints; single-use approval tokens; commit-time re-resolution; Engagement scope on every page-bound tool; bounded read/scroll/wait plans; `wait_for`; minimal atomic-JSON interrupted checkpoint; XCTest/adversarial fixtures.
+
+**Explicitly exclude:** SQLite warehouse, screenshot/OCR, downloads, sessions, recipes, relay, new conditional settings/UI.
+
+**Exit gates:** stale SPA/page/selector target blocked; text→password mutation blocked; expired/replayed approval blocked; scope denial works on non-navigation page tool; plan cannot grow or mutate/submit/navigate; crash restores interrupted with no replay; Xcode/device tests pass.
+
+### PEAK 2 — Perception & Evidence
+
+**Deliver:** stable element inspect/find; structured extraction; snapshot diff; screenshot policy; Vision OCR; PDF artifact; SQLite event/evidence store; note metadata index; findings/evidence chain; `WKDownload` quarantine; Activity citations; conditional Evidence/Downloads/Data UI.
+
+**Exit gates:** known sensitive fixtures are redacted before retention/model/export; captures with uncertain sensitive-region coverage fail closed or require explicit operator review and are never claimed universally secret-safe; OCR redaction verified; file cannot auto-open; evidence-chain tampering detected; SQLite round-trip/migration/rollback verified; notes remain intact.
+
+### PEAK 3 — Sessions & Recipes
+
+**Deliver:** review-required session checkpoints—not tabs; run/artifact search; Library; retention/export/delete; typed recipe manifest; capability diff; dry run; fresh validation and per-effect approval on replay.
+
+**Exit gates:** restored session never claims live state; pending approvals invalid; recipe hash/capability drift forces review; side effects never blind-replay; no permanent tab strip or second composer; retention and deletion are truthful and recoverable where promised.
+
+### PEAK 4 — Relay & Authorized Research
+
+**Deliver:** authenticated capability handshake; redacted task packages; relay task lifecycle; external HTTP/DNS/TLS observation/probes under active Engagement scope; evidence ingestion; generic report builder; conditional Relay/Engagement UI.
+
+**Exit gates:** relay cannot expand scope or approve device effects; disconnect pauses safely; replayed task/action rejected; token leak scan covers model/log/evidence/export; external results labeled untrusted; rate/time/byte budgets enforced; no hardcoded bounty platform or target taxonomy.
+
+---
+
+## 8. Experimental / later
+
+Evaluate only after Peak 4 evidence:
+
+- limited page fetch/XHR instrumentation;
+- visual numbered-element overlay;
+- arbitrary agent URL fetch via relay;
+- multiple live WKWebViews;
+- background task handoff that obeys iOS lifecycle;
+- report templates imported as data;
+- richer local model inference if measured device performance allows.
+
+Experimental controls stay absent from production UI until runtime and falsification gates exist.
+
+---
+
+## 9. Do not build
+
+- arbitrary `execute_javascript` or shell tool;
+- on-device CDP/HAR/MITM claims;
+- multi-tab strip or “Workspace” pretending one reloaded WKWebView is live tabs;
+- global/session Approve All;
+- agent credential/OTP/payment/wallet automation;
+- agent-resolved SecretHandle in model tools;
+- automatic CAPTCHA bypass;
+- raw secret/cookie/session export;
+- auto-open downloaded executable/profile/certificate;
+- security probes before scope/evidence/budget contracts;
+- fake lock, security score, interception, OCR-safe, or authority indicator;
+- permanent agent shelf, second composer, `planPeek`, or Mission Control mall;
+- dead settings and capability placeholders;
+- automatic side-effect replay after crash, timeout, or relay reconnect.
+
+---
+
+## 10. Falsification and device acceptance
+
+The MAX direction fails if any of these occur:
+
+1. page frame changes across agent states;
+2. more than one composer exists;
+3. stale run/page/target/approval changes the current page;
+4. current input or secret reaches model/log/note/evidence/export/relay;
+5. model/page/file/recipe/relay expands authority;
+6. out-of-scope page-bound effect executes;
+7. unknown future mutation is covered by broad plan approval;
+8. navigation or download settles before real WebKit completion;
+9. Stop leaves model/navigation/timer/relay continuation active;
+10. result/evidence disappears behind another presentation;
+11. screenshot/OCR UI implies safety the runtime cannot prove;
+12. recovery silently replays or claims restored live state;
+13. conditional UI appears before persistence/runtime exists;
+14. Mission Control becomes the primary workspace instead of the page;
+15. release adds undeclared entitlement, extension, package, or signing fragility.
+
+Each PEAK requires deterministic validators, mutation tests, XCTest on target SDK, exact-source Xcode CI, unsigned IPA inspection, and real-device acceptance for 320pt/AX5, keyboard, VoiceOver, Reduce Motion, approval/deny/reopen, redirects, timeouts, Stop, stale target, result deferral, capture/download review, and recovery semantics.
