@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Design contract: the page remains the workspace; this dock is the command/state
+// Design contract: the page remains the workspace; this shelf is the command/state
 // boundary; the ball preserves page area; there is one composer; no authority decisions.
 struct AdaptiveAgentOverlay: View {
     @ObservedObject var dockPreferences: DockPreferences
@@ -17,80 +17,59 @@ struct AdaptiveAgentOverlay: View {
     let onExpandApproval: () -> Void
 
     @Environment(\.sizeCategory) private var sizeCategory
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var composerIsFocused: Bool
     @State private var dragOrigin: CGPoint?
     @State private var dragPosition: CGPoint?
     @State private var dragDistance: CGFloat = 0
 
-    private let animationDuration = 0.20
     private let ballDiameter: CGFloat = 56
     private let minimumTapSize: CGFloat = 44
     private let dragThreshold: CGFloat = 8
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                if dockPreferences.collapsed {
+        Group {
+            if dockPreferences.collapsed {
+                GeometryReader { geometry in
                     collapsedBall(in: geometry)
-                } else {
-                    expandedDock(in: geometry)
                 }
+                .coordinateSpace(name: "AgentOverlaySpace")
+            } else {
+                expandedShelf
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .coordinateSpace(name: "AgentOverlaySpace")
-            .animation(.easeInOut(duration: animationDuration), value: dockPreferences.collapsed)
         }
     }
 
-    private func expandedDock(in geometry: GeometryProxy) -> some View {
-        let maximumDockHeight = max(
-            0,
-            geometry.size.height - geometry.safeAreaInsets.top - 8
-        )
-
-        return
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-
-            ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 12) {
-                    statusHeader
-                    composer
-                    actionRow
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, max(geometry.safeAreaInsets.bottom, 8))
+    private var expandedShelf: some View {
+        ScrollView(.vertical, showsIndicators: sizeCategory.isAccessibilityCategory) {
+            VStack(alignment: .leading, spacing: K3VisualSystem.Space.standard) {
+                statusHeader
+                composer
+                actionRow
             }
-            .frame(maxWidth: .infinity)
-            .frame(maxHeight: maximumDockHeight)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(.secondarySystemBackground))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-            )
-            .padding(.horizontal, 10)
-            .padding(.bottom, 8)
+            .padding(.horizontal, K3VisualSystem.Space.generous)
+            .padding(.vertical, K3VisualSystem.Space.standard)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(maxHeight: sizeCategory.isAccessibilityCategory ? 270 : 190)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) {
+            K3VisualSystem.Palette.separator.frame(height: K3VisualSystem.Space.hairline)
         }
     }
 
     private var statusHeader: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: stateSymbol)
-                .foregroundColor(stateColor)
+        let presentation = K3VisualSystem.presentation(for: phase)
+        return HStack(spacing: K3VisualSystem.Space.standard) {
+            Image(systemName: presentation.symbol)
+                .foregroundColor(presentation.color)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(statusText ?? phase.label)
+                Text(statusText ?? presentation.title)
                     .font(.headline)
-                    .foregroundColor(.primary)
                     .lineLimit(2)
-
                 if let engagementLabel = engagementLabel, !engagementLabel.isEmpty {
                     Text(engagementLabel)
                         .font(.caption)
@@ -99,17 +78,17 @@ struct AdaptiveAgentOverlay: View {
                 }
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: K3VisualSystem.Space.compact)
 
             Button(action: collapse) {
                 Image(systemName: "chevron.down")
                     .frame(width: minimumTapSize, height: minimumTapSize)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Collapse agent dock")
+            .accessibilityLabel("Collapse agent shelf")
             .accessibilityHint("Shows the movable agent ball and restores more page space")
         }
-        .accessibilityElement(children: .contain)
     }
 
     private var composer: some View {
@@ -126,28 +105,22 @@ struct AdaptiveAgentOverlay: View {
     @ViewBuilder
     private var actionRow: some View {
         if sizeCategory.isAccessibilityCategory {
-            VStack(spacing: 8) {
-                actionButtons
-            }
-            .font(.subheadline.weight(.semibold))
+            VStack(spacing: K3VisualSystem.Space.compact) { actionButtons }
         } else {
-            HStack(spacing: 8) {
-                actionButtons
-            }
-            .font(.subheadline.weight(.semibold))
+            HStack(spacing: K3VisualSystem.Space.compact) { actionButtons }
         }
     }
 
     @ViewBuilder
     private var actionButtons: some View {
         Button(action: onOpenMissionControl) {
-            Label("Mission Control", systemImage: "slider.horizontal.3")
+            Label("Mission Control", systemImage: "scope")
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, minHeight: minimumTapSize)
         }
         .buttonStyle(.bordered)
         .accessibilityLabel("Open Mission Control")
-        .accessibilityHint("Opens agent settings and mission details")
+        .accessibilityHint("Opens run details, page tools, and agent settings")
 
         if hasPendingApproval {
             Button(action: onExpandApproval) {
@@ -156,7 +129,7 @@ struct AdaptiveAgentOverlay: View {
                     .frame(maxWidth: .infinity, minHeight: minimumTapSize)
             }
             .buttonStyle(.bordered)
-            .tint(.orange)
+            .tint(K3VisualSystem.Palette.approval)
             .accessibilityLabel(approvalAccessibilityLabel)
             .accessibilityHint("Opens the pending approval for review")
         }
@@ -167,7 +140,7 @@ struct AdaptiveAgentOverlay: View {
                     .frame(maxWidth: .infinity, minHeight: minimumTapSize)
             }
             .buttonStyle(.borderedProminent)
-            .tint(.red)
+            .tint(K3VisualSystem.Palette.error)
             .accessibilityLabel("Stop agent")
             .accessibilityHint("Requests that the current operation stop")
         } else {
@@ -176,6 +149,7 @@ struct AdaptiveAgentOverlay: View {
                     .frame(maxWidth: .infinity, minHeight: minimumTapSize)
             }
             .buttonStyle(.borderedProminent)
+            .tint(K3VisualSystem.Palette.interaction)
             .disabled(!isConfigured || isCommandBlank || phase.isBusy)
             .accessibilityLabel("Run agent command")
             .accessibilityHint(runAccessibilityHint)
@@ -186,28 +160,27 @@ struct AdaptiveAgentOverlay: View {
         let bounds = safeBallBounds(in: geometry)
         let persistedPosition = ballPosition(in: bounds)
         let visiblePosition = dragPosition.map { clamp($0, to: bounds) } ?? persistedPosition
+        let presentation = K3VisualSystem.presentation(for: phase)
 
         return ZStack(alignment: .topTrailing) {
             Circle()
-                .fill(Color(.secondarySystemBackground))
+                .fill(.regularMaterial)
+                .overlay(Circle().stroke(presentation.color, lineWidth: 2))
                 .overlay(
-                    Circle().stroke(stateColor, lineWidth: 3)
-                )
-                .overlay(
-                    Image(systemName: stateSymbol)
+                    Image(systemName: presentation.symbol)
                         .font(.system(size: 21, weight: .semibold))
-                        .foregroundColor(stateColor)
+                        .foregroundColor(presentation.color)
+                        .accessibilityHidden(true)
                 )
                 .frame(width: ballDiameter, height: ballDiameter)
-                .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 3)
 
             if hasPendingApproval {
                 Text(badgeText)
                     .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Color(uiColor: .black))
                     .padding(.horizontal, 5)
                     .frame(minWidth: 20, minHeight: 20)
-                    .background(Capsule().fill(Color.orange))
+                    .background(Capsule().fill(K3VisualSystem.Palette.approval))
                     .offset(x: 4, y: -4)
                     .accessibilityHidden(true)
             }
@@ -221,25 +194,18 @@ struct AdaptiveAgentOverlay: View {
         .accessibilityHint("Tap to expand, or drag to move and snap to an edge")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { expand() }
+        .accessibilityAction(named: Text("Move left")) { moveBall(to: .left) }
+        .accessibilityAction(named: Text("Move right")) { moveBall(to: .right) }
     }
 
-    private func ballDragGesture(
-        bounds: BallBounds,
-        persistedPosition: CGPoint
-    ) -> some Gesture {
+    private func ballDragGesture(bounds: BallBounds, persistedPosition: CGPoint) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named("AgentOverlaySpace"))
             .onChanged { value in
                 let origin = dragOrigin ?? persistedPosition
-                if dragOrigin == nil {
-                    dragOrigin = persistedPosition
-                }
-
+                if dragOrigin == nil { dragOrigin = persistedPosition }
                 dragDistance = dragMagnitude(value.translation)
                 dragPosition = clamp(
-                    CGPoint(
-                        x: origin.x + value.translation.width,
-                        y: origin.y + value.translation.height
-                    ),
+                    CGPoint(x: origin.x + value.translation.width, y: origin.y + value.translation.height),
                     to: bounds
                 )
             }
@@ -247,44 +213,33 @@ struct AdaptiveAgentOverlay: View {
                 let origin = dragOrigin ?? persistedPosition
                 let finalDistance = dragMagnitude(value.translation)
                 let finalPoint = clamp(
-                    CGPoint(
-                        x: origin.x + value.translation.width,
-                        y: origin.y + value.translation.height
-                    ),
+                    CGPoint(x: origin.x + value.translation.width, y: origin.y + value.translation.height),
                     to: bounds
                 )
-
                 if max(dragDistance, finalDistance) < dragThreshold {
                     expand()
+                    dragPosition = nil
                 } else {
-                    withAnimation(.easeOut(duration: animationDuration)) {
+                    withAnimation(K3VisualSystem.Motion.snapAnimation(reduceMotion: reduceMotion)) {
                         snapAndPersist(finalPoint, in: bounds)
                         dragPosition = nil
                     }
                 }
-
                 dragOrigin = nil
-                if max(dragDistance, finalDistance) < dragThreshold {
-                    dragPosition = nil
-                }
                 dragDistance = 0
             }
     }
 
     private func safeBallBounds(in geometry: GeometryProxy) -> BallBounds {
         let radius = ballDiameter / 2
-        let sideMargin: CGFloat = 12
-        let topMargin: CGFloat = 12
-        let practicalBottomMargin: CGFloat = 16
+        let sideMargin: CGFloat = K3VisualSystem.Space.standard
+        let topMargin: CGFloat = K3VisualSystem.Space.standard
+        let practicalBottomMargin: CGFloat = K3VisualSystem.Space.generous
         let safeInsets = geometry.safeAreaInsets
-
         let minX = safeInsets.leading + sideMargin + radius
-        let proposedMaxX = geometry.size.width - safeInsets.trailing - sideMargin - radius
-        let maxX = max(minX, proposedMaxX)
+        let maxX = max(minX, geometry.size.width - safeInsets.trailing - sideMargin - radius)
         let minY = safeInsets.top + topMargin + radius
-        let proposedMaxY = geometry.size.height - safeInsets.bottom - practicalBottomMargin - radius
-        let maxY = max(minY, proposedMaxY)
-
+        let maxY = max(minY, geometry.size.height - safeInsets.bottom - practicalBottomMargin - radius)
         return BallBounds(minX: minX, maxX: maxX, minY: minY, maxY: maxY)
     }
 
@@ -295,10 +250,7 @@ struct AdaptiveAgentOverlay: View {
     }
 
     private func clamp(_ point: CGPoint, to bounds: BallBounds) -> CGPoint {
-        CGPoint(
-            x: min(max(point.x, bounds.minX), bounds.maxX),
-            y: min(max(point.y, bounds.minY), bounds.maxY)
-        )
+        CGPoint(x: min(max(point.x, bounds.minX), bounds.maxX), y: min(max(point.y, bounds.minY), bounds.maxY))
     }
 
     private func dragMagnitude(_ translation: CGSize) -> CGFloat {
@@ -309,21 +261,24 @@ struct AdaptiveAgentOverlay: View {
         let midpoint = (bounds.minX + bounds.maxX) / 2
         let snappedEdge: DockEdge = point.x <= midpoint ? .left : .right
         let normalizedY = bounds.height > 0 ? (point.y - bounds.minY) / bounds.height : 0.5
-
         // Persist only the final snapped result, never transient drag frames.
         dockPreferences.edge = snappedEdge
         dockPreferences.normalizedY = Double(min(max(normalizedY, 0), 1))
     }
 
+    private func moveBall(to edge: DockEdge) {
+        dockPreferences.edge = edge
+    }
+
     private func collapse() {
         composerIsFocused = false
-        withAnimation(.easeInOut(duration: animationDuration)) {
+        withAnimation(K3VisualSystem.Motion.animation(reduceMotion: reduceMotion)) {
             dockPreferences.collapsed = true
         }
     }
 
     private func expand() {
-        withAnimation(.easeInOut(duration: animationDuration)) {
+        withAnimation(K3VisualSystem.Motion.animation(reduceMotion: reduceMotion)) {
             dockPreferences.collapsed = false
         }
     }
@@ -333,82 +288,27 @@ struct AdaptiveAgentOverlay: View {
         onRun()
     }
 
-    private var hasPendingApproval: Bool {
-        pendingApprovalCount > 0
-    }
-
-    private var isCommandBlank: Bool {
-        commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var approvalTitle: String {
-        pendingApprovalCount == 1 ? "Review" : "Review \(pendingApprovalCount)"
-    }
-
+    private var hasPendingApproval: Bool { pendingApprovalCount > 0 }
+    private var isCommandBlank: Bool { commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var approvalTitle: String { pendingApprovalCount == 1 ? "Review" : "Review \(pendingApprovalCount)" }
     private var approvalAccessibilityLabel: String {
-        pendingApprovalCount == 1
-            ? "Review one pending approval"
-            : "Review \(pendingApprovalCount) pending approvals"
+        pendingApprovalCount == 1 ? "Review one pending approval" : "Review \(pendingApprovalCount) pending approvals"
     }
-
-    private var badgeText: String {
-        pendingApprovalCount > 99 ? "99+" : String(pendingApprovalCount)
-    }
-
+    private var badgeText: String { pendingApprovalCount > 99 ? "99+" : String(pendingApprovalCount) }
     private var ballAccessibilityLabel: String {
         var label = "Agent, \(statusText ?? phase.label)"
-        if hasPendingApproval {
-            label += ", \(approvalAccessibilityLabel)"
-        }
+        if hasPendingApproval { label += ", \(approvalAccessibilityLabel)" }
         return label
     }
-
     private var composerAccessibilityHint: String {
         if !isConfigured { return "Configure the agent before entering a command" }
         if phase.isBusy { return "The command field is unavailable while the agent is busy" }
         return "Enter one command for the agent"
     }
-
     private var runAccessibilityHint: String {
         if !isConfigured { return "Configure the agent before running a command" }
         if isCommandBlank { return "Enter a command before running" }
         return "Starts the entered command"
-    }
-
-    private var stateColor: Color {
-        switch phase {
-        case .idle, .done:
-            return .green
-        case .observing, .thinking, .acting:
-            return .accentColor
-        case .awaitingApproval:
-            return .orange
-        case .stopped:
-            return .secondary
-        case .error:
-            return .red
-        }
-    }
-
-    private var stateSymbol: String {
-        switch phase {
-        case .idle:
-            return "circle.fill"
-        case .observing:
-            return "eye.fill"
-        case .thinking:
-            return "brain.head.profile"
-        case .awaitingApproval:
-            return "hand.raised.fill"
-        case .acting:
-            return "bolt.fill"
-        case .done:
-            return "checkmark.circle.fill"
-        case .stopped:
-            return "stop.circle.fill"
-        case .error:
-            return "exclamationmark.triangle.fill"
-        }
     }
 }
 
@@ -417,8 +317,5 @@ private struct BallBounds {
     let maxX: CGFloat
     let minY: CGFloat
     let maxY: CGFloat
-
-    var height: CGFloat {
-        maxY - minY
-    }
+    var height: CGFloat { maxY - minY }
 }

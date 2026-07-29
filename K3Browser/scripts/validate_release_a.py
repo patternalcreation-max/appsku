@@ -96,6 +96,8 @@ redactor = read("Safety/Redactor.swift")
 snapshot = read("PagePerception/SnapshotSanitizer.swift")
 soul = read("AppModel/OperatorSoul.swift")
 dock = read("AppModel/DockPreferences.swift")
+dock_ui = read("UI/AgentDock.swift")
+mission_ui = read("UI/MissionControlView.swift")
 keychain_block = view.split("enum KeychainStore", 1)[-1].split("final class AgentSettings", 1)[0]
 memory_block = view.split("enum MemoryStore", 1)[-1].split("// MARK: - Browser State", 1)[0]
 export_block = view.split("func exportText(title:", 1)[-1].split("func copyLog()", 1)[0]
@@ -145,7 +147,7 @@ check("possible navigation timeout detector self-test", not has_possible_navigat
 check("navigation tools have no immediate success", 'webView.load(URLRequest(url: url)); finish(' not in view and 'back(); finish("Back")' not in view and 'forward(); finish("Forward")' not in view and 'reload(); finish("Reload")' not in view, "navigation tool reports success immediately after initiation")
 check("resume uses RunContext command", "agentPrompt(command: context.command" in view and "steps.first?.detail" not in view, "resume command is not sourced from RunContext")
 check("phase busy matching", "var isBusy: Bool" in phase and "case .observing, .thinking, .awaitingApproval, .acting:" in phase, "isBusy pattern matching missing")
-check("busy UI integration", "state.phase.isBusy" in view and '.acting("")' not in view, "UI still relies on phase equality workaround")
+check("busy UI integration", "phase.isBusy" in dock_ui and "state.phase.isBusy" in mission_ui and '.acting("")' not in (view + dock_ui + mission_ui), "UI still relies on phase equality workaround")
 check("central redaction", "Redactor.preview" in view and "Redactor.text(String(content.prefix(500)))" in view and "sanitizeURLString" in redactor, "preview/parser/URL redaction integration missing")
 credential_marker = "credential-tail-marker=="
 redaction_vectors = (

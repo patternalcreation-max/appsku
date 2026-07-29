@@ -975,79 +975,164 @@ extension BrowserState: WKNavigationDelegate, WKUIDelegate {
 
 // MARK: - UI
 
+private enum BrowserPresentation: Int, Identifiable {
+    case missionControl
+    case share
+
+    var id: Int { rawValue }
+}
+
 struct BrowserView: View {
     @StateObject private var state = BrowserState()
     @StateObject private var settings = AgentSettings()
     @StateObject private var dockPreferences = DockPreferences()
-    @State private var showApprovalTray = false
+    @State private var showApprovalReview = false
+    @State private var focusApprovalDeny = false
+    @State private var activePresentation: BrowserPresentation?
+    @State private var queuedPresentation: BrowserPresentation?
+    @State private var revealApprovalAfterDismiss = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            VStack(spacing: 0) {
-                topBar
-                if state.estimatedProgress < 1.0 { ProgressView(value: state.estimatedProgress).progressViewStyle(.linear) }
-                WebViewContainer(webView: state.webView)
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
-            }
-            if showApprovalTray, let pending = state.pendingApproval {
-                VStack {
-                    ApprovalTray(
-                        request: pending,
-                        onApprove: {
-                            showApprovalTray = false
-                            state.approvePending(settings: settings)
-                        },
-                        onDeny: {
-                            showApprovalTray = false
-                            state.denyPending()
-                        }
-                    )
-                    .padding(.horizontal, 12)
-                    .padding(.top, 56)
-                    Spacer(minLength: 0)
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
+        ZStack {
+            browserWorkspace
+                .disabled(state.pendingApproval != nil)
+                .accessibilityHidden(state.pendingApproval != nil)
+
+            if dockPreferences.collapsed && state.pendingApproval == nil {
+                agentOverlay
+                    .transition(.opacity)
             }
 
-            AdaptiveAgentOverlay(
-                dockPreferences: dockPreferences,
-                commandText: $state.commandText,
-                phase: state.phase,
-                isConfigured: !settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                pendingApprovalCount: state.pendingApproval == nil ? 0 : 1,
-                engagementLabel: nil,
-                statusText: nil,
-                onRun: runCommand,
-                onStop: state.stopAgent,
-                onOpenMissionControl: { state.showMissionControl = true },
-                onExpandApproval: { showApprovalTray = state.pendingApproval != nil }
-            )
+            if showApprovalReview, let pending = state.pendingApproval {
+                ApprovalReviewOverlay(
+                    request: pending,
+                    focusDeny: focusApprovalDeny,
+                    onApprove: {
+                        showApprovalReview = false
+                        state.approvePending(settings: settings)
+                    },
+                    onDeny: {
+                        showApprovalReview = false
+                        state.denyPending()
+                    }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .zIndex(100)
+            }
         }
         .onChange(of: state.pendingApproval?.id) { approvalID in
-            withAnimation(.easeOut(duration: 0.20)) {
-                showApprovalTray = approvalID != nil
+            if approvalID != nil {
+                focusApprovalDeny = false
+                queuedPresentation = nil
+                state.showMissionControl = false
+                state.showShare = false
+                if activePresentation != nil {
+                    revealApprovalAfterDismiss = true
+                    activePresentation = nil
+                } else {
+                    showApprovalReview = true
+                }
+            } else {
+                revealApprovalAfterDismiss = false
+                showApprovalReview = false
             }
         }
-        .sheet(isPresented: $state.showMissionControl) { MissionControlView(state: state, settings: settings) }
-        .sheet(isPresented: $state.showShare) { ShareSheet(items: state.shareItems) }
+        .onChange(of: state.showMissionControl) { requested in
+            if requested { requestPresentation(.missionControl) }
+        }
+        .onChange(of: state.showShare) { requested in
+            if requested { requestPresentation(.share) }
+        }
+        .sheet(item: $activePresentation, onDismiss: presentationDidDismiss) { route in
+            switch route {
+            case .missionControl:
+                MissionControlView(state: state, settings: settings)
+                    .disabled(state.pendingApproval != nil)
+                    .accessibilityHidden(state.pendingApproval != nil)
+            case .share:
+                ShareSheet(items: state.shareItems)
+            }
+        }
     }
 
-    var topBar: some View {
-        HStack(spacing: 8) {
-            Button(action: state.back) { Image(systemName: "chevron.left") }.disabled(!state.canGoBack)
-            Button(action: state.forward) { Image(systemName: "chevron.right") }.disabled(!state.canGoForward)
-            TextField("Search / URL", text: $state.address, onCommit: state.loadAddress)
-                .textFieldStyle(.roundedBorder)
-                .keyboardType(.URL)
-                .autocapitalization(.none)
-                .disableAutocorrection(true)
-            Button(action: state.isLoading ? state.stopLoading : state.reload) { Image(systemName: state.isLoading ? "xmark" : "arrow.clockwise") }
-            Button(action: { state.showMissionControl = true }) { Image(systemName: "slider.horizontal.3") }
-                .accessibilityLabel("Open Mission Control")
-        }.padding(8).background(Color(.systemBackground))
+    private var browserWorkspace: some View {
+        VStack(spacing: 0) {
+            BrowserChromeView(
+                address: $state.address,
+                canGoBack: state.canGoBack,
+                canGoForward: state.canGoForward,
+                isLoading: state.isLoading,
+                estimatedProgress: state.estimatedProgress,
+                onBack: state.back,
+                onForward: state.forward,
+                onReload: state.reload,
+                onStop: state.stopLoading,
+                onSubmitAddress: state.loadAddress
+            )
+            WebViewContainer(webView: state.webView)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !dockPreferences.collapsed {
+                agentOverlay
+            }
+        }
     }
 
-    func runCommand() { let cmd = state.commandText.trimmingCharacters(in: .whitespacesAndNewlines); guard !cmd.isEmpty else { return }; state.startAgent(command: cmd, settings: settings) }
+    private var agentOverlay: some View {
+        AdaptiveAgentOverlay(
+            dockPreferences: dockPreferences,
+            commandText: $state.commandText,
+            phase: state.phase,
+            isConfigured: !settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            pendingApprovalCount: state.pendingApproval == nil ? 0 : 1,
+            engagementLabel: nil,
+            statusText: settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Agent Not Configured" : nil,
+            onRun: runCommand,
+            onStop: state.stopAgent,
+            onOpenMissionControl: { requestPresentation(.missionControl) },
+            onExpandApproval: {
+                guard state.pendingApproval != nil else { return }
+                focusApprovalDeny = true
+                showApprovalReview = true
+            }
+        )
+    }
+
+    private func requestPresentation(_ route: BrowserPresentation) {
+        state.showMissionControl = false
+        state.showShare = false
+        guard state.pendingApproval == nil else { return }
+        guard activePresentation != route else { return }
+        if activePresentation == nil {
+            activePresentation = route
+        } else {
+            queuedPresentation = route
+            activePresentation = nil
+        }
+    }
+
+    private func presentationDidDismiss() {
+        if revealApprovalAfterDismiss, state.pendingApproval != nil {
+            revealApprovalAfterDismiss = false
+            showApprovalReview = true
+            return
+        }
+        guard state.pendingApproval == nil, let next = queuedPresentation else {
+            queuedPresentation = nil
+            return
+        }
+        queuedPresentation = nil
+        DispatchQueue.main.async {
+            guard state.pendingApproval == nil else { return }
+            activePresentation = next
+        }
+    }
+
+    private func runCommand() {
+        let command = state.commandText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !command.isEmpty else { return }
+        state.startAgent(command: command, settings: settings)
+    }
 }
 
 struct WebViewContainer: UIViewRepresentable {
@@ -1056,97 +1141,10 @@ struct WebViewContainer: UIViewRepresentable {
     func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
-struct ApprovalTray: View {
-    let request: ApprovalRequest
-    let onApprove: () -> Void
-    let onDeny: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack { Text("Approve action?").font(.headline); Spacer(); Text(request.call.tool).font(.caption).padding(5).background(Color.orange.opacity(0.2)).cornerRadius(6) }
-            Text(request.preview).font(.caption).textSelection(.enabled)
-            if !request.reason.isEmpty { Text(request.reason).font(.caption).foregroundColor(.secondary) }
-            HStack { Button("Deny", action: onDeny).buttonStyle(.bordered); Spacer(); Button("Run once", action: onApprove).buttonStyle(.borderedProminent) }
-        }
-        .padding(12).background(Color(.systemBackground)).cornerRadius(16).shadow(radius: 10)
-    }
-}
-
-struct MissionControlView: View {
-    @ObservedObject var state: BrowserState
-    @ObservedObject var settings: AgentSettings
-    @State private var tab = 0
-
-    @State private var selector = ""
-    @State private var value = ""
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                Picker("Workspace", selection: $tab) { Text("Run").tag(0); Text("Page").tag(1); Text("Tools").tag(2); Text("Settings").tag(3) }.pickerStyle(.segmented).padding()
-                if tab == 0 { runOverview }
-                if tab == 1 { snapshotView }
-                if tab == 2 { toolsView }
-                if tab == 3 { settingsView }
-            }.navigationTitle("Mission Control").navigationBarTitleDisplayMode(.inline)
-        }
-    }
-
-    var runOverview: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(state.phase.label).font(.headline)
-            Text("Commands run from the Agent Dock so the browser keeps one command boundary.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            if state.phase.isBusy { Button("Stop active run", action: state.stopAgent).buttonStyle(.bordered) }
-            HStack { Button("Copy log", action: state.copyLog).buttonStyle(.bordered); Button("Export MD", action: state.exportLog).buttonStyle(.bordered); Button("Clear") { state.steps.removeAll() }.buttonStyle(.bordered) }
-            Divider()
-            ScrollView { VStack(alignment: .leading, spacing: 10) { if state.steps.isEmpty { Text("No actions yet. Run a command to start.").foregroundColor(.secondary) }; ForEach(state.steps) { step in VStack(alignment: .leading) { Text("\(step.icon) \(step.title)").font(.subheadline.weight(.semibold)); if !step.detail.isEmpty { Text(step.detail).font(.caption).foregroundColor(.secondary).textSelection(.enabled) } }.padding(8).frame(maxWidth: .infinity, alignment: .leading).background(Color(.secondarySystemBackground)).cornerRadius(10) } } }
-        }.padding()
-    }
-
-    var snapshotView: some View {
-        VStack(alignment: .leading) { Button("Snapshot page") { state.extractSnapshot() }.buttonStyle(.borderedProminent); if let snap = state.snapshot { ScrollView { Text(snap.summaryText).font(.caption).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) } } else { Text("No snapshot yet") } }.padding()
-    }
-
-    var toolsView: some View {
-        Form {
-            Section("Manual selector tools") {
-                TextField("CSS selector", text: $selector).autocapitalization(.none).disableAutocorrection(true)
-                TextField("Value", text: $value)
-                Button("Fill once") { state.stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: "fill_selector", arguments: ["selector": selector, "value": value], reason: "Manual tool")) }
-                Button("Click once") { state.stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: "click_selector", arguments: ["selector": selector], reason: "Manual tool")) }
-            }
-            Section("Memory") { Button("Read recent notes") { state.addStep("📚", "Recent notes", MemoryStore.recent()) }; Button("Save answer as note", action: state.saveCurrentAnswerNote) }
-        }
-    }
-
-    var settingsView: some View {
-        Form {
-            Section("API") {
-                Button("Use GLM 5.2 / Z.AI preset", action: settings.useGLM52Preset)
-                SecureField("API Key", text: $settings.apiKey)
-                TextField("Base URL", text: $settings.baseURL).autocapitalization(.none).disableAutocorrection(true)
-                Text("GLM default: https://api.z.ai/api/coding/paas/v4/chat/completions")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .textSelection(.enabled)
-                TextField("Model", text: $settings.model).autocapitalization(.none).disableAutocorrection(true)
-                TextField("Operator name", text: $settings.operatorSoul.displayName)
-                TextField("Persona", text: $settings.operatorSoul.persona)
-                TextField("Communication style", text: $settings.operatorSoul.communicationStyle)
-                Text("Additional persona instructions (the immutable core safety policy is always applied separately).")
-                    .font(.caption).foregroundColor(.secondary)
-                TextEditor(text: $settings.operatorSoul.additionalInstructions).frame(height: 120)
-                HStack { Button("Save", action: settings.save).buttonStyle(.borderedProminent); Button(settings.isTesting ? "Testing" : "Test", action: settings.testConnection).buttonStyle(.bordered).disabled(settings.isTesting) }
-                Text(settings.status).font(.caption).textSelection(.enabled)
-            }
-        }
-    }
-}
-
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    func makeUIViewController(context: Context) -> UIActivityViewController { UIActivityViewController(activityItems: items, applicationActivities: nil) }
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
