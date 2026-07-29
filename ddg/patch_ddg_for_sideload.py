@@ -6,6 +6,7 @@ Applied inside a freshly checked-out upstream repo by GitHub Actions.
 - Leaves app code intact; DDG falls back to system font.
 """
 from pathlib import Path
+import shutil
 
 pbx = Path("iOS/DuckDuckGo-iOS.xcodeproj/project.pbxproj")
 s = pbx.read_text()
@@ -138,8 +139,19 @@ actor DBPContinuedProcessingCoordinator: DBPContinuedProcessingCoordinating {
 ''')
     print(f"Replaced iOS 26 BGContinuedProcessing coordinator with no-op stub in {continued}")
 
+# Xcode 16.4 actool only supports symbol template format 6.0; DDG main has
+# iOS 26 Control Center symbolsets using format 7.0. Remove them so the widget
+# asset catalog can compile on GitHub's public macos-15 runner.
+for rel in [
+    "iOS/Widgets/SharedWidgetAssets.xcassets/ControlCenter/AIVoiceChat-Symbol.symbolset",
+]:
+    p = Path(rel)
+    if p.exists():
+        shutil.rmtree(p)
+        print(f"Removed unsupported Xcode 16 asset symbolset: {p}")
+
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
     print("Non-fatal missing patterns, upstream may have changed:")
     for m in missing:
-        print("  -", m)
+        print(f"  - {m[:80]}...")
