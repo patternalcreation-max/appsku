@@ -106,30 +106,6 @@ struct PageSnapshot: Identifiable, Codable {
 
 // MARK: - Agent models
 
-enum AgentPhase: Equatable {
-    case idle
-    case observing
-    case thinking
-    case awaitingApproval
-    case acting(String)
-    case done
-    case stopped
-    case error(String)
-
-    var label: String {
-        switch self {
-        case .idle: return "Ready"
-        case .observing: return "Observing…"
-        case .thinking: return "Thinking…"
-        case .awaitingApproval: return "Approval needed"
-        case .acting(let tool): return "Acting: \(tool)"
-        case .done: return "Done"
-        case .stopped: return "Stopped"
-        case .error: return "Error"
-        }
-    }
-}
-
 enum ToolRisk: String, Codable {
     case auto
     case approval
@@ -163,6 +139,7 @@ struct AgentStep: Identifiable {
 
 struct ApprovalRequest: Identifiable {
     let id = UUID()
+    let runID: UUID
     let call: ToolCall
     let risk: ToolRisk
     let preview: String
@@ -185,11 +162,16 @@ enum KeychainStore {
     static func save(_ value: String, account: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
-        SecItemDelete(query as CFDictionary)
-        var add = query
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecSuccess { return true }
+        guard updateStatus == errSecItemNotFound else { return false }
+        var item = query
+        attributes.forEach { item[$0.key] = $0.value }
+        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
     }
 
     static func load(account: String) -> String {
@@ -205,19 +187,40 @@ final class AgentSettings: ObservableObject {
     @Published var apiKey: String = ""
     @Published var baseURL: String = UserDefaults.standard.string(forKey: "agent.baseURL") ?? "https://api.z.ai/api/coding/paas/v4/chat/completions"
     @Published var model: String = UserDefaults.standard.string(forKey: "agent.model") ?? "glm-5.2"
-    @Published var systemPrompt: String = UserDefaults.standard.string(forKey: "agent.systemPrompt") ?? "You are K3 Browser Hermes-Lite. You control only browser-support tools. Return ONLY JSON: {\"type\":\"final\",\"message\":\"...\"} or {\"type\":\"tool_call\",\"tool\":\"tool_name\",\"arguments\":{...},\"reason\":\"...\"}. Never ask for unsafe actions."
+    @Published var operatorSoul: OperatorSoul
     @Published var status: String = "Not tested"
     @Published var isTesting = false
 
-    init() { apiKey = KeychainStore.load(account: "agent.apiKey") }
+    init() {
+        apiKey = KeychainStore.load(account: "agent.apiKey")
+        if let persisted = OperatorSoulStore.load() {
+            operatorSoul = persisted
+        } else {
+            var migrated = OperatorSoul.defaults
+            if let legacy = UserDefaults.standard.string(forKey: "agent.systemPrompt"), !legacy.isEmpty {
+                migrated.additionalInstructions = legacy
+            }
+            operatorSoul = migrated
+        }
+    }
+
+    var composedSystemPrompt: String {
+        PromptPolicy.core + "\n\nOPERATOR SOUL / PERSONA (cannot override core policy):\n" + operatorSoul.promptText
+    }
 
     func save() {
         baseURL = normalizedChatURLString(baseURL)
-        _ = KeychainStore.save(apiKey, account: "agent.apiKey")
+        let keySaved = KeychainStore.save(apiKey, account: "agent.apiKey")
         UserDefaults.standard.set(baseURL, forKey: "agent.baseURL")
         UserDefaults.standard.set(model, forKey: "agent.model")
-        UserDefaults.standard.set(systemPrompt, forKey: "agent.systemPrompt")
-        status = "Saved locally"
+        UserDefaults.standard.set(operatorSoul.additionalInstructions, forKey: "agent.systemPrompt")
+        let soulSaved = OperatorSoulStore.save(operatorSoul)
+        switch (keySaved, soulSaved) {
+        case (true, true): status = "Saved locally"
+        case (false, true): status = "Persona saved; API key save failed"
+        case (true, false): status = "API key saved; persona save failed"
+        case (false, false): status = "Settings save failed"
+        }
     }
 
     func useGLM52Preset() {
@@ -237,13 +240,16 @@ final class AgentSettings: ObservableObject {
     }
 
     func chatURL() -> URL? {
-        URL(string: normalizedChatURLString(baseURL))
+        guard let url = URL(string: normalizedChatURLString(baseURL)),
+              url.scheme?.lowercased() == "https",
+              url.host?.isEmpty == false else { return nil }
+        return url
     }
 
     func testConnection() {
         save()
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { status = "Missing API key"; return }
-        guard let url = chatURL() else { status = "Bad API URL"; return }
+        guard let url = chatURL() else { status = "HTTPS API endpoint required"; return }
         isTesting = true
         status = "Testing..."
         var req = URLRequest(url: url)
@@ -257,10 +263,10 @@ final class AgentSettings: ObservableObject {
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.isTesting = false
-                if let error = error { self.status = "Failed: \(error.localizedDescription)"; return }
+                if let error = error { self.status = "Failed: \(Redactor.text(error.localizedDescription))"; return }
                 if let http = response as? HTTPURLResponse, http.statusCode >= 300 {
                     let raw = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                    self.status = "HTTP \(http.statusCode): \(raw.prefix(120))"
+                    self.status = "HTTP \(http.statusCode): \(Redactor.text(String(raw.prefix(120))))"
                     return
                 }
                 self.status = "Connection OK"
@@ -270,25 +276,27 @@ final class AgentSettings: ObservableObject {
 }
 
 enum MemoryStore {
-    static func dir() -> URL {
+    static func dir() throws -> URL {
         let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let d = base.appendingPathComponent("K3Browser/Notes", isDirectory: true)
-        try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }
 
-    static func save(title: String, body: String, url: String) -> String {
+    static func save(title: String, body: String, url: String) throws -> String {
         let safeTitle = title.replacingOccurrences(of: "[^A-Za-z0-9_-]+", with: "-", options: .regularExpression).prefix(50)
         let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        let name = "\(formatter.string(from: Date()))-\(safeTitle).md"
-        let file = dir().appendingPathComponent(name)
-        let content = "# \(title)\n\nSource: \(url)\nDate: \(Date())\n\n\(body)\n"
-        try? content.write(to: file, atomically: true, encoding: .utf8)
+        let uniqueID = UUID().uuidString.lowercased()
+        let name = "\(formatter.string(from: Date()))-\(safeTitle)-\(uniqueID).md"
+        let file = try dir().appendingPathComponent(name)
+        let content = "# \(Redactor.text(title))\n\nSource: \(Redactor.sanitizeURLString(url))\nDate: \(Date())\n\n\(Redactor.text(body))\n"
+        try content.write(to: file, atomically: true, encoding: .utf8)
         return file.lastPathComponent
     }
 
     static func recent(limit: Int = 8) -> String {
-        let files = (try? FileManager.default.contentsOfDirectory(at: dir(), includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        guard let directory = try? dir() else { return "Memory unavailable" }
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         let sorted = files.sorted { a, b in
             let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
             let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
@@ -301,6 +309,30 @@ enum MemoryStore {
 // MARK: - Browser State
 
 final class BrowserState: NSObject, ObservableObject {
+    private final class PendingNavigationAction {
+        let actionID = UUID()
+        let runID: UUID
+        let action: String
+        let completion: (String) -> Void
+        let bindsFirstNavigation: Bool
+        var navigation: WKNavigation?
+        var didStart = false
+        var noNavigationWorkItem: DispatchWorkItem?
+        var timeoutWorkItem: DispatchWorkItem?
+
+        init(runID: UUID, action: String, bindsFirstNavigation: Bool, completion: @escaping (String) -> Void) {
+            self.runID = runID
+            self.action = action
+            self.bindsFirstNavigation = bindsFirstNavigation
+            self.completion = completion
+        }
+
+        func cancelTimers() {
+            noNavigationWorkItem?.cancel()
+            timeoutWorkItem?.cancel()
+        }
+    }
+
     @Published var address = "https://duckduckgo.com"
     @Published var pageTitle = ""
     @Published var currentURL = ""
@@ -315,13 +347,15 @@ final class BrowserState: NSObject, ObservableObject {
     @Published var phase: AgentPhase = .idle
     @Published var steps: [AgentStep] = []
     @Published var pendingApproval: ApprovalRequest?
-    @Published var showCockpit = false
+    @Published var showMissionControl = false
     @Published var showShare = false
     @Published var shareItems: [Any] = []
 
     let webView: WKWebView
     private var observations: [NSKeyValueObservation] = []
-    private var cancelled = false
+    private(set) var activeRun: RunContext?
+    private var llmTask: URLSessionDataTask?
+    private var pendingNavigationAction: PendingNavigationAction?
     private var stepIndex = 0
     private let maxSteps = 6
 
@@ -345,7 +379,18 @@ final class BrowserState: NSObject, ObservableObject {
     }
 
     func addStep(_ icon: String, _ title: String, _ detail: String = "") {
-        steps.append(AgentStep(icon: icon, title: title, detail: detail))
+        steps.append(AgentStep(icon: icon, title: title, detail: Redactor.text(detail)))
+    }
+
+    private func isActive(runID: UUID) -> Bool { activeRun?.runID == runID }
+
+    private func beginRun(command: String) -> RunContext {
+        llmTask?.cancel()
+        clearPendingNavigationAction()
+        pendingApproval = nil
+        let context = RunContext(command: command)
+        activeRun = context
+        return context
     }
 
     func normalizedURL(_ raw: String) -> URL? {
@@ -377,25 +422,43 @@ final class BrowserState: NSObject, ObservableObject {
         }
     }
 
-    func extractSnapshot(completion: ((PageSnapshot?) -> Void)? = nil) {
+    private func settleSnapshotFailure(runID: UUID?, message: String) {
+        let safeMessage = Redactor.text(message)
+        if let runID = runID {
+            guard isActive(runID: runID) else { return }
+            activeRun = nil
+            pendingApproval = nil
+            isAsking = false
+        }
+        phase = .error(safeMessage)
+        addStep("⚠️", "Snapshot failed", safeMessage)
+    }
+
+    func extractSnapshot(runID: UUID? = nil, completion: ((PageSnapshot?) -> Void)? = nil) {
+        if runID == nil, activeRun != nil {
+            completion?(nil)
+            return
+        }
         phase = .observing
-        let js = BrowserState.snapshotJS
+        let js = SnapshotSanitizer.javascript
         runJS(js) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
+                if let runID = runID, !self.isActive(runID: runID) { return }
                 switch result {
                 case .success(let value):
                     let raw = value as? String ?? "{}"
                     guard let data = raw.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                        self.addStep("⚠️", "Snapshot failed", "Bad JS payload")
+                        self.settleSnapshotFailure(runID: runID, message: "Bad JS payload")
                         completion?(nil); return
                     }
                     let snap = BrowserState.decodeSnapshot(obj)
                     self.snapshot = snap
                     self.addStep("👁", "Observed page", "\(snap.text.count) chars, \(snap.links.count) links, \(snap.inputs.count) inputs, \(snap.tables.count) tables")
+                    if runID == nil, self.activeRun == nil { self.phase = .idle }
                     completion?(snap)
                 case .failure(let error):
-                    self.addStep("⚠️", "Snapshot failed", error.localizedDescription)
+                    self.settleSnapshotFailure(runID: runID, message: error.localizedDescription)
                     completion?(nil)
                 }
             }
@@ -404,111 +467,187 @@ final class BrowserState: NSObject, ObservableObject {
 
     static func decodeSnapshot(_ obj: [String: Any]) -> PageSnapshot {
         func s(_ key: String) -> String { obj[key] as? String ?? "" }
+        func m(_ value: Any?) -> String { SnapshotSanitizer.sanitizedMetadata(value as? String ?? "") }
         func element(_ d: [String: Any]) -> DOMElement {
-            DOMElement(selector: d["selector"] as? String ?? "", tag: d["tag"] as? String ?? "", text: d["text"] as? String ?? "", ariaLabel: d["ariaLabel"] as? String ?? "", role: d["role"] as? String ?? "", type: d["type"] as? String ?? "", name: d["name"] as? String ?? "", placeholder: d["placeholder"] as? String ?? "", isVisible: d["isVisible"] as? Bool ?? true)
+            DOMElement(
+                selector: m(d["selector"]),
+                tag: m(d["tag"]),
+                text: m(d["text"]),
+                ariaLabel: m(d["ariaLabel"]),
+                role: m(d["role"]),
+                type: m(d["type"]),
+                name: m(d["name"]),
+                placeholder: m(d["placeholder"]),
+                isVisible: d["isVisible"] as? Bool ?? true
+            )
         }
         let headings = (obj["headings"] as? [[String: Any]] ?? []).map(element)
         let buttons = (obj["buttons"] as? [[String: Any]] ?? []).map(element)
         let inputs = (obj["inputs"] as? [[String: Any]] ?? []).map(element)
-        let links = (obj["links"] as? [[String: Any]] ?? []).map { PageLink(text: $0["text"] as? String ?? "", href: $0["href"] as? String ?? "", selector: $0["selector"] as? String ?? "") }
-        let forms = (obj["forms"] as? [[String: Any]] ?? []).map { f -> PageForm in
-            let fields = (f["fields"] as? [[String: Any]] ?? []).map { PageFormField(selector: $0["selector"] as? String ?? "", tag: $0["tag"] as? String ?? "", type: $0["type"] as? String ?? "", name: $0["name"] as? String ?? "", label: $0["label"] as? String ?? "", placeholder: $0["placeholder"] as? String ?? "", valuePreview: $0["valuePreview"] as? String ?? "", required: $0["required"] as? Bool ?? false) }
-            return PageForm(selector: f["selector"] as? String ?? "", action: f["action"] as? String ?? "", method: f["method"] as? String ?? "", fields: fields)
+        let links = (obj["links"] as? [[String: Any]] ?? []).map {
+            PageLink(text: m($0["text"]), href: SnapshotSanitizer.sanitizedURL($0["href"] as? String ?? ""), selector: m($0["selector"]))
         }
-        let tables = (obj["tables"] as? [[String: Any]] ?? []).map { t in PageTable(selector: t["selector"] as? String ?? "", headers: t["headers"] as? [String] ?? [], rows: t["rows"] as? [[String]] ?? []) }
-        return PageSnapshot(title: s("title"), url: s("url"), text: s("text"), headings: headings, buttons: buttons, inputs: inputs, links: links, forms: forms, tables: tables)
+        let forms = (obj["forms"] as? [[String: Any]] ?? []).map { f -> PageForm in
+            let fields = (f["fields"] as? [[String: Any]] ?? []).map {
+                PageFormField(
+                    selector: m($0["selector"]),
+                    tag: m($0["tag"]),
+                    type: m($0["type"]),
+                    name: m($0["name"]),
+                    label: m($0["label"]),
+                    placeholder: m($0["placeholder"]),
+                    valuePreview: m($0["valuePreview"]),
+                    required: $0["required"] as? Bool ?? false
+                )
+            }
+            return PageForm(
+                selector: m(f["selector"]),
+                action: SnapshotSanitizer.sanitizedURL(f["action"] as? String ?? ""),
+                method: m(f["method"]),
+                fields: fields
+            )
+        }
+        let tables = (obj["tables"] as? [[String: Any]] ?? []).map { t in
+            PageTable(
+                selector: m(t["selector"]),
+                headers: (t["headers"] as? [String] ?? []).map(SnapshotSanitizer.sanitizedMetadata),
+                rows: (t["rows"] as? [[String]] ?? []).map { $0.map(SnapshotSanitizer.sanitizedMetadata) }
+            )
+        }
+        return PageSnapshot(
+            title: m(s("title")),
+            url: SnapshotSanitizer.sanitizedURL(s("url")),
+            text: m(s("text")),
+            headings: headings,
+            buttons: buttons,
+            inputs: inputs,
+            links: links,
+            forms: forms,
+            tables: tables
+        )
     }
 
     // MARK: AI + Agent loop
 
     func askPage(question: String, settings: AgentSettings) {
-        extractSnapshot { [weak self] snap in
-            guard let self = self, let snap = snap else { return }
+        let context = beginRun(command: question)
+        extractSnapshot(runID: context.runID) { [weak self] snap in
+            guard let self = self, self.isActive(runID: context.runID), let snap = snap else { return }
             self.isAsking = true
             self.agentAnswer = "Thinking..."
-            self.callLLM(messages: [["role": "system", "content": settings.systemPrompt], ["role": "user", "content": "Question: \(question)\n\n\(snap.summaryText)"]], settings: settings) { result in
+            let messages = [["role": "system", "content": settings.composedSystemPrompt], ["role": "user", "content": "Question: \(question)\n\n\(snap.summaryText)"]]
+            self.callLLM(messages: messages, settings: settings, runID: context.runID) { [weak self] result in
                 DispatchQueue.main.async {
+                    guard let self = self, self.isActive(runID: context.runID) else { return }
                     self.isAsking = false
-                    switch result { case .success(let text): self.agentAnswer = text; case .failure(let e): self.agentAnswer = "Error: \(e.localizedDescription)" }
+                    switch result {
+                    case .success(let text): self.agentAnswer = Redactor.text(text); self.phase = .done
+                    case .failure(let error):
+                        let message = Redactor.text(error.localizedDescription)
+                        self.agentAnswer = "Error: \(message)"
+                        self.phase = .error(message)
+                    }
+                    self.activeRun = nil
                 }
             }
         }
     }
 
     func startAgent(command: String, settings: AgentSettings) {
-        guard !settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { phase = .error("Missing API key"); showCockpit = true; return }
-        cancelled = false
+        guard !settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { phase = .error("Missing API key"); showMissionControl = true; return }
+        let context = beginRun(command: command)
         stepIndex = 0
         steps.removeAll()
         agentAnswer = ""
-        showCockpit = true
         addStep("▶️", "Started", command)
-        continueAgent(command: command, settings: settings, previousResult: "")
+        continueAgent(context: context, settings: settings, previousResult: "")
     }
 
     func stopAgent() {
-        cancelled = true
+        llmTask?.cancel()
+        llmTask = nil
+        clearPendingNavigationAction()
+        activeRun = nil
         pendingApproval = nil
+        isAsking = false
         phase = .stopped
         addStep("⏹", "Stopped by operator")
     }
 
-    func continueAgent(command: String, settings: AgentSettings, previousResult: String) {
-        if cancelled { return }
-        if stepIndex >= maxSteps { phase = .done; addStep("✅", "Max steps reached"); return }
+    func continueAgent(context: RunContext, settings: AgentSettings, previousResult: String) {
+        guard isActive(runID: context.runID) else { return }
+        if stepIndex >= maxSteps { phase = .done; activeRun = nil; addStep("✅", "Max steps reached"); return }
         stepIndex += 1
-        extractSnapshot { [weak self] snap in
-            guard let self = self, let snap = snap, !self.cancelled else { return }
+        extractSnapshot(runID: context.runID) { [weak self] snap in
+            guard let self = self, self.isActive(runID: context.runID), let snap = snap else { return }
             self.phase = .thinking
-            let prompt = self.agentPrompt(command: command, snapshot: snap, previousResult: previousResult)
+            let prompt = self.agentPrompt(command: context.command, snapshot: snap, previousResult: previousResult)
             self.addStep("💭", "Thinking", "Step \(self.stepIndex)/\(self.maxSteps)")
-            self.callLLM(messages: [["role": "system", "content": settings.systemPrompt], ["role": "user", "content": prompt]], settings: settings) { result in
+            let messages = [["role": "system", "content": settings.composedSystemPrompt], ["role": "user", "content": prompt]]
+            self.callLLM(messages: messages, settings: settings, runID: context.runID) { [weak self] result in
                 DispatchQueue.main.async {
-                    guard !self.cancelled else { return }
+                    guard let self = self, self.isActive(runID: context.runID) else { return }
                     switch result {
                     case .failure(let error):
-                        self.phase = .error(error.localizedDescription); self.addStep("⚠️", "LLM error", error.localizedDescription)
+                        let message = Redactor.text(error.localizedDescription)
+                        self.phase = .error(message); self.addStep("⚠️", "LLM error", message); self.activeRun = nil
                     case .success(let content):
-                        self.handleAgentResponse(content, command: command, settings: settings)
+                        self.handleAgentResponse(content, context: context, settings: settings)
                     }
                 }
             }
         }
     }
 
-    func handleAgentResponse(_ content: String, command: String, settings: AgentSettings) {
+    func handleAgentResponse(_ content: String, context: RunContext, settings: AgentSettings) {
+        guard isActive(runID: context.runID) else { return }
         switch parseAgentResponse(content) {
         case .failure(let error):
-            phase = .error(error); addStep("⚠️", "Parser error", error + "\nRaw: \(String(content.prefix(500)))")
+            phase = .error(error); addStep("⚠️", "Parser error", error + "\nRaw: \(Redactor.text(String(content.prefix(500))))"); activeRun = nil
         case .success(let response):
             switch response.kind {
             case .final(let message):
-                agentAnswer = message; phase = .done; addStep("✅", "Final", message)
-            case .tool(let call):
+                agentAnswer = Redactor.text(message); phase = .done; addStep("✅", "Final", message); activeRun = nil
+            case .tool(let rawCall):
+                let call = resolvedExecutionCall(rawCall)
                 let risk = classify(call)
-                if risk == .blocked { phase = .done; addStep("⛔️", "Blocked", "\(call.tool): \(blockReason(call))"); return }
+                if risk == .blocked { phase = .done; addStep("⛔️", "Blocked", "\(call.tool): \(blockReason(call))"); activeRun = nil; return }
                 if risk == .approval {
-                    pendingApproval = ApprovalRequest(call: call, risk: risk, preview: preview(call), reason: call.reason)
+                    pendingApproval = ApprovalRequest(runID: context.runID, call: call, risk: risk, preview: preview(call), reason: Redactor.text(call.reason))
                     phase = .awaitingApproval
                     addStep("⏸", "Needs approval", preview(call))
                 } else {
-                    execute(call: call) { [weak self] result in self?.continueAgent(command: command, settings: settings, previousResult: result) }
+                    execute(call: call, context: context) { [weak self] result in
+                        guard let self = self, self.isActive(runID: context.runID) else { return }
+                        self.continueAgent(context: context, settings: settings, previousResult: result)
+                    }
                 }
             }
         }
     }
 
     func approvePending(settings: AgentSettings) {
-        guard let req = pendingApproval else { return }
+        guard let req = pendingApproval, let context = activeRun, req.runID == context.runID else { pendingApproval = nil; return }
         pendingApproval = nil
         addStep("✅", "Approved", preview(req.call))
-        execute(call: req.call) { [weak self] result in self?.continueAgent(command: self?.steps.first?.detail ?? "", settings: settings, previousResult: result) }
+        execute(call: req.call, context: context) { [weak self] result in
+            guard let self = self, self.isActive(runID: context.runID) else { return }
+            self.continueAgent(context: context, settings: settings, previousResult: result)
+        }
     }
 
     func denyPending() {
-        if let req = pendingApproval { addStep("🚫", "Denied", preview(req.call)) }
+        guard let req = pendingApproval, req.runID == activeRun?.runID else { pendingApproval = nil; return }
+        addStep("🚫", "Denied", preview(req.call))
         pendingApproval = nil
+        activeRun = nil
         phase = .stopped
+    }
+
+    func stageManualApproval(call: ToolCall) {
+        let context = beginRun(command: "Manual \(call.tool)")
+        pendingApproval = ApprovalRequest(runID: context.runID, call: call, risk: .approval, preview: preview(call), reason: "Manual tool")
+        phase = .awaitingApproval
     }
 
     func parseAgentResponse(_ text: String) -> AgentParseResult {
@@ -542,79 +681,211 @@ final class BrowserState: NSObject, ObservableObject {
     }
 
     func blockReason(_ call: ToolCall) -> String { "Blocked by safety policy for sensitive/payment/login/crypto/delete pattern." }
-    func preview(_ call: ToolCall) -> String { "\(call.tool) \(call.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))" }
+    func preview(_ call: ToolCall) -> String { Redactor.preview(tool: call.tool, arguments: call.arguments) }
 
-    func execute(call: ToolCall, completion: @escaping (String) -> Void) {
+    func resolvedExecutionCall(_ call: ToolCall) -> ToolCall {
+        guard call.tool.hasPrefix("export_") else { return call }
+        var arguments = call.arguments
+        if arguments["body"] == nil, arguments["json"] == nil, arguments["rows"] == nil {
+            arguments["body"] = Redactor.exportBody(agentAnswer)
+        }
+        return ToolCall(id: call.id, tool: call.tool, arguments: arguments, reason: call.reason)
+    }
+
+    private func clearPendingNavigationAction() {
+        pendingNavigationAction?.cancelTimers()
+        pendingNavigationAction = nil
+    }
+
+    private func prepareNavigationAction(context: RunContext, action: String, bindsFirstNavigation: Bool, completion: @escaping (String) -> Void) {
+        clearPendingNavigationAction()
+        pendingNavigationAction = PendingNavigationAction(runID: context.runID, action: action, bindsFirstNavigation: bindsFirstNavigation, completion: completion)
+    }
+
+    private func settleNavigationAction(actionID: UUID, runID: UUID, result: String) {
+        guard let pending = pendingNavigationAction,
+              pending.actionID == actionID,
+              pending.runID == runID else { return }
+        clearPendingNavigationAction()
+        guard isActive(runID: runID) else { return }
+        pending.completion(Redactor.text(result))
+    }
+
+    private func scheduleNavigationTimeout(for pending: PendingNavigationAction) {
+        guard pendingNavigationAction === pending else { return }
+        guard pending.timeoutWorkItem == nil else { return }
+        let actionID = pending.actionID
+        let runID = pending.runID
+        let work = DispatchWorkItem { [weak self] in
+            self?.settleNavigationAction(actionID: actionID, runID: runID, result: "Navigation timed out")
+        }
+        pending.timeoutWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: work)
+    }
+
+    private func performNavigation(context: RunContext, action: String, completion: @escaping (String) -> Void, start: () -> WKNavigation?) {
+        guard isActive(runID: context.runID) else { return }
+        prepareNavigationAction(context: context, action: action, bindsFirstNavigation: false, completion: completion)
+        guard let pending = pendingNavigationAction, pending.runID == context.runID else { return }
+        guard let navigation = start() else {
+            settleNavigationAction(actionID: pending.actionID, runID: context.runID, result: "\(action) did not start")
+            return
+        }
+        pending.navigation = navigation
+        pending.didStart = true
+        scheduleNavigationTimeout(for: pending)
+    }
+
+    private func performPossibleNavigationJS(context: RunContext, action: String, javascript: String, completion: @escaping (String) -> Void) {
+        guard isActive(runID: context.runID) else { return }
+        guard !webView.isLoading else {
+            completion("\(action) deferred: page is still loading")
+            return
+        }
+        prepareNavigationAction(context: context, action: action, bindsFirstNavigation: true, completion: completion)
+        guard let prepared = pendingNavigationAction, prepared.runID == context.runID else { return }
+        scheduleNavigationTimeout(for: prepared)
+        runJS(javascript) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self,
+                      self.isActive(runID: context.runID),
+                      let pending = self.pendingNavigationAction,
+                      pending.actionID == prepared.actionID,
+                      pending.runID == context.runID else { return }
+                switch result {
+                case .failure(let error):
+                    if pending.didStart { return }
+                    self.settleNavigationAction(actionID: pending.actionID, runID: context.runID, result: "\(action) failed: \(error.localizedDescription)")
+                case .success(let value):
+                    let message = value as? String ?? action
+                    if message.lowercased().contains("not found") {
+                        self.settleNavigationAction(actionID: pending.actionID, runID: context.runID, result: message)
+                        return
+                    }
+                    if pending.didStart { return }
+                    let work = DispatchWorkItem { [weak self, weak pending] in
+                        guard let self = self,
+                              let pending = pending,
+                              let current = self.pendingNavigationAction,
+                              current.actionID == pending.actionID,
+                              current.runID == context.runID,
+                              !current.didStart else { return }
+                        self.settleNavigationAction(actionID: current.actionID, runID: context.runID, result: message)
+                    }
+                    pending.noNavigationWorkItem = work
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+                }
+            }
+        }
+    }
+
+    func execute(call: ToolCall, context: RunContext, completion: @escaping (String) -> Void) {
+        guard isActive(runID: context.runID) else { return }
+        let finish: (String) -> Void = { [weak self] result in
+            guard let self = self, self.isActive(runID: context.runID) else { return }
+            completion(Redactor.text(result))
+        }
         phase = .acting(call.tool)
         addStep("⚙️", "Running \(call.tool)", preview(call))
         switch call.tool {
         case "snapshot_page", "extract_text", "extract_links", "extract_forms", "extract_tables":
-            extractSnapshot { snap in completion(snap?.summaryText ?? "No snapshot") }
+            extractSnapshot(runID: context.runID) { snap in finish(snap?.summaryText ?? "No snapshot") }
         case "save_memory_note":
-            let name = MemoryStore.save(title: call.arguments["title"] ?? "K3 Note", body: call.arguments["body"] ?? agentAnswer, url: currentURL)
-            addStep("💾", "Saved note", name); completion("Saved note: \(name)")
+            do {
+                let name = try MemoryStore.save(title: call.arguments["title"] ?? "K3 Note", body: call.arguments["body"] ?? agentAnswer, url: currentURL)
+                addStep("💾", "Saved note", name); finish("Saved note: \(name)")
+            } catch {
+                let message = Redactor.text(error.localizedDescription)
+                addStep("⚠️", "Note save failed", message); finish("Note save failed: \(message)")
+            }
         case "read_memory_notes":
-            completion(MemoryStore.recent())
+            finish(MemoryStore.recent())
         case "scroll":
             let dir = call.arguments["direction"] ?? "down"
             let amount = Int(call.arguments["amount"] ?? "650") ?? 650
             let y = dir == "up" ? -amount : amount
-            runJS("window.scrollBy({top:\(y),left:0,behavior:'smooth'}); 'scrolled';") { _ in completion("Scrolled \(dir)") }
+            runJS("window.scrollBy({top:\(y),left:0,behavior:'smooth'}); 'scrolled';") { _ in finish("Scrolled \(dir)") }
         case "open_url":
-            if let urlString = call.arguments["url"], let url = normalizedURL(urlString) { webView.load(URLRequest(url: url)); completion("Opened \(url.absoluteString)") } else { completion("Bad URL") }
-        case "back": back(); completion("Back")
-        case "forward": forward(); completion("Forward")
-        case "reload": reload(); completion("Reload")
+            if let urlString = call.arguments["url"], let url = normalizedURL(urlString) {
+                performNavigation(context: context, action: "Open URL", completion: finish) { self.webView.load(URLRequest(url: url)) }
+            } else { finish("Bad URL") }
+        case "back":
+            performNavigation(context: context, action: "Back", completion: finish) { self.webView.goBack() }
+        case "forward":
+            performNavigation(context: context, action: "Forward", completion: finish) { self.webView.goForward() }
+        case "reload":
+            performNavigation(context: context, action: "Reload", completion: finish) { self.webView.reload() }
         case "fill_selector":
             let selector = call.arguments["selector"] ?? ""
             let value = call.arguments["value"] ?? ""
             let js = """
             (function(){ var el=document.querySelector(\(jsLiteral(selector))); if(!el){return 'selector not found';} el.focus(); el.value=\(jsLiteral(value)); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return 'filled '+\(jsLiteral(selector)); })();
             """
-            runJS(js) { result in completion((try? result.get()) as? String ?? "Filled") }
+            runJS(js) { result in finish((try? result.get()) as? String ?? "Filled") }
         case "click_selector":
             let selector = call.arguments["selector"] ?? ""
             let js = """
             (function(){ var el=document.querySelector(\(jsLiteral(selector))); if(!el){return 'selector not found';} el.scrollIntoView({block:'center'}); el.click(); return 'clicked '+\(jsLiteral(selector)); })();
             """
-            runJS(js) { result in completion((try? result.get()) as? String ?? "Clicked") }
+            performPossibleNavigationJS(context: context, action: "Click", javascript: js, completion: finish)
         case "select_option":
             let selector = call.arguments["selector"] ?? ""; let value = call.arguments["value"] ?? ""
             let js = """
             (function(){ var el=document.querySelector(\(jsLiteral(selector))); if(!el){return 'selector not found';} el.value=\(jsLiteral(value)); el.dispatchEvent(new Event('change',{bubbles:true})); return 'selected'; })();
             """
-            runJS(js) { result in completion((try? result.get()) as? String ?? "Selected") }
+            runJS(js) { result in finish((try? result.get()) as? String ?? "Selected") }
         case "submit_form":
             let selector = call.arguments["selector"] ?? "form"
             let js = """
             (function(){ var el=document.querySelector(\(jsLiteral(selector))); if(!el){return 'selector not found';} if(el.tagName.toLowerCase()!=='form'){el=el.closest('form');} if(!el){return 'form not found';} el.requestSubmit ? el.requestSubmit() : el.submit(); return 'submitted'; })();
             """
-            runJS(js) { result in completion((try? result.get()) as? String ?? "Submitted") }
+            performPossibleNavigationJS(context: context, action: "Submit", javascript: js, completion: finish)
         case "export_markdown", "export_json", "export_csv":
             let title = call.arguments["title"] ?? "k3-export"
-            let body = call.arguments["body"] ?? call.arguments["json"] ?? call.arguments["rows"] ?? agentAnswer
-            exportText(title: title, body: body, ext: call.tool == "export_csv" ? "csv" : (call.tool == "export_json" ? "json" : "md"))
-            completion("Export ready")
-        default: completion("Unknown tool")
+            let body = call.arguments["body"] ?? call.arguments["json"] ?? call.arguments["rows"] ?? ""
+            if exportText(title: title, body: body, ext: call.tool == "export_csv" ? "csv" : (call.tool == "export_json" ? "json" : "md")) {
+                finish("Export ready")
+            } else {
+                finish("Export failed")
+            }
+        default: finish("Unknown tool")
         }
     }
 
-    func exportText(title: String, body: String, ext: String) {
+    @discardableResult
+    func exportText(title: String, body: String, ext: String) -> Bool {
         let safe = title.replacingOccurrences(of: "[^A-Za-z0-9_-]+", with: "-", options: .regularExpression).prefix(50)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(safe).\(ext)")
-        try? body.write(to: url, atomically: true, encoding: .utf8)
-        shareItems = [url]
-        showShare = true
-        addStep("📤", "Export ready", url.lastPathComponent)
+        let safeBody = Redactor.exportBody(body)
+        do {
+            try safeBody.write(to: url, atomically: true, encoding: .utf8)
+            shareItems = [url]
+            showShare = true
+            addStep("📤", "Export ready", url.lastPathComponent)
+            return true
+        } catch {
+            addStep("⚠️", "Export failed", Redactor.text(error.localizedDescription))
+            return false
+        }
     }
 
     func copyLog() {
-        UIPasteboard.general.string = steps.map { "\($0.icon) \($0.title) — \($0.detail)" }.joined(separator: "\n")
+        UIPasteboard.general.string = Redactor.text(steps.map { "\($0.icon) \($0.title) — \($0.detail)" }.joined(separator: "\n"))
     }
 
-    func exportLog() { exportText(title: "k3-agent-run", body: steps.map { "- \($0.icon) **\($0.title)**: \($0.detail)" }.joined(separator: "\n"), ext: "md") }
+    func exportLog() { exportText(title: "k3-agent-run", body: Redactor.text(steps.map { "- \($0.icon) **\($0.title)**: \($0.detail)" }.joined(separator: "\n")), ext: "md") }
 
-    func callLLM(messages: [[String: String]], settings: AgentSettings, completion: @escaping (Result<String, Error>) -> Void) {
+    func saveCurrentAnswerNote() {
+        do {
+            let name = try MemoryStore.save(title: pageTitle.isEmpty ? "K3 Note" : pageTitle, body: agentAnswer, url: currentURL)
+            addStep("💾", "Saved note", name)
+        } catch {
+            addStep("⚠️", "Note save failed", Redactor.text(error.localizedDescription))
+        }
+    }
+
+    func callLLM(messages: [[String: String]], settings: AgentSettings, runID: UUID, completion: @escaping (Result<String, Error>) -> Void) {
+        guard isActive(runID: runID) else { return }
         guard let url = settings.chatURL() else { completion(.failure(NSError(domain: "K3", code: 1, userInfo: [NSLocalizedDescriptionKey: "Bad API URL"]))) ; return }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"; req.timeoutInterval = 90
@@ -622,19 +893,24 @@ final class BrowserState: NSObject, ObservableObject {
         req.setValue("Bearer \(settings.apiKey)", forHTTPHeaderField: "Authorization")
         let body: [String: Any] = ["model": settings.model, "messages": messages, "temperature": 0.2]
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        URLSession.shared.dataTask(with: req) { data, response, error in
-            if let error = error { completion(.failure(error)); return }
-            if let http = response as? HTTPURLResponse, http.statusCode >= 300 {
-                let raw = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                completion(.failure(NSError(domain: "K3", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(raw.prefix(200))"])))
-                return
+        let task = URLSession.shared.dataTask(with: req) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                guard let self = self, self.isActive(runID: runID) else { return }
+                if let error = error { completion(.failure(error)); return }
+                if let http = response as? HTTPURLResponse, http.statusCode >= 300 {
+                    let raw = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                    completion(.failure(NSError(domain: "K3", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(Redactor.text(String(raw.prefix(200))))"])))
+                    return
+                }
+                guard let data = data, let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let choices = obj["choices"] as? [[String: Any]], let msg = choices.first?["message"] as? [String: Any], let content = msg["content"] as? String else {
+                    completion(.failure(NSError(domain: "K3", code: 2, userInfo: [NSLocalizedDescriptionKey: "Bad LLM response"])))
+                    return
+                }
+                completion(.success(content))
             }
-            guard let data = data, let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let choices = obj["choices"] as? [[String: Any]], let msg = choices.first?["message"] as? [String: Any], let content = msg["content"] as? String else {
-                completion(.failure(NSError(domain: "K3", code: 2, userInfo: [NSLocalizedDescriptionKey: "Bad LLM response"])))
-                return
-            }
-            completion(.success(content))
-        }.resume()
+        }
+        llmTask = task
+        task.resume()
     }
 
     func agentPrompt(command: String, snapshot: PageSnapshot, previousResult: String) -> String {
@@ -657,43 +933,53 @@ final class BrowserState: NSObject, ObservableObject {
         """
     }
 
-    static let snapshotJS = """
-    (function(){
-      function clean(s){return (s||'').replace(/\\s+/g,' ').trim();}
-      function cssPath(el){
-        if(!el || !el.tagName) return '';
-        if(el.id && /^[A-Za-z][A-Za-z0-9_-]*$/.test(el.id)) return '#'+el.id;
-        if(el.name) return el.tagName.toLowerCase()+'[name="'+CSS.escape(el.name)+'"]';
-        var path=[];
-        while(el && el.nodeType===1 && el!==document.body){
-          var name=el.tagName.toLowerCase();
-          var parent=el.parentElement;
-          if(parent){ var same=Array.prototype.filter.call(parent.children,function(x){return x.tagName===el.tagName;}); if(same.length>1){ name+=':nth-of-type('+(same.indexOf(el)+1)+')'; } }
-          path.unshift(name); el=parent;
-        }
-        return path.join(' > ');
-      }
-      function visible(el){ var r=el.getBoundingClientRect(); var st=getComputedStyle(el); return r.width>0 && r.height>0 && st.visibility!=='hidden' && st.display!=='none'; }
-      function elem(el){ return {selector:cssPath(el), tag:(el.tagName||'').toLowerCase(), text:clean(el.innerText||el.value||'' ).slice(0,160), ariaLabel:clean(el.getAttribute('aria-label')||''), role:clean(el.getAttribute('role')||''), type:clean(el.getAttribute('type')||''), name:clean(el.getAttribute('name')||''), placeholder:clean(el.getAttribute('placeholder')||''), isVisible:visible(el)}; }
-      var headings=Array.from(document.querySelectorAll('h1,h2,h3')).filter(visible).slice(0,40).map(elem);
-      var buttons=Array.from(document.querySelectorAll('button,[role=button],input[type=button],input[type=submit],a')).filter(visible).slice(0,80).map(elem);
-      var inputs=Array.from(document.querySelectorAll('input,textarea,select')).filter(visible).slice(0,80).map(elem);
-      var links=Array.from(document.querySelectorAll('a[href]')).filter(visible).slice(0,100).map(function(a){return {text:clean(a.innerText||a.getAttribute('aria-label')||a.href).slice(0,160), href:a.href, selector:cssPath(a)};});
-      var forms=Array.from(document.querySelectorAll('form')).slice(0,20).map(function(f){return {selector:cssPath(f), action:f.action||'', method:f.method||'', fields:Array.from(f.querySelectorAll('input,textarea,select')).slice(0,60).map(function(x){var typ=(x.getAttribute('type')||x.tagName||'').toLowerCase(); var val=(typ.indexOf('password')>=0||typ.indexOf('card')>=0)?'[masked]':clean(x.value||'').slice(0,80); return {selector:cssPath(x), tag:(x.tagName||'').toLowerCase(), type:typ, name:clean(x.name||''), label:clean((x.labels&&x.labels[0]&&x.labels[0].innerText)||''), placeholder:clean(x.placeholder||''), valuePreview:val, required:!!x.required};})};});
-      var tables=Array.from(document.querySelectorAll('table')).slice(0,12).map(function(t){var rows=Array.from(t.querySelectorAll('tr')).slice(0,30).map(function(r){return Array.from(r.querySelectorAll('th,td')).slice(0,12).map(function(c){return clean(c.innerText).slice(0,120);});}); var headers=rows.length?rows[0]:[]; return {selector:cssPath(t), headers:headers, rows:rows.slice(1)};});
-      return JSON.stringify({title:document.title||'', url:location.href, text:clean(document.body?document.body.innerText:'').slice(0,18000), headings:headings, buttons:buttons, inputs:inputs, links:links, forms:forms, tables:tables});
-    })();
-    """
 }
 
-extension BrowserState: WKNavigationDelegate, WKUIDelegate {}
+extension BrowserState: WKNavigationDelegate, WKUIDelegate {
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        guard let pending = pendingNavigationAction, isActive(runID: pending.runID) else { return }
+        if let boundNavigation = pending.navigation {
+            guard boundNavigation === navigation else { return }
+        } else {
+            guard pending.bindsFirstNavigation else { return }
+            pending.navigation = navigation
+        }
+        pending.didStart = true
+        pending.noNavigationWorkItem?.cancel()
+        scheduleNavigationTimeout(for: pending)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let pending = pendingNavigationAction,
+              let boundNavigation = pending.navigation,
+              boundNavigation === navigation,
+              pending.didStart else { return }
+        let url = Redactor.sanitizeURLString(webView.url?.absoluteString ?? "")
+        settleNavigationAction(actionID: pending.actionID, runID: pending.runID, result: "\(pending.action) completed: \(url)")
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard let pending = pendingNavigationAction,
+              let boundNavigation = pending.navigation,
+              boundNavigation === navigation else { return }
+        settleNavigationAction(actionID: pending.actionID, runID: pending.runID, result: "\(pending.action) failed: \(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard let pending = pendingNavigationAction,
+              let boundNavigation = pending.navigation,
+              boundNavigation === navigation else { return }
+        settleNavigationAction(actionID: pending.actionID, runID: pending.runID, result: "\(pending.action) failed: \(error.localizedDescription)")
+    }
+}
 
 // MARK: - UI
 
 struct BrowserView: View {
     @StateObject private var state = BrowserState()
     @StateObject private var settings = AgentSettings()
-    @State private var showShareURL = false
+    @StateObject private var dockPreferences = DockPreferences()
+    @State private var showApprovalTray = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -703,14 +989,46 @@ struct BrowserView: View {
                 WebViewContainer(webView: state.webView)
                     .ignoresSafeArea(.keyboard, edges: .bottom)
             }
-            VStack(spacing: 8) {
-                if let pending = state.pendingApproval { ApprovalTray(request: pending, onApprove: { state.approvePending(settings: settings) }, onDeny: { state.denyPending() }) }
-                bottomCommandBar
+            if showApprovalTray, let pending = state.pendingApproval {
+                VStack {
+                    ApprovalTray(
+                        request: pending,
+                        onApprove: {
+                            showApprovalTray = false
+                            state.approvePending(settings: settings)
+                        },
+                        onDeny: {
+                            showApprovalTray = false
+                            state.denyPending()
+                        }
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.top, 56)
+                    Spacer(minLength: 0)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 10)
+
+            AdaptiveAgentOverlay(
+                dockPreferences: dockPreferences,
+                commandText: $state.commandText,
+                phase: state.phase,
+                isConfigured: !settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                pendingApprovalCount: state.pendingApproval == nil ? 0 : 1,
+                engagementLabel: nil,
+                statusText: nil,
+                onRun: runCommand,
+                onStop: state.stopAgent,
+                onOpenMissionControl: { state.showMissionControl = true },
+                onExpandApproval: { showApprovalTray = state.pendingApproval != nil }
+            )
         }
-        .sheet(isPresented: $state.showCockpit) { AgentCockpitView(state: state, settings: settings) }
+        .onChange(of: state.pendingApproval?.id) { approvalID in
+            withAnimation(.easeOut(duration: 0.20)) {
+                showApprovalTray = approvalID != nil
+            }
+        }
+        .sheet(isPresented: $state.showMissionControl) { MissionControlView(state: state, settings: settings) }
         .sheet(isPresented: $state.showShare) { ShareSheet(items: state.shareItems) }
     }
 
@@ -724,47 +1042,11 @@ struct BrowserView: View {
                 .autocapitalization(.none)
                 .disableAutocorrection(true)
             Button(action: state.isLoading ? state.stopLoading : state.reload) { Image(systemName: state.isLoading ? "xmark" : "arrow.clockwise") }
-            Button(action: { state.showCockpit = true }) { Image(systemName: "bolt.fill") }
+            Button(action: { state.showMissionControl = true }) { Image(systemName: "slider.horizontal.3") }
+                .accessibilityLabel("Open Mission Control")
         }.padding(8).background(Color(.systemBackground))
     }
 
-    var bottomCommandBar: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                statusPill
-                TextField(settings.apiKey.isEmpty ? "Set API key to run K3 Agent" : "Tell K3 what to do…", text: $state.commandText, onCommit: runCommand)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(settings.apiKey.isEmpty || state.phase == .thinking || state.phase == .observing)
-                if state.phase == .thinking || state.phase == .observing || state.phase == .acting("") || state.pendingApproval != nil {
-                    Button("Stop", action: state.stopAgent).buttonStyle(.bordered)
-                } else {
-                    Button("Run", action: runCommand).buttonStyle(.borderedProminent).disabled(settings.apiKey.isEmpty || state.commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                Button(action: { state.showCockpit = true }) { Image(systemName: "list.bullet.rectangle") }.buttonStyle(.bordered)
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    chip("Summarize") { state.commandText = "Summarize this page and list next actions."; runCommand() }
-                    chip("Find forms") { state.commandText = "Find forms and explain what fields are needed."; runCommand() }
-                    chip("Extract links") { state.commandText = "Extract the most important links from this page."; runCommand() }
-                    chip("Save note") { state.commandText = "Summarize this page and save a memory note."; runCommand() }
-                }
-            }
-        }
-        .padding(10)
-        .background(.ultraThinMaterial)
-        .cornerRadius(18)
-        .shadow(radius: 8)
-    }
-
-    var statusPill: some View {
-        Text("● \(state.phase.label)")
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8).padding(.vertical, 6)
-            .background(Color(.secondarySystemBackground)).cornerRadius(999)
-    }
-
-    func chip(_ text: String, action: @escaping () -> Void) -> some View { Button(text, action: action).font(.caption).buttonStyle(.bordered) }
     func runCommand() { let cmd = state.commandText.trimmingCharacters(in: .whitespacesAndNewlines); guard !cmd.isEmpty else { return }; state.startAgent(command: cmd, settings: settings) }
 }
 
@@ -790,30 +1072,33 @@ struct ApprovalTray: View {
     }
 }
 
-struct AgentCockpitView: View {
+struct MissionControlView: View {
     @ObservedObject var state: BrowserState
     @ObservedObject var settings: AgentSettings
     @State private var tab = 0
-    @State private var askText = ""
+
     @State private var selector = ""
     @State private var value = ""
 
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                Picker("Mode", selection: $tab) { Text("Cockpit").tag(0); Text("Snapshot").tag(1); Text("Tools").tag(2); Text("Settings").tag(3) }.pickerStyle(.segmented).padding()
-                if tab == 0 { cockpit }
+                Picker("Workspace", selection: $tab) { Text("Run").tag(0); Text("Page").tag(1); Text("Tools").tag(2); Text("Settings").tag(3) }.pickerStyle(.segmented).padding()
+                if tab == 0 { runOverview }
                 if tab == 1 { snapshotView }
                 if tab == 2 { toolsView }
                 if tab == 3 { settingsView }
-            }.navigationTitle("K3 Agent").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle("Mission Control").navigationBarTitleDisplayMode(.inline)
         }
     }
 
-    var cockpit: some View {
+    var runOverview: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(state.phase.label).font(.headline)
-            HStack { TextField("Tell K3 what to do…", text: $state.commandText).textFieldStyle(.roundedBorder); Button("Run") { state.startAgent(command: state.commandText, settings: settings) }.buttonStyle(.borderedProminent); Button("Stop", action: state.stopAgent).buttonStyle(.bordered) }
+            Text("Commands run from the Agent Dock so the browser keeps one command boundary.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            if state.phase.isBusy { Button("Stop active run", action: state.stopAgent).buttonStyle(.bordered) }
             HStack { Button("Copy log", action: state.copyLog).buttonStyle(.bordered); Button("Export MD", action: state.exportLog).buttonStyle(.bordered); Button("Clear") { state.steps.removeAll() }.buttonStyle(.bordered) }
             Divider()
             ScrollView { VStack(alignment: .leading, spacing: 10) { if state.steps.isEmpty { Text("No actions yet. Run a command to start.").foregroundColor(.secondary) }; ForEach(state.steps) { step in VStack(alignment: .leading) { Text("\(step.icon) \(step.title)").font(.subheadline.weight(.semibold)); if !step.detail.isEmpty { Text(step.detail).font(.caption).foregroundColor(.secondary).textSelection(.enabled) } }.padding(8).frame(maxWidth: .infinity, alignment: .leading).background(Color(.secondarySystemBackground)).cornerRadius(10) } } }
@@ -829,10 +1114,10 @@ struct AgentCockpitView: View {
             Section("Manual selector tools") {
                 TextField("CSS selector", text: $selector).autocapitalization(.none).disableAutocorrection(true)
                 TextField("Value", text: $value)
-                Button("Fill once") { state.pendingApproval = ApprovalRequest(call: ToolCall(id: UUID().uuidString, tool: "fill_selector", arguments: ["selector": selector, "value": value], reason: "Manual tool"), risk: .approval, preview: "fill_selector selector=\(selector)", reason: "Manual tool") }
-                Button("Click once") { state.pendingApproval = ApprovalRequest(call: ToolCall(id: UUID().uuidString, tool: "click_selector", arguments: ["selector": selector], reason: "Manual tool"), risk: .approval, preview: "click_selector selector=\(selector)", reason: "Manual tool") }
+                Button("Fill once") { state.stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: "fill_selector", arguments: ["selector": selector, "value": value], reason: "Manual tool")) }
+                Button("Click once") { state.stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: "click_selector", arguments: ["selector": selector], reason: "Manual tool")) }
             }
-            Section("Memory") { Button("Read recent notes") { state.addStep("📚", "Recent notes", MemoryStore.recent()) }; Button("Save answer as note") { let name = MemoryStore.save(title: state.pageTitle.isEmpty ? "K3 Note" : state.pageTitle, body: state.agentAnswer, url: state.currentURL); state.addStep("💾", "Saved note", name) } }
+            Section("Memory") { Button("Read recent notes") { state.addStep("📚", "Recent notes", MemoryStore.recent()) }; Button("Save answer as note", action: state.saveCurrentAnswerNote) }
         }
     }
 
@@ -847,7 +1132,12 @@ struct AgentCockpitView: View {
                     .foregroundColor(.secondary)
                     .textSelection(.enabled)
                 TextField("Model", text: $settings.model).autocapitalization(.none).disableAutocorrection(true)
-                TextEditor(text: $settings.systemPrompt).frame(height: 120)
+                TextField("Operator name", text: $settings.operatorSoul.displayName)
+                TextField("Persona", text: $settings.operatorSoul.persona)
+                TextField("Communication style", text: $settings.operatorSoul.communicationStyle)
+                Text("Additional persona instructions (the immutable core safety policy is always applied separately).")
+                    .font(.caption).foregroundColor(.secondary)
+                TextEditor(text: $settings.operatorSoul.additionalInstructions).frame(height: 120)
                 HStack { Button("Save", action: settings.save).buttonStyle(.borderedProminent); Button(settings.isTesting ? "Testing" : "Test", action: settings.testConnection).buttonStyle(.bordered).disabled(settings.isTesting) }
                 Text(settings.status).font(.caption).textSelection(.enabled)
             }
