@@ -19,14 +19,13 @@ jobs:
         with:
           path: builder
 
-      - name: Checkout DuckDuckGo Apple Browsers
-        uses: actions/checkout@v4
-        with:
-          repository: duckduckgo/apple-browsers
-          ref: main
-          path: ddg
-          submodules: recursive
-          fetch-depth: 1
+      - name: Clone DuckDuckGo Apple Browsers
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 https://github.com/duckduckgo/apple-browsers.git ddg
+          cd ddg
+          git submodule update --init --recursive || true
+          git status --short
 
       - name: Select Xcode 16.x
         run: |
