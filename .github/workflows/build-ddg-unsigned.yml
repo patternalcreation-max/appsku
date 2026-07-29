@@ -48,8 +48,8 @@ jobs:
           cat > iOS/Configuration/ExternalDeveloper.xcconfig <<'EOF'
           // External sideload build config for patternalcreation-max
           DEVELOPMENT_TEAM =
-          APP_ID = com.patternalcreation.ddgbrowser
-          GROUP_ID_PREFIX = group.com.patternalcreation.ddgbrowser
+          APP_ID = com.duckduckgo.mobile.ios
+          GROUP_ID_PREFIX = group.com.duckduckgo.mobile.ios
           VPN_APP_GROUP = $(GROUP_ID_PREFIX).netp
           SUBSCRIPTION_APP_GROUP = $(GROUP_ID_PREFIX).subscriptions
           CODE_SIGN_STYLE = Manual
