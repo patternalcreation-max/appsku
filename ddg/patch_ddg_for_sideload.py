@@ -39,6 +39,18 @@ for old, new in replacements.items():
         missing.append(old.splitlines()[0])
     s = s.replace(old, new)
 
+# DDG's Copy GRDB framework phase always codesigns the copied framework. In an
+# unsigned sideload build EXPANDED_CODE_SIGN_IDENTITY is empty, causing keychain
+# lookup failure. Patch the generated shell script text in project.pbxproj to
+# copy GRDB but skip codesign when no identity is present.
+old_grdb_sign = '''# Sign the framework directory contents\n/usr/bin/codesign \\\n    --force \\\n    --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \\\n    --timestamp\\=none \\\n    --preserve-metadata\\=identifier,entitlements,flags \\\n    --generate-entitlement-der \"${grdb_install_dir}\"\n'''
+new_grdb_sign = '''# Sign the framework directory contents only for signed builds\nif [ -n \"${EXPANDED_CODE_SIGN_IDENTITY:-}\" ] && [ \"${EXPANDED_CODE_SIGN_IDENTITY}\" != \"-\" ]; then\n/usr/bin/codesign \\\n    --force \\\n    --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \\\n    --timestamp\\=none \\\n    --preserve-metadata\\=identifier,entitlements,flags \\\n    --generate-entitlement-der \"${grdb_install_dir}\"\nelse\n    echo \"Skipping GRDB codesign for unsigned sideload build\"\nfi\n'''
+if old_grdb_sign in s:
+    s = s.replace(old_grdb_sign, new_grdb_sign)
+    print("Patched GRDB framework codesign phase for unsigned build")
+else:
+    missing.append("GRDB codesign shell phase")
+
 pbx.write_text(s)
 
 if "DuckSansFont" in s or "native-apps-ducksans" in s:
