@@ -8,12 +8,12 @@
       "bundleIdentifier": "com.patternalcreation.k3browser",
       "developerName": "patternalcreation-max",
       "subtitle": "Native WKWebView browser baseline",
-      "localizedDescription": "Native iOS WKWebView browser for sideloading. No DDG entitlements, no extensions, no app groups. Includes URL/search bar, navigation, share, persistent WKWebsiteDataStore, Agent Snapshot, Keychain API settings, OpenAI-compatible Ask Page, extract forms/links, fill/click CSS selector tools, and custom JS probe.",
-      "version": "0.3.1",
+      "localizedDescription": "Native iOS WKWebView browser for sideloading. No DDG entitlements, no extensions, no app groups. Includes Hermes-Lite browser runtime: observe page, reason with AI, parse tool-call JSON, approve risky browser actions, execute WKWebView tools, log every step, save memory notes, and export results.",
+      "version": "0.4.0",
       "versionDate": "2026-07-29",
-      "versionDescription": "Max Agent polish: adds API connection test/status, save status, and copy AI answer. Keeps Keychain API storage, OpenAI-compatible Ask Page, snapshot, forms/links extraction, selector fill/click, custom JS probe.",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.3.1/K3Browser.ipa",
-      "size": 258687,
+      "versionDescription": "Hermes-Lite browser runtime: agent loop, JSON tool-call parser, DOM Snapshot V2, approval tray, action timeline, local memory notes, export log/files, bottom command bar, and gated browser tools.",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.4.0/K3Browser.ipa",
+      "size": 0,
       "minOSVersion": "15.0"
     }
   ]
