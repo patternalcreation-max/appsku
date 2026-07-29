@@ -23,40 +23,26 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
-      - name: Build .app (unsigned)
+      - name: Build archive (unsigned)
         run: |
-          set +e
-          xcodebuild build \
+          xcodebuild archive \
             -project k3-calculator.xcodeproj \
             -scheme k3-calculator \
             -sdk iphoneos \
             -configuration Release \
-            -derivedDataPath build \
+            -archivePath build/k3-calculator.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
-          EXIT_CODE=${PIPESTATUS[0]}
-          echo "Build exit code: $EXIT_CODE"
-          # Show errors clearly
-          echo "=== ERRORS ==="
-          grep -i "error:" build_output.log || echo "(no error lines found)"
-          exit $EXIT_CODE
-
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build_output.log
-          retention-days: 7
+            DEVELOPMENT_TEAM="" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
       - name: Package IPA
-        if: success()
         run: |
           mkdir -p build/Payload
-          APP_PATH=$(find build/Build/Products -name "*.app" -type d | head -1)
-          echo "Found app at: $APP_PATH"
+          APP_PATH="build/k3-calculator.xcarchive/Products/Applications/k3-calculator.app"
+          echo "App path: $APP_PATH"
+          ls -la "$APP_PATH"
           cp -r "$APP_PATH" build/Payload/
           cd build
           zip -r k3-calculator.ipa Payload
@@ -64,7 +50,6 @@ jobs:
           ls -la build/k3-calculator.ipa
 
       - name: Upload IPA artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: k3-calculator-ipa
@@ -72,7 +57,7 @@ jobs:
           retention-days: 90
 
       - name: Create Release on tag
-        if: success() && startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: build/k3-calculator.ipa
