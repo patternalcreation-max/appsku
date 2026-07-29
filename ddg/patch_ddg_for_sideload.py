@@ -174,41 +174,29 @@ for xcode_version_file in [Path(".xcode-version"), Path("iOS/.xcode-version")]:
 
 
 
-# v0.4.2-canary: probe-only isolate build.
-# No native UI/button/alert. This only attaches a tiny WKUserScript probe so we
-# can tell whether launch crashes are from the UI overlay or from script injection.
-tab = Path("iOS/DuckDuckGo/TabViewController.swift")
-if tab.exists():
-    t = tab.read_text()
-    if "installDDGSuperAgentProbeOnly" not in t:
-        t = t.replace(
-            "        configuration.userContentController = userContentController\n        userContentController.delegate = self\n",
-            "        configuration.userContentController = userContentController\n"
-            "        userContentController.delegate = self\n"
-            "        installDDGSuperAgentProbeOnly(on: userContentController)\n"
-        )
-        marker = "\n    private func addObservers() {\n"
-        native = r'''
+# v0.4.3-marked: stable/no-agent build with obvious app identity for device-side debugging.
+# No WKUserScript, no native overlay. Only display/version markers.
+info = Path("iOS/DuckDuckGo/Info.plist")
+if info.exists():
+    t = info.read_text()
+    t = t.replace("<key>CFBundleDisplayName</key>\n\t<string>$(PRODUCT_NAME)</string>", "<key>CFBundleDisplayName</key>\n\t<string>DDG MARKED 043</string>")
+    t = t.replace("<key>CFBundleName</key>\n\t<string>$(PRODUCT_NAME)</string>", "<key>CFBundleName</key>\n\t<string>DDGMarked043</string>")
+    t = t.replace("<key>CFBundleShortVersionString</key>\n\t<string>$(MARKETING_VERSION)</string>", "<key>CFBundleShortVersionString</key>\n\t<string>7.210.0-marked.4.3</string>")
+    t = t.replace("<key>CFBundleVersion</key>\n\t<string>$(CURRENT_PROJECT_VERSION)</string>", "<key>CFBundleVersion</key>\n\t<string>43</string>")
+    info.write_text(t)
+    print(f"Marked app identity in {info}: DDG MARKED 043 / 7.210.0-marked.4.3")
 
-    private func installDDGSuperAgentProbeOnly(on userContentController: WKUserContentController) {
-        let source = """
-        (function() {
-            window.__DDG_SUPERAGENT_NATIVE_PROBE__ = {
-                version: "0.4.2-probe-only",
-                ok: true,
-                href: location.href
-            };
-        })();
-        """
-        let script = WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        userContentController.addUserScript(script)
-    }
-'''
-        t = t.replace(marker, native + marker)
-        tab.write_text(t)
-        print(f"Injected DDG probe-only canary into {tab}")
-    else:
-        print("DDG probe-only canary already present")
+# Localized InfoPlist.strings can override CFBundleDisplayName on device. Patch every app/extension localization.
+for strings in Path("iOS").rglob("InfoPlist.strings"):
+    try:
+        t = strings.read_text(errors="ignore")
+    except Exception:
+        continue
+    if "CFBundleDisplayName" in t:
+        t2 = re.sub(r'"CFBundleDisplayName"\s*=\s*"[^"]*";', '"CFBundleDisplayName" = "DDG MARKED 043";', t)
+        if t2 != t:
+            strings.write_text(t2)
+print("Patched localized InfoPlist display names to DDG MARKED 043")
 
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
