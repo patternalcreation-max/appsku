@@ -120,6 +120,17 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist" || true
           /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist" || true
           cp -R "$APP_PATH" build/Payload/
+          APP_BUNDLE="build/Payload/$(basename "$APP_PATH")"
+          echo "Preparing DDG LITE 044 package: strip extensions + mark identity"
+          rm -rf "$APP_BUNDLE/PlugIns"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName DDG LITE 044' "$APP_BUNDLE/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleName DDGLite044' "$APP_BUNDLE/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.patternalcreation.ddglite044' "$APP_BUNDLE/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 7.210.0-lite.4.4' "$APP_BUNDLE/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 44' "$APP_BUNDLE/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_BUNDLE/Info.plist" || true
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_BUNDLE/Info.plist" || true
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_BUNDLE/Info.plist" || true
           cd build
           zip -ry DDG-SUPER.ipa Payload
           ls -lah DDG-SUPER.ipa
