@@ -995,13 +995,14 @@ struct BrowserView: View {
     var body: some View {
         ZStack {
             browserWorkspace
+                // The keyboard repositions the Capsule, never the WKWebView workspace.
+                .ignoresSafeArea(.keyboard, edges: .bottom)
                 .disabled(state.pendingApproval != nil)
                 .accessibilityHidden(state.pendingApproval != nil)
 
-            if dockPreferences.collapsed && state.pendingApproval == nil {
-                agentOverlay
-                    .transition(.opacity)
-            }
+            agentOverlay
+                .disabled(state.pendingApproval != nil)
+                .accessibilityHidden(state.pendingApproval != nil)
 
             if showApprovalReview, let pending = state.pendingApproval {
                 ApprovalReviewOverlay(
@@ -1049,6 +1050,8 @@ struct BrowserView: View {
                 MissionControlView(state: state, settings: settings)
                     .disabled(state.pendingApproval != nil)
                     .accessibilityHidden(state.pendingApproval != nil)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             case .share:
                 ShareSheet(items: state.shareItems)
             }
@@ -1071,10 +1074,28 @@ struct BrowserView: View {
             )
             WebViewContainer(webView: state.webView)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !dockPreferences.collapsed {
-                agentOverlay
+    }
+
+    private var agentResultText: String {
+        let answer = Redactor.text(state.agentAnswer).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !answer.isEmpty { return answer }
+
+        if case .error(let message) = state.phase {
+            let errorMessage = Redactor.text(message).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !errorMessage.isEmpty { return errorMessage }
+        }
+
+        switch state.phase {
+        case .done, .error:
+            if let finalStep = state.steps.last {
+                let title = Redactor.text(finalStep.title).trimmingCharacters(in: .whitespacesAndNewlines)
+                let detail = Redactor.text(finalStep.detail).trimmingCharacters(in: .whitespacesAndNewlines)
+                let stepResult = [title, detail].filter { !$0.isEmpty }.joined(separator: ": ")
+                if !stepResult.isEmpty { return stepResult }
             }
+            return Redactor.text(state.phase.label)
+        default:
+            return answer
         }
     }
 
@@ -1083,10 +1104,11 @@ struct BrowserView: View {
             dockPreferences: dockPreferences,
             commandText: $state.commandText,
             phase: state.phase,
+            resultText: agentResultText,
             isConfigured: !settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             pendingApprovalCount: state.pendingApproval == nil ? 0 : 1,
-            engagementLabel: nil,
             statusText: settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Agent Not Configured" : nil,
+            hasPresentationConflict: activePresentation != nil || showApprovalReview,
             onRun: runCommand,
             onStop: state.stopAgent,
             onOpenMissionControl: { requestPresentation(.missionControl) },

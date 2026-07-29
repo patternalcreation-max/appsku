@@ -25,20 +25,16 @@ struct ApprovalReviewOverlay: View {
                                 Image(systemName: "hand.raised.fill")
                                     .foregroundColor(K3VisualSystem.Palette.approval)
                                     .accessibilityHidden(true)
-                                Text("Approval required")
+                                Text(approveLabel)
                                     .font(.headline)
                                     .foregroundColor(.primary)
                                 Spacer(minLength: K3VisualSystem.Space.compact)
-                                Text(request.call.tool)
-                                    .font(.caption.monospaced())
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(2)
                             }
 
-                            Text("One-action authority")
-                                .font(.caption.weight(.semibold))
-                                .textCase(.uppercase)
+                            Text(request.call.tool)
+                                .font(.caption.monospaced())
                                 .foregroundColor(.secondary)
+                                .lineLimit(2)
 
                             Text(request.preview)
                                 .font(.body)
@@ -87,7 +83,7 @@ struct ApprovalReviewOverlay: View {
                 .background(.regularMaterial)
                 .overlay(alignment: .top) {
                     K3VisualSystem.Palette.approval
-                        .frame(height: 3)
+                        .frame(height: K3VisualSystem.Space.hairline)
                         .accessibilityHidden(true)
                 }
                 .accessibilityElement(children: .contain)

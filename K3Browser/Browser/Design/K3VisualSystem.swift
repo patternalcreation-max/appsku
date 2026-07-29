@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-// THESIS page-first adaptive native instrument; OWN-WORLD semantic indigo interaction, system material rails, amber approval, red error, SF typography/symbols; STORY browse quietly → expand K3 → see bounded operation/approval/result; FIRST VIEWPORT page dominates between shallow top rail and compact bottom shelf; FORM native operator rail, no dashboard/chat/card stacks; FINISH unreviewed and undocumented is unfinished; this build ends with finish review, verdict, DESIGN.md.
+// THESIS page-first Magnetic Capsule; OWN-WORLD semantic indigo interaction, neutral material, amber approval, red error, SF typography/symbols; STORY browse quietly → tap the Ball → compose/watch/read a bounded result; FIRST VIEWPORT page dominates; the page never yields layout to agent chrome; FORM the Ball is the agent and capsules are temporary speech; FINISH independent review and CI compile remain required.
 enum K3VisualSystem {
     enum Space {
         static let hairline: CGFloat = 1
@@ -33,7 +33,7 @@ enum K3VisualSystem {
         static let error = Color(uiColor: .systemRed)
         static let success = Color(uiColor: .systemGreen)
         static let rail = Color(uiColor: .systemBackground)
-        static let shelf = Color(uiColor: .secondarySystemBackground)
+        static let capsule = Color(uiColor: .secondarySystemBackground)
         static let separator = Color(uiColor: .separator)
         static let dim = Color(uiColor: .black).opacity(0.42)
     }

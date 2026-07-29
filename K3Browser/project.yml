@@ -3,7 +3,7 @@ name: K3Browser
 options:
   bundleIdPrefix: com.patternalcreation
   deploymentTarget:
-    iOS: "15.0"
+    iOS: "26.0"
 
 settings:
   base:
@@ -19,8 +19,8 @@ targets:
       base:
         PRODUCT_NAME: K3Browser
         PRODUCT_BUNDLE_IDENTIFIER: com.patternalcreation.k3browser
-        MARKETING_VERSION: "0.6.0"
-        CURRENT_PROJECT_VERSION: "8"
+        MARKETING_VERSION: "0.7.0"
+        CURRENT_PROJECT_VERSION: "9"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""

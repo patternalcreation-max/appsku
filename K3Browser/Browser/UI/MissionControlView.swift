@@ -3,12 +3,12 @@ import SwiftUI
 struct MissionControlView: View {
     @ObservedObject var state: BrowserState
     @ObservedObject var settings: AgentSettings
-    @Environment(\.presentationMode) private var presentationMode
+    @Environment(\.dismiss) private var dismiss
     @State private var selector = ""
     @State private var value = ""
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section("Current Run") {
                     NavigationLink(destination: CurrentRunView(state: state)) {
@@ -39,12 +39,11 @@ struct MissionControlView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { presentationMode.wrappedValue.dismiss() }
+                    Button("Done") { dismiss() }
                         .accessibilityLabel("Close Mission Control")
                 }
             }
         }
-        .navigationViewStyle(.stack)
         .disabled(state.pendingApproval != nil)
         .accessibilityHidden(state.pendingApproval != nil)
     }
@@ -176,8 +175,8 @@ private struct ManualToolsView: View {
         Form {
             Section("Selector") {
                 TextField("CSS selector", text: $selector)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                 TextField("Value", text: $value)
             }
             Section("Stage for review") {
@@ -208,11 +207,11 @@ private struct AgentSettingsView: View {
                     .textContentType(.password)
                 TextField("Base URL", text: $settings.baseURL)
                     .keyboardType(.URL)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                 TextField("Model", text: $settings.model)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
             }
             Section("Operator") {
                 TextField("Operator name", text: $settings.operatorSoul.displayName)
