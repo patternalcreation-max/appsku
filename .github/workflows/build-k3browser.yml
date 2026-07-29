@@ -58,6 +58,16 @@ jobs:
             ARCHS=arm64 2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           grep -i "error:" build_output.log || true
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "---- compiler error context ----"
+            grep -n -i -C 3 "error:" build_output.log | head -160 || true
+            grep -i "error:" build_output.log | head -40 | while IFS= read -r line; do
+              safe=${line//'%'/'%25'}
+              safe=${safe//$'\n'/'%0A'}
+              safe=${safe//$'\r'/'%0D'}
+              echo "::error::$safe"
+            done
+          fi
           exit $EXIT_CODE
 
       - name: Inspect and package IPA
