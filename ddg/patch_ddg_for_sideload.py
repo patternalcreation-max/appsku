@@ -75,6 +75,15 @@ if sync_success.exists():
         sync_success.write_text(t2)
         print(f"Patched unavailable SwiftUI glass style in {sync_success}")
 
+# Network.NWError.wifiAware is also newer than Xcode 16.4's Network framework.
+vpn_leak = Path("SharedPackages/VPN/Sources/VPN/LeakCheck/VPNLeakCheckService.swift")
+if vpn_leak.exists():
+    t = vpn_leak.read_text()
+    t2 = t.replace("            case .wifiAware:\n                return false\n", "")
+    if t2 != t:
+        vpn_leak.write_text(t2)
+        print(f"Patched unavailable NWError.wifiAware case in {vpn_leak}")
+
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
     print("Non-fatal missing patterns, upstream may have changed:")
