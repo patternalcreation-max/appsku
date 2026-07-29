@@ -1,0 +1,20 @@
+{
+  "name": "SUPERAGENT iOS Apps CANARY",
+  "identifier": "com.patternalcreation.superagent.apps.canary",
+  "sourceURL": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/apps-ddg-canary.json",
+  "apps": [
+    {
+      "name": "DDG SUPER Canary Probe",
+      "bundleIdentifier": "com.duckduckgo.mobile.ios",
+      "developerName": "patternalcreation-max / DuckDuckGo OSS",
+      "subtitle": "Probe-only canary; no native Agent UI",
+      "localizedDescription": "Unsigned DuckDuckGo iOS canary from duckduckgo/apple-browsers tag 7.210.0+ios. v0.4.2 only injects a tiny internal WKUserScript probe. No button, no alert, no overlay. Use only to isolate launch force-close cause.",
+      "version": "7.210.0-canary.4.2",
+      "versionDate": "2026-07-29",
+      "versionDescription": "Probe-only isolation build: no native UI strings/button present; probe marker found in binary. If this launches, prior crash came from native UI overlay route.",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/ddg-v0.4.2/DDG-SUPER.ipa",
+      "size": 155926253,
+      "minOSVersion": "15.0"
+    }
+  ]
+}
