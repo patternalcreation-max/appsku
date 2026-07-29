@@ -84,6 +84,60 @@ if vpn_leak.exists():
         vpn_leak.write_text(t2)
         print(f"Patched unavailable NWError.wifiAware case in {vpn_leak}")
 
+# BGContinuedProcessingTask is iOS 26 SDK-only. For a sideload browser build on
+# Xcode 16.4, disable that optional background flow with a no-op coordinator.
+continued = Path("iOS/LocalPackages/DataBrokerProtection-iOS/Sources/DataBrokerProtection-iOS/ManagingAndCoordinating/ContinuedProcessing/DBPContinuedProcessingCoordinator.swift")
+if continued.exists():
+    continued.write_text('''//
+//  DBPContinuedProcessingCoordinator.swift
+//  Patched for external sideload build on Xcode 16.x: iOS 26 continued
+//  processing BackgroundTasks APIs are unavailable in this SDK.
+//
+
+import DataBrokerProtectionCore
+import Foundation
+
+protocol DBPContinuedProcessingDelegate: AnyObject {
+    func coordinatorDidStartRun()
+    func coordinatorDidFinishRun()
+    func coordinatorIsReadyForScanOperations() async
+    func coordinatorIsReadyForOptOutOperations()
+    func coordinatorDidRequestStopOperations()
+    func continuedProcessingScanJobTimeout() -> TimeInterval
+    func makeContinuedProcessingOptOutPlan() throws -> DBPContinuedProcessingPlans.OptOutPlan
+}
+
+enum DBPContinuedProcessingEvent {
+    case scanJobCompleted(DBPContinuedProcessingPlans.ScanJobID)
+    case optOutJobCompleted(DBPContinuedProcessingPlans.OptOutJobID)
+    case scanPhaseCompleted
+    case optOutPhaseCompleted
+}
+
+protocol DBPContinuedProcessingCoordinating: AnyObject, Sendable {
+    func hasAttachedTask() async -> Bool
+    func startInitialRun(scanPlan: DBPContinuedProcessingPlans.InitialScanPlan) async throws
+    func didEmit(event: DBPContinuedProcessingEvent) async
+}
+
+@available(iOS 26.0, *)
+actor DBPContinuedProcessingCoordinator: DBPContinuedProcessingCoordinating {
+    init(delegate: DBPContinuedProcessingDelegate,
+         progressReporter: DBPContinuedProcessingProgressReporter? = nil) {}
+
+    func hasAttachedTask() async -> Bool { false }
+
+    func startInitialRun(scanPlan: DBPContinuedProcessingPlans.InitialScanPlan) async throws {
+        // No-op for external sideload builds compiled with pre-iOS-26 SDKs.
+    }
+
+    func didEmit(event: DBPContinuedProcessingEvent) async {
+        // No-op.
+    }
+}
+''')
+    print(f"Replaced iOS 26 BGContinuedProcessing coordinator with no-op stub in {continued}")
+
 print(f"Patched {pbx}: removed DuckSansFont references")
 if missing:
     print("Non-fatal missing patterns, upstream may have changed:")
