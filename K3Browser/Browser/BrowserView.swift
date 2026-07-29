@@ -633,7 +633,7 @@ final class BrowserState: NSObject, ObservableObject {
 
     static let snapshotJS = """
     (function(){
-      function clean(s){return (s||'').replace(/\s+/g,' ').trim();}
+      function clean(s){return (s||'').replace(/\\s+/g,' ').trim();}
       function cssPath(el){
         if(!el || !el.tagName) return '';
         if(el.id && /^[A-Za-z][A-Za-z0-9_-]*$/.test(el.id)) return '#'+el.id;
