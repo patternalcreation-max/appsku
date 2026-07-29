@@ -1,6 +1,33 @@
 import SwiftUI
 import WebKit
 import Combine
+import UIKit
+
+struct PageSnapshot: Identifiable {
+    let id = UUID()
+    let title: String
+    let url: String
+    let text: String
+    let links: [String]
+
+    var summaryText: String {
+        let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clippedText = String(cleanText.prefix(6000))
+        let clippedLinks = links.prefix(30).enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+        return """
+        K3 Browser Page Snapshot
+
+        Title: \(title.isEmpty ? "(none)" : title)
+        URL: \(url)
+
+        TEXT
+        \(clippedText.isEmpty ? "(no readable text)" : clippedText)
+
+        LINKS
+        \(clippedLinks.isEmpty ? "(none)" : clippedLinks)
+        """
+    }
+}
 
 final class BrowserState: ObservableObject {
     @Published var urlText: String = "https://duckduckgo.com"
@@ -9,6 +36,8 @@ final class BrowserState: ObservableObject {
     @Published var canGoBack = false
     @Published var canGoForward = false
     @Published var isLoading = false
+    @Published var snapshot: PageSnapshot?
+    @Published var snapshotStatus: String = "Ready"
 
     let webView: WKWebView
 
@@ -40,11 +69,59 @@ final class BrowserState: ObservableObject {
     func goBack() { if webView.canGoBack { webView.goBack() } }
     func goForward() { if webView.canGoForward { webView.goForward() } }
     func stop() { webView.stopLoading() }
+
+    func captureSnapshot() {
+        snapshotStatus = "Extracting page..."
+        let js = """
+        (() => {
+          const clean = (s) => (s || '').replace(/\\s+/g, ' ').trim();
+          const links = Array.from(document.links || [])
+            .slice(0, 80)
+            .map(a => clean(a.innerText || a.href) + ' — ' + a.href)
+            .filter(Boolean);
+          return JSON.stringify({
+            title: document.title || '',
+            url: location.href,
+            text: clean(document.body ? document.body.innerText : ''),
+            links
+          });
+        })();
+        """
+        webView.evaluateJavaScript(js) { [weak self] result, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let error {
+                    self.snapshotStatus = "Snapshot failed: \(error.localizedDescription)"
+                    return
+                }
+                guard let json = result as? String,
+                      let data = json.data(using: .utf8),
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    self.snapshotStatus = "Snapshot failed: empty result"
+                    return
+                }
+                let title = object["title"] as? String ?? ""
+                let url = object["url"] as? String ?? self.currentURL?.absoluteString ?? self.urlText
+                let text = object["text"] as? String ?? ""
+                let links = object["links"] as? [String] ?? []
+                self.snapshot = PageSnapshot(title: title, url: url, text: text, links: links)
+                self.snapshotStatus = "Captured \(text.count) chars / \(links.count) links"
+            }
+        }
+    }
+
+    func copySnapshot() {
+        guard let snapshot else { return }
+        UIPasteboard.general.string = snapshot.summaryText
+        snapshotStatus = "Copied snapshot"
+    }
 }
 
 struct BrowserView: View {
     @StateObject private var state = BrowserState()
-    @State private var showShare = false
+    @State private var showShareURL = false
+    @State private var showAgent = false
+    @State private var showShareSnapshot = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -58,8 +135,14 @@ struct BrowserView: View {
                 .ignoresSafeArea(edges: .bottom)
         }
         .background(Color(.systemBackground))
-        .sheet(isPresented: $showShare) {
+        .sheet(isPresented: $showShareURL) {
             ShareSheet(items: [state.currentURL?.absoluteString ?? state.urlText])
+        }
+        .sheet(isPresented: $showAgent) {
+            AgentPanel(state: state, showShareSnapshot: $showShareSnapshot)
+        }
+        .sheet(isPresented: $showShareSnapshot) {
+            ShareSheet(items: [state.snapshot?.summaryText ?? "No snapshot"])
         }
         .onAppear { state.load("https://duckduckgo.com") }
     }
@@ -84,7 +167,11 @@ struct BrowserView: View {
                 Button(action: { state.isLoading ? state.stop() : state.reload() }) {
                     Image(systemName: state.isLoading ? "xmark" : "arrow.clockwise")
                 }
-                Button(action: { showShare = true }) { Image(systemName: "square.and.arrow.up") }
+                Button(action: { showShareURL = true }) { Image(systemName: "square.and.arrow.up") }
+                Button(action: { showAgent = true }) {
+                    Text("⚡")
+                        .font(.system(size: 18, weight: .bold))
+                }
             }
             .font(.system(size: 17, weight: .semibold))
         }
@@ -92,6 +179,97 @@ struct BrowserView: View {
         .padding(.top, 8)
         .padding(.bottom, 8)
         .background(.ultraThinMaterial)
+    }
+}
+
+struct AgentPanel: View {
+    @ObservedObject var state: BrowserState
+    @Binding var showShareSnapshot: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Label("Agent Snapshot", systemImage: "bolt.fill")
+                        .font(.headline)
+                    Spacer()
+                    Button("Close") { dismiss() }
+                }
+
+                Text(state.currentURL?.absoluteString ?? state.urlText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                HStack(spacing: 10) {
+                    Button(action: state.captureSnapshot) {
+                        Label("Extract", systemImage: "doc.text.magnifyingglass")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button(action: state.copySnapshot) {
+                        Label("Copy", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(state.snapshot == nil)
+
+                    Button(action: { showShareSnapshot = true }) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(state.snapshot == nil)
+                }
+                .labelStyle(.iconOnly)
+
+                Text(state.snapshotStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Divider()
+
+                if let snapshot = state.snapshot {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(snapshot.title.isEmpty ? "(No title)" : snapshot.title)
+                                .font(.title3.bold())
+                            Text(snapshot.url)
+                                .font(.caption)
+                                .foregroundStyle(.blue)
+                            Text(String(snapshot.text.prefix(3000)).isEmpty ? "No readable body text." : String(snapshot.text.prefix(3000)))
+                                .font(.body)
+                                .textSelection(.enabled)
+                            if !snapshot.links.isEmpty {
+                                Text("Links")
+                                    .font(.headline)
+                                ForEach(Array(snapshot.links.prefix(20).enumerated()), id: \.offset) { index, link in
+                                    Text("\(index + 1). \(link)")
+                                        .font(.caption)
+                                        .textSelection(.enabled)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        Image(systemName: "bolt")
+                            .font(.system(size: 44, weight: .bold))
+                            .foregroundColor(.orange)
+                        Text("No snapshot yet")
+                            .font(.headline)
+                        Text("Tap Extract to read page title, URL, visible text, and links.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
+                }
+            }
+            .padding()
+            .navigationBarHidden(true)
+        }
     }
 }
 
