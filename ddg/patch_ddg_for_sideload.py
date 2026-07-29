@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Patch duckduckgo/apple-browsers for public unsigned sideload builds.
+
+Applied inside a freshly checked-out upstream repo by GitHub Actions.
+- Removes private DuckSansFont Swift package references.
+- Leaves app code intact; DDG falls back to system font.
+"""
+from pathlib import Path
+
+pbx = Path("iOS/DuckDuckGo-iOS.xcodeproj/project.pbxproj")
+s = pbx.read_text()
+
+replacements = {
+    '\t\t9FADFC4A2F5FC56400CA16F7 /* DuckSansFont in Frameworks */ = {isa = PBXBuildFile; productRef = 9FADFC492F5FC56400CA16F7 /* DuckSansFont */; };\n': '',
+    '\t\t\t\t9FADFC4A2F5FC56400CA16F7 /* DuckSansFont in Frameworks */,\n': '',
+    '\t\t\t\t9FADFC492F5FC56400CA16F7 /* DuckSansFont */,\n': '',
+    '''\t\t9FADFC482F5FC56400CA16F7 /* XCRemoteSwiftPackageReference "native-apps-ducksans" */ = {
+\t\t\tisa = XCRemoteSwiftPackageReference;
+\t\t\trepositoryURL = "git@github.com:duckduckgo/native-apps-ducksans.git";
+\t\t\trequirement = {
+\t\t\t\tkind = exactVersion;
+\t\t\t\tversion = 1.0.0;
+\t\t\t};
+\t\t};
+''': '',
+    '''\t\t9FADFC492F5FC56400CA16F7 /* DuckSansFont */ = {
+\t\t\tisa = XCSwiftPackageProductDependency;
+\t\t\tpackage = 9FADFC482F5FC56400CA16F7 /* XCRemoteSwiftPackageReference "native-apps-ducksans" */;
+\t\t\tproductName = DuckSansFont;
+\t\t};
+''': '',
+    '\t\t\t\t9FADFC482F5FC56400CA16F7 /* XCRemoteSwiftPackageReference "native-apps-ducksans" */,\n': '',
+}
+
+missing = []
+for old, new in replacements.items():
+    if old not in s:
+        missing.append(old.splitlines()[0])
+    s = s.replace(old, new)
+
+pbx.write_text(s)
+
+if "DuckSansFont" in s or "native-apps-ducksans" in s:
+    raise SystemExit("DuckSans removal incomplete")
+
+print(f"Patched {pbx}: removed DuckSansFont references")
+if missing:
+    print("Non-fatal missing patterns, upstream may have changed:")
+    for m in missing:
+        print("  -", m)

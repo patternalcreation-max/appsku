@@ -1,0 +1,121 @@
+name: Build DuckDuckGo iOS Unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['ddg-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-ddg-ios:
+    runs-on: macos-15
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout builder repo
+        uses: actions/checkout@v4
+        with:
+          path: builder
+
+      - name: Checkout DuckDuckGo Apple Browsers
+        uses: actions/checkout@v4
+        with:
+          repository: duckduckgo/apple-browsers
+          ref: main
+          path: ddg
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Select Xcode 16.x
+        run: |
+          if [ -d /Applications/Xcode_16.4.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.4.app
+          elif [ -d /Applications/Xcode_16.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.3.app
+          else
+            sudo xcode-select -s /Applications/Xcode.app
+          fi
+          xcodebuild -version
+
+      - name: Patch DDG for external unsigned sideload build
+        working-directory: ddg
+        run: |
+          python3 ../builder/ddg/patch_ddg_for_sideload.py
+          cat > iOS/Configuration/ExternalDeveloper.xcconfig <<'EOF'
+          // External sideload build config for patternalcreation-max
+          DEVELOPMENT_TEAM =
+          APP_ID = com.patternalcreation.ddgbrowser
+          GROUP_ID_PREFIX = group.com.patternalcreation.ddgbrowser
+          VPN_APP_GROUP = $(GROUP_ID_PREFIX).netp
+          SUBSCRIPTION_APP_GROUP = $(GROUP_ID_PREFIX).subscriptions
+          CODE_SIGN_STYLE = Manual
+          PROVISIONING_PROFILE_SPECIFIER =
+          CODE_SIGNING_ALLOWED = NO
+          CODE_SIGNING_REQUIRED = NO
+          CODE_SIGN_IDENTITY =
+          EOF
+
+      - name: List schemes
+        working-directory: ddg/iOS
+        run: xcodebuild -list -project DuckDuckGo-iOS.xcodeproj
+
+      - name: Build unsigned app
+        working-directory: ddg/iOS
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project DuckDuckGo-iOS.xcodeproj \
+            -scheme "iOS Browser" \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            ENABLE_BITCODE=NO \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            | tee build_output.log
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddg-build-log
+          path: ddg/iOS/build_output.log
+          retention-days: 7
+
+      - name: Package unsigned IPA
+        working-directory: ddg/iOS
+        run: |
+          mkdir -p build/Payload
+          APP_PATH=$(find build/Build/Products -name "*.app" -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found"
+            find build/Build/Products -maxdepth 5 -type d || true
+            exit 1
+          fi
+          echo "App: $APP_PATH"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist" || true
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist" || true
+          cp -R "$APP_PATH" build/Payload/
+          cd build
+          zip -ry DDG-SUPER.ipa Payload
+          ls -lah DDG-SUPER.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddg-super-ipa
+          path: ddg/iOS/build/DDG-SUPER.ipa
+          retention-days: 90
+
+      - name: Create Release on tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ddg/iOS/build/DDG-SUPER.ipa
+          generate_release_notes: true
