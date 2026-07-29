@@ -13,7 +13,7 @@
       "versionDate": "2026-07-29",
       "versionDescription": "Max Agent build: Keychain API key storage, OpenAI-compatible chat completions, Ask Page, summarize, page snapshot with forms/links, CSS selector fill/click tools, and custom JS probe.",
       "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.3.0/K3Browser.ipa",
-      "size": 0,
+      "size": 249198,
       "minOSVersion": "15.0"
     }
   ]
