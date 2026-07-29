@@ -9,11 +9,11 @@
       "developerName": "patternalcreation-max",
       "subtitle": "Native WKWebView browser baseline",
       "localizedDescription": "Native iOS WKWebView browser for sideloading. No DDG entitlements, no extensions, no app groups. Includes URL/search bar, navigation, share, persistent WKWebsiteDataStore, Agent Snapshot, Keychain API settings, OpenAI-compatible Ask Page, extract forms/links, fill/click CSS selector tools, and custom JS probe.",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "versionDate": "2026-07-29",
-      "versionDescription": "Max Agent build: Keychain API key storage, OpenAI-compatible chat completions, Ask Page, summarize, page snapshot with forms/links, CSS selector fill/click tools, and custom JS probe.",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.3.0/K3Browser.ipa",
-      "size": 249198,
+      "versionDescription": "Max Agent polish: adds API connection test/status, save status, and copy AI answer. Keeps Keychain API storage, OpenAI-compatible Ask Page, snapshot, forms/links extraction, selector fill/click, custom JS probe.",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/k3browser-v0.3.1/K3Browser.ipa",
+      "size": 0,
       "minOSVersion": "15.0"
     }
   ]

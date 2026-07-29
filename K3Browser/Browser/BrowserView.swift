@@ -74,6 +74,8 @@ final class AgentSettings: ObservableObject {
     @Published var baseURL: String = UserDefaults.standard.string(forKey: "agent.baseURL") ?? "https://api.openai.com/v1/chat/completions"
     @Published var model: String = UserDefaults.standard.string(forKey: "agent.model") ?? "gpt-4o-mini"
     @Published var systemPrompt: String = UserDefaults.standard.string(forKey: "agent.systemPrompt") ?? "You are K3 Browser Agent. Be concise. Use the provided page snapshot. If user asks for page actions, output clear selectors and steps."
+    @Published var status: String = "Not tested"
+    @Published var isTesting = false
 
     init() {
         apiKey = KeychainStore.load(account: "agent.apiKey")
@@ -84,6 +86,48 @@ final class AgentSettings: ObservableObject {
         UserDefaults.standard.set(baseURL, forKey: "agent.baseURL")
         UserDefaults.standard.set(model, forKey: "agent.model")
         UserDefaults.standard.set(systemPrompt, forKey: "agent.systemPrompt")
+        status = "Saved locally"
+    }
+
+    func testConnection() {
+        save()
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            status = "Missing API key"
+            return
+        }
+        guard let url = URL(string: baseURL) else {
+            status = "Bad API URL"
+            return
+        }
+        isTesting = true
+        status = "Testing..."
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 30
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [["role": "user", "content": "Reply with OK only."]],
+            "temperature": 0
+        ]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        URLSession.shared.dataTask(with: req) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isTesting = false
+                if let error {
+                    self.status = "Failed: \(error.localizedDescription)"
+                    return
+                }
+                if let http = response as? HTTPURLResponse, http.statusCode >= 300 {
+                    let raw = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                    self.status = "HTTP \(http.statusCode): \(raw.prefix(120))"
+                    return
+                }
+                self.status = "Connection OK"
+            }
+        }.resume()
     }
 }
 
@@ -451,6 +495,11 @@ struct AgentPanel: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(state.isAsking)
+                Button("Copy") {
+                    UIPasteboard.general.string = state.agentAnswer
+                }
+                .buttonStyle(.bordered)
+                .disabled(state.agentAnswer.isEmpty)
             }
             Divider()
             ScrollView {
@@ -553,10 +602,21 @@ struct AgentPanel: View {
                 TextEditor(text: $settings.systemPrompt)
                     .frame(height: 120)
                     .padding(6).background(Color(.secondarySystemBackground)).cornerRadius(8)
-                Button(action: settings.save) {
-                    Label("Save Settings", systemImage: "key.fill")
+                HStack {
+                    Button(action: settings.save) {
+                        Label("Save", systemImage: "key.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button(action: settings.testConnection) {
+                        Label(settings.isTesting ? "Testing" : "Test", systemImage: "network")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(settings.isTesting)
                 }
-                .buttonStyle(.borderedProminent)
+                Text(settings.status)
+                    .font(.caption)
+                    .foregroundColor(settings.status == "Connection OK" ? .green : .secondary)
+                    .textSelection(.enabled)
                 Text("Default URL expects OpenAI /v1/chat/completions shape. OpenRouter also works if you set its chat completions URL + model.")
                     .font(.caption)
                     .foregroundColor(.secondary)
