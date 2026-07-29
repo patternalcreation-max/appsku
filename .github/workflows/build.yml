@@ -55,7 +55,7 @@ jobs:
 
       - name: Inspect and Package IPA
         run: |
-          APP="build/k3-calculator.xcarchive/Products/Applications/k3-calculator.app"
+          APP="build/k3-calculator.xcarchive/Products/Applications/K3Calculator.app"
           echo "=== App bundle contents ==="
           ls -laR "$APP"
           echo ""

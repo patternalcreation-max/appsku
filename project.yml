@@ -17,10 +17,10 @@ targets:
       - Calculator
     settings:
       base:
-        PRODUCT_NAME: k3-calculator
-        PRODUCT_BUNDLE_IDENTIFIER: com.k3.calculator
-        MARKETING_VERSION: "1.2.0"
-        CURRENT_PROJECT_VERSION: "3"
+        PRODUCT_NAME: K3Calculator
+        PRODUCT_BUNDLE_IDENTIFIER: com.patternalcreation.k3calculator
+        MARKETING_VERSION: "1.3.0"
+        CURRENT_PROJECT_VERSION: "4"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
@@ -30,7 +30,7 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
-        INFOPLIST_KEY_CFBundleDisplayName: Calculator
+        INFOPLIST_KEY_CFBundleDisplayName: K3 Calc
         INFOPLIST_KEY_UIRequiresFullScreen: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_BITCODE: NO

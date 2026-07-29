@@ -1,17 +1,17 @@
 {
   "name": "K3 Calculator Repo",
   "subtitle": "Built by SUPERAGENT × Kimi K3",
-  "icon": "",
+  "icon": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/Calculator/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
   "apps": [
     {
-      "name": "K3 Calculator",
-      "bundleIdentifier": "com.k3.calculator",
-      "version": "1.2.0",
+      "name": "K3 Calc",
+      "bundleIdentifier": "com.patternalcreation.k3calculator",
+      "version": "1.3.0",
       "versionDate": "2026-07-29",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/v1.2.0/k3-calculator.ipa",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/v1.3.0/k3-calculator.ipa",
       "developerName": "SUPERAGENT",
-      "iconURL": "",
-      "size": 63383,
+      "iconURL": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/Calculator/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+      "size": 0,
       "screenshots": [],
       "versions": []
     }
