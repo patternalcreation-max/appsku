@@ -240,6 +240,7 @@ final class BrowserState: NSObject, ObservableObject {
     @Published var isLoading = false
     @Published var snapshot: PageSnapshot?
     @Published var agentAnswer = ""
+    @Published var conversation: [ConversationEntry] = []
     @Published var isAsking = false
     @Published var commandText = ""
     @Published var phase: AgentPhase = .idle
@@ -566,7 +567,7 @@ final class BrowserState: NSObject, ObservableObject {
                     guard let self = self, self.isActive(runID: context.runID), self.isCurrent(self.activeModelBinding) else { return }
                     self.isAsking = false
                     switch result {
-                    case .success(let text): self.agentAnswer = Redactor.text(text); self.phase = .done
+                    case .success(let text): self.agentAnswer = Redactor.text(text); self.phase = .done; self.conversation.append(ConversationEntry(role: .agent, content: Redactor.text(text)))
                     case .failure(let error):
                         let message = Redactor.text(error.localizedDescription)
                         self.agentAnswer = "Error: \(message)"
@@ -584,6 +585,7 @@ final class BrowserState: NSObject, ObservableObject {
         stepIndex = 0
         steps.removeAll()
         agentAnswer = ""
+        conversation.append(ConversationEntry(role: .user, content: command))
         addStep("▶️", "Started", command)
         continueAgent(context: context, settings: settings, previousResult: "")
     }
@@ -636,7 +638,7 @@ final class BrowserState: NSObject, ObservableObject {
             switch response.kind {
             case .final(let message):
                 guard isCurrent(activeModelBinding) else { return }
-                agentAnswer = Redactor.text(message); phase = .done; addStep("✅", "Final", message); activeRun = nil
+                agentAnswer = Redactor.text(message); phase = .done; addStep("✅", "Final", message); conversation.append(ConversationEntry(role: .agent, content: Redactor.text(message))); activeRun = nil
             case .tool(let rawCall):
                 let resolved = resolvedExecutionCall(rawCall)
                 guard case .success(let call) = validate(resolved) else {

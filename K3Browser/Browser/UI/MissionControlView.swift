@@ -11,6 +11,9 @@ struct MissionControlView: View {
         NavigationStack {
             List {
                 Section("Current Run") {
+                    NavigationLink(destination: ConversationTimelineView(state: state, settings: settings)) {
+                        missionRow(symbol: "bubble.left.and.bubble.right", title: "Conversation", detail: state.conversation.isEmpty ? "No messages yet" : "\(state.conversation.count) messages")
+                    }
                     NavigationLink(destination: CurrentRunView(state: state)) {
                         missionRow(symbol: K3VisualSystem.presentation(for: state.phase).symbol, title: state.phase.label, detail: "Status and result")
                     }

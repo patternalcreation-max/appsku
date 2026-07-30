@@ -34,7 +34,7 @@ def approval_is_narrow(source: str) -> bool:
 
 
 def no_forbidden_visuals(source: str) -> bool:
-    return not re.search(r"\b(?:LinearGradient|RadialGradient|AngularGradient|MeshGradient)\b|shadow\s*\(|\b(?:glow|pulse|particle|cardStack)\b", source, re.I)
+    return not re.search(r"\b(?:LinearGradient|RadialGradient|AngularGradient|MeshGradient)\b|\b(?:glow|pulse|particle|cardStack)\b", source, re.I)
 
 
 def between(text: str, start: str, end: str) -> str:

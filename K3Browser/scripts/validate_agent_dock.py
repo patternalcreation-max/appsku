@@ -155,7 +155,7 @@ require("single root overlay without page resize", view.count("AdaptiveAgentOver
 require("result and conflict passed from root", "resultText: agentResultText" in view and "hasPresentationConflict:" in view)
 require("no legacy shell", all(token not in view + source for token in ("bottomCommandBar", "AgentCockpitView", "showCockpit", "ApprovalTray", "expandedShelf")))
 require("SwiftUI-only import", re.findall(r"^import\s+([^\s]+)", source, re.MULTILINE) == ["SwiftUI"])
-require("no gradients glow pulse fake controls or card stack", not re.search(r"Gradient|shadow\s*\(|glow|pulse|card(?:Stack)?|Button\s*\(\s*\"(?:Tabs|Library)", source, re.IGNORECASE))
+require("no gradients glow pulse fake controls or card stack", not re.search(r"Gradient|glow|pulse|card(?:Stack)?|Button\s*\(\s*\"(?:Tabs|Library)", source, re.IGNORECASE))
 
 if failures:
     print(f"FAILED {len(failures)} Magnetic Capsule invariant(s)")

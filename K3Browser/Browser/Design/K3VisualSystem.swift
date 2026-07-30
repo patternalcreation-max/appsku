@@ -64,4 +64,28 @@ enum K3VisualSystem {
             return PhasePresentation(title: phase.label, symbol: "exclamationmark.triangle.fill", color: Palette.error)
         }
     }
+
+    enum Haptics {
+        static func light() {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+        static func medium() {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+        static func soft() {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        }
+        static func success() {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+        }
+        static func error() {
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+        }
+        static func warning() {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        }
+        static func selection() {
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
+    }
 }

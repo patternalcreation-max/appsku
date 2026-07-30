@@ -162,11 +162,16 @@ struct AdaptiveAgentOverlay: View {
                 .frame(width: 24, height: minimumTapSize)
                 .accessibilityHidden(true)
 
-            Text(resultExcerpt)
-                .font(.body)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel(isErrorPhase ? "Agent error: \(resultExcerpt)" : "Agent result: \(resultExcerpt)")
+            if hasMarkdownInResult {
+                AgentMarkdownView(text: resultExcerpt, fontSize: 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(resultExcerpt)
+                    .font(.body)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel(isErrorPhase ? "Agent error: \(resultExcerpt)" : "Agent result: \(resultExcerpt)")
+            }
 
             Button {
                 setSurface(.collapsed)
@@ -252,9 +257,12 @@ struct AdaptiveAgentOverlay: View {
                     Image(systemName: presentation.symbol)
                         .font(.system(size: 21, weight: .semibold))
                         .foregroundStyle(presentation.color)
+                        .contentTransition(.symbolEffect(.replace))
                         .accessibilityHidden(true)
                 )
                 .frame(width: ballDiameter, height: ballDiameter)
+                .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 3)
+                .shadow(color: .black.opacity(0.06), radius: 2, x: 0, y: 1)
                 .agentMatchedGeometry(id: "agent-surface", in: agentGeometry, isSource: true, enabled: !reduceMotion)
 
             if hasPendingApproval {
@@ -307,10 +315,12 @@ struct AdaptiveAgentOverlay: View {
                 let finalPoint = clamp(CGPoint(x: origin.x + value.translation.width, y: origin.y + value.translation.height), to: bounds)
                 if max(dragDistance, finalDistance) < dragThreshold {
                     handleBallTap()
+                    K3VisualSystem.Haptics.light()
                     dragPosition = nil
                 } else {
                     withAnimation(K3VisualSystem.Motion.snapAnimation(reduceMotion: reduceMotion)) {
                         snapAndPersist(finalPoint, in: bounds)
+                        K3VisualSystem.Haptics.medium()
                         dragPosition = nil
                     }
                 }
@@ -392,6 +402,11 @@ struct AdaptiveAgentOverlay: View {
               pendingApprovalCount == 0,
               !hasPresentationConflict else { return }
         composerIsFocused = false
+        if isErrorPhase {
+            K3VisualSystem.Haptics.error()
+        } else {
+            K3VisualSystem.Haptics.success()
+        }
         setSurface(.resultPeek)
     }
 
@@ -424,6 +439,10 @@ struct AdaptiveAgentOverlay: View {
     private var isCommandBlank: Bool { commandText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var badgeText: String { pendingApprovalCount > 99 ? "99+" : String(pendingApprovalCount) }
     private var resultExcerpt: String { resultText.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var hasMarkdownInResult: Bool {
+        let r = resultExcerpt
+        return r.contains("**") || r.contains("`") || r.contains("##") || r.contains("- ") || r.contains("```")
+    }
     private var ballAccessibilityLabel: String {
         var label = "Agent, \(statusText ?? phase.label)"
         if hasPendingApproval { label += ", approval pending" }
