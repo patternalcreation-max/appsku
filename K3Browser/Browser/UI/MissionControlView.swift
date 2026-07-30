@@ -25,6 +25,15 @@ struct MissionControlView: View {
                     }
                 }
 
+                Section("Sessions") {
+                    NavigationLink(destination: HistoryView(state: state)) {
+                        missionRow(symbol: "clock", title: "History", detail: state.history.isEmpty ? "No history yet" : "\(state.history.count) pages")
+                    }
+                    NavigationLink(destination: BookmarksView(state: state)) {
+                        missionRow(symbol: "bookmark", title: "Bookmarks", detail: state.bookmarks.isEmpty ? "No bookmarks yet" : "\(state.bookmarks.count) saved")
+                    }
+                }
+
                 Section("Operate") {
                     NavigationLink(destination: ManualToolsView(state: state, elementReference: $elementReference, value: $value)) {
                         missionRow(symbol: "wrench.and.screwdriver", title: "Manual Tools", detail: "Actions are staged for approval")

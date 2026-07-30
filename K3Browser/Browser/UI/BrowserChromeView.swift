@@ -6,11 +6,13 @@ struct BrowserChromeView: View {
     let canGoForward: Bool
     let isLoading: Bool
     let estimatedProgress: Double
+    let isBookmarked: Bool
     let onBack: () -> Void
     let onForward: () -> Void
     let onReload: () -> Void
     let onStop: () -> Void
     let onSubmitAddress: () -> Void
+    let onToggleBookmark: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +32,8 @@ struct BrowserChromeView: View {
                     .background(Color(uiColor: .secondarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: K3VisualSystem.Space.standard, style: .continuous))
                     .accessibilityLabel("Search or website address")
+
+                chromeButton(isBookmarked ? "bookmark.fill" : "bookmark", label: isBookmarked ? "Remove bookmark" : "Bookmark page", enabled: true, action: onToggleBookmark)
 
                 if isLoading {
                     chromeButton("xmark", label: "Stop loading", enabled: true, action: onStop)

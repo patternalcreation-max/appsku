@@ -143,7 +143,7 @@ check("timeline uses SF Symbols", "Image(systemName: symbol(for: step.title))" i
 
 check("no forbidden visual effects", no_forbidden_visuals(all_ui))
 check("visual detector mutation self-test", not no_forbidden_visuals(all_ui + "\nLinearGradient()\n.shadow(radius: 4)\npulse"))
-check("icon-only controls carry accessibility labels", sources["chrome"].count("chromeButton(") == 5 and ".accessibilityLabel(label)" in sources["chrome"] and sources["dock"].count(".accessibilityLabel(") >= 8)
+check("icon-only controls carry accessibility labels", sources["chrome"].count("chromeButton(") == 6 and ".accessibilityLabel(label)" in sources["chrome"] and sources["dock"].count(".accessibilityLabel(") >= 8)
 check("Reduce Motion uses opacity animation and conditional shared geometry", reduce_motion_crossfade(sources["dock"]))
 check("Reduce Motion mutation self-test", not reduce_motion_crossfade(sources["dock"].replace("? .easeInOut(duration: 0.18)", "? nil", 1)))
 check("compact and AX capsule adaptation with one field", compact_capsule_adaptation(sources["dock"]))

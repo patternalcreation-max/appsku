@@ -248,6 +248,8 @@ final class BrowserState: NSObject, ObservableObject {
     @Published var showMissionControl = false
     @Published var showShare = false
     @Published var shareItems: [Any] = []
+    @Published var history: [HistoryEntry] = []
+    @Published var bookmarks: [Bookmark] = []
 
     let webView: WKWebView
     private var observations: [NSKeyValueObservation] = []
@@ -274,12 +276,21 @@ final class BrowserState: NSObject, ObservableObject {
         webView.uiDelegate = self
         observations = [
             webView.observe(\.estimatedProgress, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.estimatedProgress = view.estimatedProgress } },
-            webView.observe(\.title, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.pageTitle = view.title ?? "" } },
+            webView.observe(\.title, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async {
+                let newTitle = view.title ?? ""
+                self?.pageTitle = newTitle
+                if let url = view.url, !newTitle.isEmpty, !url.absoluteString.isEmpty {
+                    HistoryStore.record(url: url.absoluteString, title: newTitle)
+                    self?.history = HistoryStore.load()
+                }
+            } },
             webView.observe(\.url, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.handleObservedURL(view.url) } },
             webView.observe(\.canGoBack, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.canGoBack = view.canGoBack } },
             webView.observe(\.canGoForward, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.canGoForward = view.canGoForward } },
             webView.observe(\.isLoading, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.isLoading = view.isLoading } }
         ]
+        history = HistoryStore.load()
+        bookmarks = BookmarkStore.load()
         loadAddress()
     }
 
@@ -392,6 +403,34 @@ final class BrowserState: NSObject, ObservableObject {
     func forward() { if webView.canGoForward { webView.goForward() } }
     func reload() { webView.reload() }
     func stopLoading() { webView.stopLoading() }
+
+    // MARK: - Bookmarks
+
+    func toggleBookmark() {
+        let url = currentURL.isEmpty ? address : currentURL
+        guard !url.isEmpty else { return }
+        if let existing = bookmarks.first(where: { $0.url == url }) {
+            BookmarkStore.remove(id: existing.id)
+        } else {
+            BookmarkStore.add(url: url, title: pageTitle.isEmpty ? url : pageTitle)
+        }
+        bookmarks = BookmarkStore.load()
+    }
+
+    var isCurrentPageBookmarked: Bool {
+        let url = currentURL.isEmpty ? address : currentURL
+        return !url.isEmpty && bookmarks.contains(where: { $0.url == url })
+    }
+
+    func clearHistory() {
+        HistoryStore.clear()
+        history = []
+    }
+
+    func navigate(to url: String) {
+        address = url
+        loadAddress()
+    }
 
     private func settleSnapshotFailure(runID: UUID?, message: String) {
         let safeMessage = Redactor.text(message)
@@ -1421,11 +1460,13 @@ struct BrowserView: View {
                 canGoForward: state.canGoForward,
                 isLoading: state.isLoading,
                 estimatedProgress: state.estimatedProgress,
+                isBookmarked: state.isCurrentPageBookmarked,
                 onBack: state.back,
                 onForward: state.forward,
                 onReload: state.reload,
                 onStop: state.stopLoading,
-                onSubmitAddress: state.loadAddress
+                onSubmitAddress: state.loadAddress,
+                onToggleBookmark: state.toggleBookmark
             )
             WebViewContainer(webView: state.webView)
         }
