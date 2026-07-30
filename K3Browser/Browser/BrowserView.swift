@@ -251,6 +251,10 @@ final class BrowserState: NSObject, ObservableObject {
     @Published var history: [HistoryEntry] = []
     @Published var bookmarks: [Bookmark] = []
 
+    // PEAK 2 — Tab state
+    @Published var _tabs: [TabItem] = []
+    @Published var _activeTabIndex: Int = 0
+
     let webView: WKWebView
     private var observations: [NSKeyValueObservation] = []
     private(set) var activeRun: RunContext?
@@ -283,6 +287,7 @@ final class BrowserState: NSObject, ObservableObject {
                     HistoryStore.record(url: url.absoluteString, title: newTitle)
                     self?.history = HistoryStore.load()
                 }
+                self?.saveCurrentTabMetadata()
             } },
             webView.observe(\.url, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.handleObservedURL(view.url) } },
             webView.observe(\.canGoBack, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.canGoBack = view.canGoBack } },
@@ -291,6 +296,8 @@ final class BrowserState: NSObject, ObservableObject {
         ]
         history = HistoryStore.load()
         bookmarks = BookmarkStore.load()
+        _tabs.append(TabItem(url: address, title: ""))
+        restoreSession()
         loadAddress()
     }
 
@@ -1468,6 +1475,7 @@ struct BrowserView: View {
                 onSubmitAddress: state.loadAddress,
                 onToggleBookmark: state.toggleBookmark
             )
+            TabStripView(state: state)
             WebViewContainer(webView: state.webView)
         }
     }
