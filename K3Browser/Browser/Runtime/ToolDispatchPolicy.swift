@@ -235,7 +235,7 @@ enum ToolDispatchPolicy {
 
     private static func safePreviewText(_ raw: String, maximumBytes: Int) -> String {
         let cleanedScalars = raw.unicodeScalars.filter {
-            !$0.properties.isControl && !$0.properties.isWhitespace || $0 == " "
+            $0.properties.generalCategory != .control && !$0.properties.isWhitespace || $0 == " "
         }
         let cleaned = String(String.UnicodeScalarView(cleanedScalars))
         guard cleaned.utf8.count > maximumBytes else { return cleaned }
