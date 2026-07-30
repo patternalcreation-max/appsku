@@ -31,7 +31,7 @@ struct ApprovalReviewOverlay: View {
                                 Spacer(minLength: K3VisualSystem.Space.compact)
                             }
 
-                            Text(request.call.tool)
+                            Text(request.call.tool.rawValue)
                                 .font(.caption.monospaced())
                                 .foregroundColor(.secondary)
                                 .lineLimit(2)
@@ -108,16 +108,16 @@ struct ApprovalReviewOverlay: View {
 
     private var approveLabel: String {
         switch request.call.tool {
-        case "click_selector": return "Click once"
-        case "fill_selector": return "Fill once"
-        case "select_option": return "Select once"
-        case "submit_form": return "Submit once"
-        case "open_url": return "Open once"
-        case "back": return "Go back once"
-        case "forward": return "Go forward once"
-        case "reload": return "Reload once"
-        case "scroll": return "Scroll once"
-        case "export_markdown", "export_json", "export_csv": return "Export once"
+        case .clickSelector: return "Click once"
+        case .fillSelector: return "Fill once"
+        case .selectOption: return "Select once"
+        case .submitForm: return "Submit once"
+        case .openURL: return "Open once"
+        case .back: return "Go back once"
+        case .forward: return "Go forward once"
+        case .reload: return "Reload once"
+        case .scroll: return "Scroll once"
+        case .exportMarkdown, .exportJSON, .exportCSV: return "Export once"
         default: return "Run once"
         }
     }

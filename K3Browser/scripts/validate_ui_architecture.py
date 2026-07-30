@@ -131,7 +131,7 @@ check("approval blocks with explicit decisions", all(token in sources["approval"
 check("approval context scrolls with pinned actions", "ScrollView(.vertical" in sources["approval"] and sources["approval"].index("ScrollView(.vertical") < sources["approval"].index("Button(action: onDeny)"))
 check("approval is VoiceOver-modal and escape denies", all(token in sources["approval"] for token in ("@AccessibilityFocusState", ".accessibilityFocused($denyIsFocused)", ".accessibilityAction(.escape, onDeny)")) and ".accessibilityHidden(state.pendingApproval != nil)" in sources["root"])
 check("approval exact action labels retained", all(label in sources["approval"] for label in ("Click once", "Fill once", "Select once", "Submit once", "Open once", "Go back once", "Go forward once", "Reload once", "Scroll once", "Export once", "Run once")))
-check("approval craft uses exact action first and one-point risk accent", "Text(approveLabel)" in sources["approval"] and "Text(request.call.tool)" in sources["approval"] and ".frame(height: K3VisualSystem.Space.hairline)" in sources["approval"])
+check("approval craft uses exact action first and one-point risk accent", "Text(approveLabel)" in sources["approval"] and "Text(request.call.tool.rawValue)" in sources["approval"] and ".frame(height: K3VisualSystem.Space.hairline)" in sources["approval"])
 check("approval has no outside dismissal", "onDismiss" not in sources["approval"] and "presentationMode" not in sources["approval"])
 
 check("Mission Control uses NavigationStack", "NavigationStack {" in sources["mission"] and "NavigationView" not in sources["mission"] and ".navigationViewStyle" not in sources["mission"])

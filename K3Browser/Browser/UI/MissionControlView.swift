@@ -4,7 +4,7 @@ struct MissionControlView: View {
     @ObservedObject var state: BrowserState
     @ObservedObject var settings: AgentSettings
     @Environment(\.dismiss) private var dismiss
-    @State private var selector = ""
+    @State private var elementReference = ""
     @State private var value = ""
 
     var body: some View {
@@ -26,7 +26,7 @@ struct MissionControlView: View {
                 }
 
                 Section("Operate") {
-                    NavigationLink(destination: ManualToolsView(state: state, selector: $selector, value: $value)) {
+                    NavigationLink(destination: ManualToolsView(state: state, elementReference: $elementReference, value: $value)) {
                         missionRow(symbol: "wrench.and.screwdriver", title: "Manual Tools", detail: "Actions are staged for approval")
                     }
                     NavigationLink(destination: AgentSettingsView(settings: settings)) {
@@ -168,23 +168,23 @@ private struct PageSnapshotView: View {
 
 private struct ManualToolsView: View {
     @ObservedObject var state: BrowserState
-    @Binding var selector: String
+    @Binding var elementReference: String
     @Binding var value: String
 
     var body: some View {
         Form {
-            Section("Selector") {
-                TextField("CSS selector", text: $selector)
+            Section("Element Reference") {
+                TextField("Opaque element reference", text: $elementReference)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 TextField("Value", text: $value)
             }
             Section("Stage for review") {
                 Button("Fill once") {
-                    state.stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: "fill_selector", arguments: ["selector": selector, "value": value], reason: "Manual tool"))
+                    state.stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: .fillSelector, arguments: .object(["ref": .string(elementReference), "value": .string(value)])))
                 }
                 Button("Click once") {
-                    state.stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: "click_selector", arguments: ["selector": selector], reason: "Manual tool"))
+                    state.stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: .clickSelector, arguments: .object(["ref": .string(elementReference)])))
                 }
             }
             Section("Memory") {

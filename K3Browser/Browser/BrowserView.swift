@@ -3,120 +3,12 @@ import WebKit
 import UIKit
 import Security
 
-// MARK: - Page perception
-
-struct PageLink: Identifiable, Codable {
-    let id = UUID()
-    let text: String
-    let href: String
-    let selector: String
-}
-
-struct PageFormField: Identifiable, Codable {
-    let id = UUID()
-    let selector: String
-    let tag: String
-    let type: String
-    let name: String
-    let label: String
-    let placeholder: String
-    let valuePreview: String
-    let required: Bool
-}
-
-struct PageForm: Identifiable, Codable {
-    let id = UUID()
-    let selector: String
-    let action: String
-    let method: String
-    let fields: [PageFormField]
-}
-
-struct PageTable: Identifiable, Codable {
-    let id = UUID()
-    let selector: String
-    let headers: [String]
-    let rows: [[String]]
-}
-
-struct DOMElement: Identifiable, Codable {
-    let id = UUID()
-    let selector: String
-    let tag: String
-    let text: String
-    let ariaLabel: String
-    let role: String
-    let type: String
-    let name: String
-    let placeholder: String
-    let isVisible: Bool
-}
-
-struct PageSnapshot: Identifiable, Codable {
-    let id = UUID()
-    let title: String
-    let url: String
-    let text: String
-    let headings: [DOMElement]
-    let buttons: [DOMElement]
-    let inputs: [DOMElement]
-    let links: [PageLink]
-    let forms: [PageForm]
-    let tables: [PageTable]
-    let capturedAt: Date = Date()
-
-    var summaryText: String {
-        let clippedText = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(9000))
-        let headingBlock = headings.prefix(25).map { "- \($0.text) [\($0.selector)]" }.joined(separator: "\n")
-        let linkBlock = links.prefix(40).enumerated().map { "\($0.offset + 1). \($0.element.text) → \($0.element.href) [\($0.element.selector)]" }.joined(separator: "\n")
-        let inputBlock = inputs.prefix(40).map { "- \($0.type) \($0.name) \($0.placeholder) [\($0.selector)]" }.joined(separator: "\n")
-        let formBlock = forms.prefix(10).map { form in
-            let fields = form.fields.map { "  - \($0.type) \($0.name) \($0.placeholder) [\($0.selector)]" }.joined(separator: "\n")
-            return "FORM \(form.selector) \(form.method) \(form.action)\n\(fields)"
-        }.joined(separator: "\n")
-        let tableBlock = tables.prefix(8).map { table in
-            let rows = table.rows.prefix(8).map { $0.joined(separator: " | ") }.joined(separator: "\n")
-            return "TABLE \(table.selector)\nHeaders: \(table.headers.joined(separator: " | "))\n\(rows)"
-        }.joined(separator: "\n")
-        return """
-        K3 Browser DOM Snapshot V2
-        Title: \(title.isEmpty ? "(none)" : title)
-        URL: \(url)
-
-        TEXT
-        \(clippedText.isEmpty ? "(no readable text)" : clippedText)
-
-        HEADINGS
-        \(headingBlock.isEmpty ? "(none)" : headingBlock)
-
-        LINKS
-        \(linkBlock.isEmpty ? "(none)" : linkBlock)
-
-        INPUTS
-        \(inputBlock.isEmpty ? "(none)" : inputBlock)
-
-        FORMS
-        \(formBlock.isEmpty ? "(none)" : formBlock)
-
-        TABLES
-        \(tableBlock.isEmpty ? "(none)" : tableBlock)
-        """
-    }
-}
-
 // MARK: - Agent models
 
-enum ToolRisk: String, Codable {
+enum ToolRisk: String, Codable, Equatable {
     case auto
     case approval
     case blocked
-}
-
-struct ToolCall: Identifiable, Codable {
-    let id: String
-    let tool: String
-    let arguments: [String: String]
-    let reason: String
 }
 
 struct AgentResponse {
@@ -135,15 +27,6 @@ struct AgentStep: Identifiable {
     let title: String
     let detail: String
     let date = Date()
-}
-
-struct ApprovalRequest: Identifiable {
-    let id = UUID()
-    let runID: UUID
-    let call: ToolCall
-    let risk: ToolRisk
-    let preview: String
-    let reason: String
 }
 
 struct MemoryNote: Identifiable, Codable {
@@ -308,6 +191,7 @@ enum MemoryStore {
 
 // MARK: - Browser State
 
+@MainActor
 final class BrowserState: NSObject, ObservableObject {
     private final class PendingNavigationAction {
         let actionID = UUID()
@@ -315,15 +199,29 @@ final class BrowserState: NSObject, ObservableObject {
         let action: String
         let completion: (String) -> Void
         let bindsFirstNavigation: Bool
+        let expectedTarget: CanonicalPageTarget?
         var navigation: WKNavigation?
         var didStart = false
         var noNavigationWorkItem: DispatchWorkItem?
         var timeoutWorkItem: DispatchWorkItem?
 
-        init(runID: UUID, action: String, bindsFirstNavigation: Bool, completion: @escaping (String) -> Void) {
+        // Action-owned atomic invocation candidate state (private). Never exposed
+        // in UI/log/result. The epoch identifies the exact invocation; the
+        // in-flight flag is the only window a candidate may be captured; the
+        // candidate fields hold at most one WKNavigation and/or one same-document
+        // transition; the terminal receipt stores a closed bounded result if the
+        // candidate finishes before authorization.
+        let atomicInvocationEpoch = UUID()
+        var atomicInvocationInFlight = false
+        var atomicCandidateNavigation: WKNavigation?
+        var atomicCandidateSameDocument = false
+        var atomicCandidateTerminalReceipt: String?
+
+        init(runID: UUID, action: String, bindsFirstNavigation: Bool, expectedTarget: CanonicalPageTarget?, completion: @escaping (String) -> Void) {
             self.runID = runID
             self.action = action
             self.bindsFirstNavigation = bindsFirstNavigation
+            self.expectedTarget = expectedTarget
             self.completion = completion
         }
 
@@ -356,6 +254,13 @@ final class BrowserState: NSObject, ObservableObject {
     private(set) var activeRun: RunContext?
     private var llmTask: URLSessionDataTask?
     private var pendingNavigationAction: PendingNavigationAction?
+    private var pageIdentity = PageIdentityReducer()
+    private var navigationBindings: [ObjectIdentifier: (navigation: WKNavigation, id: UUID)] = [:]
+    private var startedNavigationIDs: Set<UUID> = []
+    private var lastObservedURLString: String?
+    private let privateTargetMap = PrivateElementReferenceMap()
+    private let approvalAuthority = ApprovalAuthority()
+    private var activeModelBinding: SnapshotIdentity?
     private var stepIndex = 0
     private let maxSteps = 6
 
@@ -370,7 +275,7 @@ final class BrowserState: NSObject, ObservableObject {
         observations = [
             webView.observe(\.estimatedProgress, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.estimatedProgress = view.estimatedProgress } },
             webView.observe(\.title, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.pageTitle = view.title ?? "" } },
-            webView.observe(\.url, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.currentURL = view.url?.absoluteString ?? ""; self?.address = view.url?.absoluteString ?? self?.address ?? "" } },
+            webView.observe(\.url, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.handleObservedURL(view.url) } },
             webView.observe(\.canGoBack, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.canGoBack = view.canGoBack } },
             webView.observe(\.canGoForward, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.canGoForward = view.canGoForward } },
             webView.observe(\.isLoading, options: [.new]) { [weak self] view, _ in DispatchQueue.main.async { self?.isLoading = view.isLoading } }
@@ -382,12 +287,90 @@ final class BrowserState: NSObject, ObservableObject {
         steps.append(AgentStep(icon: icon, title: title, detail: Redactor.text(detail)))
     }
 
+    private func invalidatePageDerivedAuthority() {
+        snapshot = nil
+        privateTargetMap.invalidate()
+        pendingApproval = nil
+        activeModelBinding = nil
+        approvalAuthority.invalidateAll()
+    }
+
+    private func navigationID(for navigation: WKNavigation) -> UUID {
+        let key = ObjectIdentifier(navigation)
+        if let existing = navigationBindings[key], existing.navigation === navigation { return existing.id }
+        let created = UUID()
+        navigationBindings[key] = (navigation, created)
+        return created
+    }
+
+    private func retireNavigation(_ navigation: WKNavigation) {
+        let key = ObjectIdentifier(navigation)
+        guard let binding = navigationBindings[key], binding.navigation === navigation else { return }
+        navigationBindings.removeValue(forKey: key)
+        startedNavigationIDs.remove(binding.id)
+    }
+
+    private func cancelRunForPageTransition(_ message: String, asError: Bool = false) {
+        let hadRunAuthority = activeRun != nil || pendingNavigationAction != nil || pendingApproval != nil
+        llmTask?.cancel()
+        llmTask = nil
+        clearPendingNavigationAction()
+        activeRun = nil
+        pendingApproval = nil
+        isAsking = false
+        guard hadRunAuthority else { return }
+        let safe = Redactor.text(message)
+        phase = asError ? .error(safe) : .stopped
+        addStep(asError ? "⚠️" : "⏹", asError ? "Page transition failed" : "Run stopped", safe)
+    }
+
+    private func handleObservedURL(_ url: URL?) {
+        let observedURLString = url?.absoluteString
+        currentURL = observedURLString ?? ""
+        address = observedURLString ?? address
+        guard observedURLString != lastObservedURLString else { return }
+        lastObservedURLString = observedURLString
+        guard let url, let target = try? CanonicalPageTarget(validating: url) else {
+            if !pageIdentity.inFlightTopLevelNavigation {
+                _ = pageIdentity.webContentProcessTerminated()
+                cancelRunForPageTransition("The page URL became invalid")
+                invalidatePageDerivedAuthority()
+            }
+            return
+        }
+        if pageIdentity.observeTopLevelURL(target) {
+            if let pending = pendingNavigationAction,
+               isActive(runID: pending.runID),
+               pending.atomicInvocationInFlight,
+               pending.atomicCandidateNavigation == nil,
+               !pending.atomicCandidateSameDocument {
+                pending.atomicCandidateSameDocument = true
+                invalidatePageDerivedAuthority()
+            } else {
+                cancelRunForPageTransition("The page changed outside the active action")
+                invalidatePageDerivedAuthority()
+            }
+        }
+    }
+
+    private func currentSnapshotIdentity() -> SnapshotIdentity? {
+        guard let snapshot, pageIdentity.accepts(snapshot.identity) else { return nil }
+        return snapshot.identity
+    }
+
+    private func isCurrent(_ identity: SnapshotIdentity?) -> Bool {
+        guard let identity else { return false }
+        return pageIdentity.accepts(identity) && currentSnapshotIdentity() == identity
+    }
+
     private func isActive(runID: UUID) -> Bool { activeRun?.runID == runID }
 
     private func beginRun(command: String) -> RunContext {
         llmTask?.cancel()
         clearPendingNavigationAction()
         pendingApproval = nil
+        approvalAuthority.invalidateAll()
+        activeModelBinding = nil
         let context = RunContext(command: command)
         activeRun = context
         return context
@@ -410,18 +393,6 @@ final class BrowserState: NSObject, ObservableObject {
     func reload() { webView.reload() }
     func stopLoading() { webView.stopLoading() }
 
-    func jsLiteral(_ value: String) -> String {
-        let data = try? JSONSerialization.data(withJSONObject: [value])
-        let json = data.flatMap { String(data: $0, encoding: .utf8) } ?? "[\"\"]"
-        return String(json.dropFirst().dropLast())
-    }
-
-    func runJS(_ js: String, completion: @escaping (Result<Any, Error>) -> Void) {
-        webView.evaluateJavaScript(js) { value, error in
-            if let error = error { completion(.failure(error)) } else { completion(.success(value ?? "")) }
-        }
-    }
-
     private func settleSnapshotFailure(runID: UUID?, message: String) {
         let safeMessage = Redactor.text(message)
         if let runID = runID {
@@ -435,28 +406,38 @@ final class BrowserState: NSObject, ObservableObject {
     }
 
     func extractSnapshot(runID: UUID? = nil, completion: ((PageSnapshot?) -> Void)? = nil) {
-        if runID == nil, activeRun != nil {
+        if runID == nil, activeRun != nil { completion?(nil); return }
+        guard !webView.isLoading, let capturedIdentity = pageIdentity.captureSnapshotIdentity() else {
+            settleSnapshotFailure(runID: runID, message: "Committed page is not ready for a snapshot")
             completion?(nil)
             return
         }
         phase = .observing
-        let js = SnapshotSanitizer.javascript
-        runJS(js) { [weak self] result in
+        let snapshotBinding = capturedIdentity.snapshotID.uuidString.lowercased()
+        webView.callAsyncJavaScript(
+            SnapshotSanitizer.javascript,
+            arguments: ["snapshotBinding": snapshotBinding],
+            in: nil,
+            contentWorld: WKContentWorld.defaultClient
+        ) { [weak self] result in
             DispatchQueue.main.async {
-                guard let self = self else { return }
-                if let runID = runID, !self.isActive(runID: runID) { return }
+                guard let self else { return }
+                if let runID, !self.isActive(runID: runID) { return }
+                guard self.pageIdentity.accepts(capturedIdentity) else { completion?(nil); return }
                 switch result {
                 case .success(let value):
                     let raw = value as? String ?? "{}"
-                    guard let data = raw.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    guard let data = raw.data(using: .utf8), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                         self.settleSnapshotFailure(runID: runID, message: "Bad JS payload")
                         completion?(nil); return
                     }
-                    let snap = BrowserState.decodeSnapshot(obj)
-                    self.snapshot = snap
-                    self.addStep("👁", "Observed page", "\(snap.text.count) chars, \(snap.links.count) links, \(snap.inputs.count) inputs, \(snap.tables.count) tables")
+                    let decoded = BrowserState.decodeSnapshot(object, identity: capturedIdentity, snapshotBinding: snapshotBinding)
+                    guard self.pageIdentity.accepts(capturedIdentity) else { completion?(nil); return }
+                    self.privateTargetMap.replace(with: decoded.references, identity: capturedIdentity)
+                    self.snapshot = decoded.snapshot
+                    self.addStep("👁", "Observed page", "\(decoded.snapshot.text.count) chars, \(decoded.snapshot.links.count) links, \(decoded.snapshot.inputs.count) inputs, \(decoded.snapshot.tables.count) tables")
                     if runID == nil, self.activeRun == nil { self.phase = .idle }
-                    completion?(snap)
+                    completion?(decoded.snapshot)
                 case .failure(let error):
                     self.settleSnapshotFailure(runID: runID, message: error.localizedDescription)
                     completion?(nil)
@@ -465,66 +446,63 @@ final class BrowserState: NSObject, ObservableObject {
         }
     }
 
-    static func decodeSnapshot(_ obj: [String: Any]) -> PageSnapshot {
-        func s(_ key: String) -> String { obj[key] as? String ?? "" }
-        func m(_ value: Any?) -> String { SnapshotSanitizer.sanitizedMetadata(value as? String ?? "") }
-        func element(_ d: [String: Any]) -> DOMElement {
-            DOMElement(
-                selector: m(d["selector"]),
-                tag: m(d["tag"]),
-                text: m(d["text"]),
-                ariaLabel: m(d["ariaLabel"]),
-                role: m(d["role"]),
-                type: m(d["type"]),
-                name: m(d["name"]),
-                placeholder: m(d["placeholder"]),
-                isVisible: d["isVisible"] as? Bool ?? true
+    static func decodeSnapshot(_ object: [String: Any], identity: SnapshotIdentity, snapshotBinding: String) -> (snapshot: PageSnapshot, references: [StableElementReference]) {
+        func raw(_ dictionary: [String: Any], _ key: String) -> String { dictionary[key] as? String ?? "" }
+        func string(_ dictionary: [String: Any], _ key: String) -> String { SnapshotSanitizer.sanitizedMetadata(raw(dictionary, key)) }
+        func canonicalAction(_ value: String) -> String { (try? CanonicalPageTarget(validating: value).serializedURL) ?? "__invalid__" }
+        func metadata(_ dictionary: [String: Any], formMethod: String = "", formAction: String = "") -> StableElementMetadata {
+            let method = formMethod.isEmpty ? raw(dictionary, "formMethod") : formMethod
+            let candidateAction = formAction.isEmpty ? raw(dictionary, "formAction") : formAction
+            let action = candidateAction.isEmpty ? "" : canonicalAction(candidateAction)
+            let ariaLabel = raw(dictionary, "ariaLabel")
+            return StableElementMetadata.classify(
+                tag: raw(dictionary, "tag"), type: raw(dictionary, "type"), role: raw(dictionary, "role"), name: raw(dictionary, "name"),
+                label: ariaLabel.isEmpty ? raw(dictionary, "label") : ariaLabel, text: raw(dictionary, "text"),
+                placeholder: raw(dictionary, "placeholder"), autocomplete: raw(dictionary, "autocomplete"), visible: dictionary["isVisible"] as? Bool ?? false,
+                formMethod: method, formAction: action
             )
         }
-        let headings = (obj["headings"] as? [[String: Any]] ?? []).map(element)
-        let buttons = (obj["buttons"] as? [[String: Any]] ?? []).map(element)
-        let inputs = (obj["inputs"] as? [[String: Any]] ?? []).map(element)
-        let links = (obj["links"] as? [[String: Any]] ?? []).map {
-            PageLink(text: m($0["text"]), href: SnapshotSanitizer.sanitizedURL($0["href"] as? String ?? ""), selector: m($0["selector"]))
+        var references: [StableElementReference] = []
+        let snapshotPageURL = object["url"] as? String ?? ""
+        func actionable(_ dictionary: [String: Any], formMethod: String = "", formAction: String = "") -> StableElementReference? {
+            let binding = StableElementReference(
+                privateSelector: raw(dictionary, "selector"),
+                snapshotMarker: snapshotBinding,
+                pageURL: snapshotPageURL,
+                identity: identity,
+                metadata: metadata(dictionary, formMethod: formMethod, formAction: formAction)
+            )
+            guard binding.isExecutableBinding else { return nil }
+            references.append(binding)
+            return binding
         }
-        let forms = (obj["forms"] as? [[String: Any]] ?? []).map { f -> PageForm in
-            let fields = (f["fields"] as? [[String: Any]] ?? []).map {
-                PageFormField(
-                    selector: m($0["selector"]),
-                    tag: m($0["tag"]),
-                    type: m($0["type"]),
-                    name: m($0["name"]),
-                    label: m($0["label"]),
-                    placeholder: m($0["placeholder"]),
-                    valuePreview: m($0["valuePreview"]),
-                    required: $0["required"] as? Bool ?? false
-                )
+        func element(_ dictionary: [String: Any], isActionable: Bool) -> DOMElement? {
+            let binding = isActionable ? actionable(dictionary) : nil
+            if isActionable && binding == nil { return nil }
+            return DOMElement(ref: binding?.ref, tag: string(dictionary, "tag"), text: string(dictionary, "text"), ariaLabel: string(dictionary, "ariaLabel"), role: string(dictionary, "role"), type: string(dictionary, "type"), name: string(dictionary, "name"), placeholder: string(dictionary, "placeholder"), isVisible: dictionary["isVisible"] as? Bool ?? false)
+        }
+        let headings = (object["headings"] as? [[String: Any]] ?? []).compactMap { element($0, isActionable: false) }
+        let buttons = (object["buttons"] as? [[String: Any]] ?? []).compactMap { element($0, isActionable: true) }
+        let inputs = (object["inputs"] as? [[String: Any]] ?? []).compactMap { element($0, isActionable: true) }
+        let links = (object["links"] as? [[String: Any]] ?? []).compactMap { dictionary -> PageLink? in
+            guard let binding = actionable(dictionary) else { return nil }
+            return PageLink(ref: binding.ref, text: string(dictionary, "text"), href: SnapshotSanitizer.sanitizedURL(raw(dictionary, "href")))
+        }
+        let forms = (object["forms"] as? [[String: Any]] ?? []).compactMap { form -> PageForm? in
+            let method = raw(form, "method")
+            let action = canonicalAction(raw(form, "action"))
+            guard let formBinding = actionable(form, formMethod: method, formAction: action) else { return nil }
+            let fields = (form["fields"] as? [[String: Any]] ?? []).compactMap { field -> PageFormField? in
+                guard let fieldBinding = actionable(field, formMethod: method, formAction: action) else { return nil }
+                return PageFormField(ref: fieldBinding.ref, tag: string(field, "tag"), type: string(field, "type"), name: string(field, "name"), label: string(field, "label"), placeholder: string(field, "placeholder"), required: field["required"] as? Bool ?? false)
             }
-            return PageForm(
-                selector: m(f["selector"]),
-                action: SnapshotSanitizer.sanitizedURL(f["action"] as? String ?? ""),
-                method: m(f["method"]),
-                fields: fields
-            )
+            return PageForm(ref: formBinding.ref, action: SnapshotSanitizer.sanitizedURL(action), method: SnapshotSanitizer.sanitizedMetadata(method), fields: fields)
         }
-        let tables = (obj["tables"] as? [[String: Any]] ?? []).map { t in
-            PageTable(
-                selector: m(t["selector"]),
-                headers: (t["headers"] as? [String] ?? []).map(SnapshotSanitizer.sanitizedMetadata),
-                rows: (t["rows"] as? [[String]] ?? []).map { $0.map(SnapshotSanitizer.sanitizedMetadata) }
-            )
+        let tables = (object["tables"] as? [[String: Any]] ?? []).map { table in
+            PageTable(headers: (table["headers"] as? [String] ?? []).map(SnapshotSanitizer.sanitizedMetadata), rows: (table["rows"] as? [[String]] ?? []).map { $0.map(SnapshotSanitizer.sanitizedMetadata) })
         }
-        return PageSnapshot(
-            title: m(s("title")),
-            url: SnapshotSanitizer.sanitizedURL(s("url")),
-            text: m(s("text")),
-            headings: headings,
-            buttons: buttons,
-            inputs: inputs,
-            links: links,
-            forms: forms,
-            tables: tables
-        )
+        let snapshot = PageSnapshot(identity: identity, title: SnapshotSanitizer.sanitizedMetadata(object["title"] as? String ?? ""), url: SnapshotSanitizer.sanitizedURL(object["url"] as? String ?? ""), text: SnapshotSanitizer.sanitizedMetadata(object["text"] as? String ?? ""), headings: headings, buttons: buttons, inputs: inputs, links: links, forms: forms, tables: tables)
+        return (snapshot, references)
     }
 
     // MARK: AI + Agent loop
@@ -534,11 +512,12 @@ final class BrowserState: NSObject, ObservableObject {
         extractSnapshot(runID: context.runID) { [weak self] snap in
             guard let self = self, self.isActive(runID: context.runID), let snap = snap else { return }
             self.isAsking = true
+            self.activeModelBinding = snap.identity
             self.agentAnswer = "Thinking..."
             let messages = [["role": "system", "content": settings.composedSystemPrompt], ["role": "user", "content": "Question: \(question)\n\n\(snap.summaryText)"]]
             self.callLLM(messages: messages, settings: settings, runID: context.runID) { [weak self] result in
                 DispatchQueue.main.async {
-                    guard let self = self, self.isActive(runID: context.runID) else { return }
+                    guard let self = self, self.isActive(runID: context.runID), self.isCurrent(self.activeModelBinding) else { return }
                     self.isAsking = false
                     switch result {
                     case .success(let text): self.agentAnswer = Redactor.text(text); self.phase = .done
@@ -569,6 +548,8 @@ final class BrowserState: NSObject, ObservableObject {
         clearPendingNavigationAction()
         activeRun = nil
         pendingApproval = nil
+        approvalAuthority.invalidateAll()
+        activeModelBinding = nil
         isAsking = false
         phase = .stopped
         addStep("⏹", "Stopped by operator")
@@ -581,12 +562,13 @@ final class BrowserState: NSObject, ObservableObject {
         extractSnapshot(runID: context.runID) { [weak self] snap in
             guard let self = self, self.isActive(runID: context.runID), let snap = snap else { return }
             self.phase = .thinking
+            self.activeModelBinding = snap.identity
             let prompt = self.agentPrompt(command: context.command, snapshot: snap, previousResult: previousResult)
             self.addStep("💭", "Thinking", "Step \(self.stepIndex)/\(self.maxSteps)")
             let messages = [["role": "system", "content": settings.composedSystemPrompt], ["role": "user", "content": prompt]]
             self.callLLM(messages: messages, settings: settings, runID: context.runID) { [weak self] result in
                 DispatchQueue.main.async {
-                    guard let self = self, self.isActive(runID: context.runID) else { return }
+                    guard let self = self, self.isActive(runID: context.runID), self.isCurrent(self.activeModelBinding) else { return }
                     switch result {
                     case .failure(let error):
                         let message = Redactor.text(error.localizedDescription)
@@ -600,24 +582,29 @@ final class BrowserState: NSObject, ObservableObject {
     }
 
     func handleAgentResponse(_ content: String, context: RunContext, settings: AgentSettings) {
-        guard isActive(runID: context.runID) else { return }
+        guard isActive(runID: context.runID), isCurrent(activeModelBinding) else { return }
         switch parseAgentResponse(content) {
         case .failure(let error):
-            phase = .error(error); addStep("⚠️", "Parser error", error + "\nRaw: \(Redactor.text(String(content.prefix(500))))"); activeRun = nil
+            phase = .error(error); addStep("⚠️", "Parser error", error); activeRun = nil
         case .success(let response):
             switch response.kind {
             case .final(let message):
+                guard isCurrent(activeModelBinding) else { return }
                 agentAnswer = Redactor.text(message); phase = .done; addStep("✅", "Final", message); activeRun = nil
             case .tool(let rawCall):
-                let call = resolvedExecutionCall(rawCall)
-                let risk = classify(call)
-                if risk == .blocked { phase = .done; addStep("⛔️", "Blocked", "\(call.tool): \(blockReason(call))"); activeRun = nil; return }
+                let resolved = resolvedExecutionCall(rawCall)
+                guard case .success(let call) = validate(resolved) else {
+                    phase = .error("Tool schema validation failed"); addStep("⚠️", "Dispatch error", "Tool schema validation failed"); activeRun = nil; return
+                }
+                let risk = classify(call.transportCall)
+                if risk == .blocked { phase = .done; addStep("⛔️", "Blocked", "\(call.tool): \(blockReason(call.transportCall))"); activeRun = nil; return }
                 if risk == .approval {
-                    pendingApproval = ApprovalRequest(runID: context.runID, call: call, risk: risk, preview: preview(call), reason: Redactor.text(call.reason))
+                    let request = proposal(call: call, context: context, risk: risk)
+                    pendingApproval = request
                     phase = .awaitingApproval
-                    addStep("⏸", "Needs approval", preview(call))
+                    addStep("⏸", "Needs approval", request.preview)
                 } else {
-                    execute(call: call, context: context) { [weak self] result in
+                    dispatch(call: call, context: context, authority: .automatic) { [weak self] result in
                         guard let self = self, self.isActive(runID: context.runID) else { return }
                         self.continueAgent(context: context, settings: settings, previousResult: result)
                     }
@@ -627,69 +614,75 @@ final class BrowserState: NSObject, ObservableObject {
     }
 
     func approvePending(settings: AgentSettings) {
-        guard let req = pendingApproval, let context = activeRun, req.runID == context.runID else { pendingApproval = nil; return }
+        guard let request = pendingApproval, let context = activeRun, request.runID == context.runID else { pendingApproval = nil; return }
         pendingApproval = nil
-        addStep("✅", "Approved", preview(req.call))
-        execute(call: req.call, context: context) { [weak self] result in
+        let token = approvalAuthority.issue(for: request)
+        addStep("✅", "Approved", request.preview)
+        dispatch(call: request.call, context: context, authority: .approved(token: token, proposal: request)) { [weak self] result in
             guard let self = self, self.isActive(runID: context.runID) else { return }
             self.continueAgent(context: context, settings: settings, previousResult: result)
         }
     }
 
     func denyPending() {
-        guard let req = pendingApproval, req.runID == activeRun?.runID else { pendingApproval = nil; return }
-        addStep("🚫", "Denied", preview(req.call))
+        guard let request = pendingApproval, request.runID == activeRun?.runID else { pendingApproval = nil; return }
+        addStep("🚫", "Denied", request.preview)
         pendingApproval = nil
+        approvalAuthority.invalidateAll()
         activeRun = nil
         phase = .stopped
     }
 
     func stageManualApproval(call: ToolCall) {
         let context = beginRun(command: "Manual \(call.tool)")
-        pendingApproval = ApprovalRequest(runID: context.runID, call: call, risk: .approval, preview: preview(call), reason: "Manual tool")
+        guard case .success(let validated) = validate(resolvedExecutionCall(call)) else {
+            phase = .error("Tool schema validation failed"); activeRun = nil; return
+        }
+        let risk = classify(validated.transportCall)
+        guard risk != .blocked else {
+            phase = .done; addStep("⛔️", "Blocked", "\(call.tool): \(blockReason(validated.transportCall))"); activeRun = nil; return
+        }
+        pendingApproval = proposal(call: validated, context: context, risk: .approval)
         phase = .awaitingApproval
     }
 
-    func parseAgentResponse(_ text: String) -> AgentParseResult {
-        var raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let start = raw.range(of: "```") {
-            raw = String(raw[start.upperBound...])
-            if raw.lowercased().hasPrefix("json") { raw = String(raw.dropFirst(4)) }
-            if let end = raw.range(of: "```") { raw = String(raw[..<end.lowerBound]) }
+    func parseAgentResponse(_ text: String) -> AgentParseResult { AgentProtocol.parse(text) }
+
+    private func validate(_ call: ToolCall) -> Result<ValidatedToolCall, ToolDispatchError> {
+        ToolDispatchPolicy.validate(call, pageIdentity: currentSnapshotIdentity()) { [privateTargetMap] ref, identity in
+            privateTargetMap.resolve(ref: ref, identity: identity)?.reference
         }
-        guard raw.count < 65000, let data = raw.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return .failure("Model did not return valid JSON") }
-        let type = obj["type"] as? String ?? ""
-        if type == "final" { return .success(AgentResponse(kind: .final(obj["message"] as? String ?? "Done"))) }
-        if type == "tool_call" {
-            let tool = obj["tool"] as? String ?? ""
-            guard Self.knownTools.contains(tool) else { return .failure("Unknown tool: \(tool)") }
-            var args: [String: String] = [:]
-            if let dict = obj["arguments"] as? [String: Any] { for (k, v) in dict { args[k] = "\(v)" } }
-            return .success(AgentResponse(kind: .tool(ToolCall(id: UUID().uuidString, tool: tool, arguments: args, reason: obj["reason"] as? String ?? ""))))
-        }
-        return .failure("Unknown response type: \(type)")
     }
 
-    static let knownTools: Set<String> = ["snapshot_page", "extract_text", "extract_links", "extract_forms", "extract_tables", "save_memory_note", "read_memory_notes", "scroll", "open_url", "back", "forward", "reload", "fill_selector", "click_selector", "select_option", "submit_form", "export_markdown", "export_json", "export_csv"]
+    private func proposal(call: ValidatedToolCall, context: RunContext, risk: ToolRisk, id: UUID = UUID()) -> ApprovalRequest {
+        ApprovalRequest(id: id, runID: context.runID, call: call, risk: risk, preview: ToolDispatchPolicy.safePreview(call), reason: ToolRegistry.approvalReason(for: call.tool))
+    }
 
     func classify(_ call: ToolCall) -> ToolRisk {
-        let joined = (call.tool + " " + call.arguments.values.joined(separator: " ")).lowercased()
-        let blocked = ["password", "passcode", "otp", "2fa", "credit card", "cvv", "payment", "purchase", "checkout", "delete", "remove", "send money", "transfer", "swap", "wallet", "connect wallet", "sign transaction", "approve token", "confirm order"]
-        if blocked.contains(where: { joined.contains($0) }) { return .blocked }
-        let approval: Set<String> = ["scroll", "open_url", "back", "forward", "reload", "fill_selector", "click_selector", "select_option", "submit_form", "export_markdown", "export_json", "export_csv"]
-        return approval.contains(call.tool) ? .approval : .auto
+        let descriptor = ToolRegistry.descriptor(for: call.tool)
+        if SensitiveToolPolicy.blockReason(for: call.arguments) != nil { return .blocked }
+        switch descriptor.defaultApprovalPolicy {
+        case .automatic: return .auto
+        case .requireApproval, .alwaysRequireApproval: return .approval
+        }
     }
 
-    func blockReason(_ call: ToolCall) -> String { "Blocked by safety policy for sensitive/payment/login/crypto/delete pattern." }
-    func preview(_ call: ToolCall) -> String { Redactor.preview(tool: call.tool, arguments: call.arguments) }
+    func blockReason(_ call: ToolCall) -> String {
+        SensitiveToolPolicy.blockReason(for: call.arguments) ?? "Blocked by tool policy."
+    }
 
     func resolvedExecutionCall(_ call: ToolCall) -> ToolCall {
-        guard call.tool.hasPrefix("export_") else { return call }
-        var arguments = call.arguments
-        if arguments["body"] == nil, arguments["json"] == nil, arguments["rows"] == nil {
-            arguments["body"] = Redactor.exportBody(agentAnswer)
+        guard call.tool.isExport else { return call }
+        var arguments = call.arguments.objectValue ?? [:]
+        let contentKey: String
+        switch call.tool {
+        case .exportMarkdown: contentKey = "body"
+        case .exportJSON: contentKey = "json"
+        case .exportCSV: contentKey = "rows"
+        default: return call
         }
-        return ToolCall(id: call.id, tool: call.tool, arguments: arguments, reason: call.reason)
+        if arguments[contentKey] == nil { arguments[contentKey] = .string(Redactor.exportBody(agentAnswer)) }
+        return ToolCall(id: call.id, tool: call.tool, arguments: .object(arguments))
     }
 
     private func clearPendingNavigationAction() {
@@ -697,9 +690,9 @@ final class BrowserState: NSObject, ObservableObject {
         pendingNavigationAction = nil
     }
 
-    private func prepareNavigationAction(context: RunContext, action: String, bindsFirstNavigation: Bool, completion: @escaping (String) -> Void) {
+    private func prepareNavigationAction(context: RunContext, action: String, bindsFirstNavigation: Bool, expectedTarget: CanonicalPageTarget? = nil, completion: @escaping (String) -> Void) {
         clearPendingNavigationAction()
-        pendingNavigationAction = PendingNavigationAction(runID: context.runID, action: action, bindsFirstNavigation: bindsFirstNavigation, completion: completion)
+        pendingNavigationAction = PendingNavigationAction(runID: context.runID, action: action, bindsFirstNavigation: bindsFirstNavigation, expectedTarget: expectedTarget, completion: completion)
     }
 
     private func settleNavigationAction(actionID: UUID, runID: UUID, result: String) {
@@ -723,9 +716,9 @@ final class BrowserState: NSObject, ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: work)
     }
 
-    private func performNavigation(context: RunContext, action: String, completion: @escaping (String) -> Void, start: () -> WKNavigation?) {
+    private func performNavigation(context: RunContext, action: String, expectedTarget: CanonicalPageTarget? = nil, completion: @escaping (String) -> Void, start: () -> WKNavigation?) {
         guard isActive(runID: context.runID) else { return }
-        prepareNavigationAction(context: context, action: action, bindsFirstNavigation: false, completion: completion)
+        prepareNavigationAction(context: context, action: action, bindsFirstNavigation: false, expectedTarget: expectedTarget, completion: completion)
         guard let pending = pendingNavigationAction, pending.runID == context.runID else { return }
         guard let navigation = start() else {
             settleNavigationAction(actionID: pending.actionID, runID: context.runID, result: "\(action) did not start")
@@ -736,119 +729,386 @@ final class BrowserState: NSObject, ObservableObject {
         scheduleNavigationTimeout(for: pending)
     }
 
-    private func performPossibleNavigationJS(context: RunContext, action: String, javascript: String, completion: @escaping (String) -> Void) {
-        guard isActive(runID: context.runID) else { return }
-        guard !webView.isLoading else {
-            completion("\(action) deferred: page is still loading")
+    private func failDispatch(context: RunContext, message: String) {
+        guard activeRun == context else { return }
+        let safe = boundedResult(message, maximumBytes: 1_024)
+        llmTask?.cancel()
+        llmTask = nil
+        clearPendingNavigationAction()
+        pendingApproval = nil
+        approvalAuthority.invalidateAll()
+        activeModelBinding = nil
+        activeRun = nil
+        isAsking = false
+        phase = .error(safe)
+        addStep("⚠️", "Dispatch failed", safe)
+    }
+
+    private func boundedResult(_ raw: String, maximumBytes: Int) -> String {
+        let safe = Redactor.text(raw)
+        let limit = max(0, maximumBytes)
+        guard safe.utf8.count > limit else { return safe }
+        var result = ""
+        for character in safe {
+            let next = String(character)
+            guard result.utf8.count + next.utf8.count <= limit else { break }
+            result.append(character)
+        }
+        return result
+    }
+
+    /// Dispatch Gate + Commit Gate. No other method accepts an executable tool call.
+    private func dispatch(call: ValidatedToolCall, context: RunContext, authority: CommitAuthority, completion: @escaping (String) -> Void) {
+        guard activeRun == context else { return }
+
+        switch authority {
+        case .approved(let token, let proposal):
+            guard case .success = approvalAuthority.consume(token, expected: proposal) else {
+                failDispatch(context: context, message: "Approval authority was missing, expired, or mismatched")
+                return
+            }
+            let trustedProposal = self.proposal(call: call, context: context, risk: .approval, id: proposal.id)
+            guard proposal == trustedProposal,
+                  proposal.runID == context.runID,
+                  proposal.call == call,
+                  proposal.risk == .approval,
+                  classify(call.transportCall) == .approval else {
+                failDispatch(context: context, message: "Approval proposal did not match the current action")
+                return
+            }
+        case .automatic:
+            let descriptor = ToolRegistry.descriptor(for: call.tool)
+            guard descriptor.defaultApprovalPolicy == .automatic,
+                  classify(call.transportCall) == .auto else {
+                failDispatch(context: context, message: "Automatic authority cannot execute this action")
+                return
+            }
+        }
+
+        guard case .success(let liveCall) = validate(call.transportCall), liveCall == call else {
+            failDispatch(context: context, message: "The validated action became stale before execution")
             return
         }
-        prepareNavigationAction(context: context, action: action, bindsFirstNavigation: true, completion: completion)
-        guard let prepared = pendingNavigationAction, prepared.runID == context.runID else { return }
-        scheduleNavigationTimeout(for: prepared)
-        runJS(javascript) { [weak self] result in
-            DispatchQueue.main.async {
-                guard let self = self,
-                      self.isActive(runID: context.runID),
-                      let pending = self.pendingNavigationAction,
-                      pending.actionID == prepared.actionID,
-                      pending.runID == context.runID else { return }
-                switch result {
-                case .failure(let error):
-                    if pending.didStart { return }
-                    self.settleNavigationAction(actionID: pending.actionID, runID: context.runID, result: "\(action) failed: \(error.localizedDescription)")
-                case .success(let value):
-                    let message = value as? String ?? action
-                    if message.lowercased().contains("not found") {
-                        self.settleNavigationAction(actionID: pending.actionID, runID: context.runID, result: message)
-                        return
+
+        let descriptor = ToolRegistry.descriptor(for: liveCall.tool)
+        if descriptor.isPageBound {
+            guard let identity = liveCall.pageIdentity,
+                  pageIdentity.accepts(identity),
+                  currentSnapshotIdentity() == identity else {
+                failDispatch(context: context, message: "The page or snapshot changed before execution")
+                return
+            }
+        }
+        if let originalTarget = call.target {
+            guard let liveTarget = liveCall.target,
+                  liveTarget.ref == originalTarget.ref,
+                  liveTarget.fingerprint == originalTarget.fingerprint,
+                  liveTarget == originalTarget else {
+                failDispatch(context: context, message: "The element target changed before execution")
+                return
+            }
+        }
+
+        executeValidated(call: liveCall, context: context, completion: completion)
+    }
+
+    private func executeValidated(call: ValidatedToolCall, context: RunContext, completion: @escaping (String) -> Void) {
+        guard activeRun == context else { return }
+        let descriptor = ToolRegistry.descriptor(for: call.tool)
+        let finish: (String) -> Void = { [weak self] result in
+            guard let self, self.activeRun == context else { return }
+            completion(self.boundedResult(result, maximumBytes: descriptor.budget.maximumResultBytes))
+        }
+        phase = .acting(call.tool.rawValue)
+        addStep("⚙️", "Running \(call.tool)", ToolDispatchPolicy.safePreview(call))
+
+        switch call.tool {
+        case .snapshotPage, .extractText, .extractLinks, .extractForms, .extractTables:
+            extractSnapshot(runID: context.runID) { snapshot in
+                finish(snapshot?.summaryText ?? "Snapshot unavailable")
+            }
+        case .saveMemoryNote:
+            do {
+                _ = try MemoryStore.save(
+                    title: call.arguments["title"]?.stringValue ?? "K3 Note",
+                    body: call.arguments["body"]?.stringValue ?? "",
+                    url: currentURL
+                )
+                addStep("💾", "Saved note", "Local note saved")
+                finish("Memory note saved")
+            } catch {
+                addStep("⚠️", "Note save failed", "Local note write failed")
+                finish("Memory note rejected: localWriteFailure")
+            }
+        case .readMemoryNotes:
+            finish(MemoryStore.recent())
+        case .scroll:
+            guard let direction = call.arguments["direction"]?.stringValue,
+                  let amount = call.arguments["amount"]?.integerValue else {
+                failDispatch(context: context, message: "Validated scroll arguments were unavailable")
+                return
+            }
+            // Scroll is page-bound. The validated call must carry a page identity
+            // that is still current, otherwise a same-document or full navigation
+            // could land the approved scroll on a different page. Bind the isolated
+            // snapshot marker, canonical page URL, and origin through WebKit
+            // arguments; the scroll JS re-verifies all three synchronously before
+            // scrollBy, rejecting with {status:"rejected",code:"pageMismatch"} on
+            // any mismatch. No string interpolation of direction/amount.
+            guard let pageIdentity = call.pageIdentity,
+                  let snapshot = self.snapshot,
+                  snapshot.identity.snapshotID == pageIdentity.snapshotID else {
+                failDispatch(context: context, message: "Scroll requires a current page identity and snapshot")
+                return
+            }
+            let snapshotMarker = snapshot.identity.snapshotID.uuidString.lowercased()
+            guard let canonicalTarget = try? CanonicalPageTarget(validating: snapshot.url),
+                  canonicalTarget.serializedURL == snapshot.url || canonicalTarget.origin == pageIdentity.origin,
+                  canonicalTarget.origin == pageIdentity.origin else {
+                failDispatch(context: context, message: "Scroll target origin does not match the validated page")
+                return
+            }
+            let boundPageURL = canonicalTarget.serializedURL
+            let boundOrigin = pageIdentity.origin
+            let script = #"""
+            "use strict";
+            if (typeof snapshotMarker !== "string" || typeof boundPageURL !== "string" || typeof boundOrigin !== "string" ||
+                typeof direction !== "string" || typeof amount !== "number") {
+              return {status: "rejected", code: "pageMismatch"};
+            }
+            const encoder = new TextEncoder();
+            function asciiLowercase(value) { return String(value).replace(/[A-Z]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) + 32); }); }
+            function canonicalPageURL(value) {
+              if (typeof value !== "string" || value.length === 0 || encoder.encode(value).length > 4096 || /[\s\\\u0000-\u001f\u007f]/u.test(value)) return null;
+              const schemeMatch = /^(https?):\/\//iu.exec(value);
+              if (!schemeMatch) return null;
+              const authority = value.slice(schemeMatch[0].length).split(/[/?#]/u, 1)[0];
+              if (!authority || /[@%]/u.test(authority) || !/^[\x00-\x7f]+$/u.test(authority)) return null;
+              let rawHost;
+              let rawPort = "";
+              if (authority.startsWith("[")) {
+                const close = authority.indexOf("]");
+                if (close <= 1) return null;
+                rawHost = authority.slice(0, close + 1);
+                const suffix = authority.slice(close + 1);
+                if (suffix) {
+                  if (!/^:[0-9]+$/u.test(suffix)) return null;
+                  rawPort = suffix.slice(1);
+                }
+              } else {
+                const pieces = authority.split(":");
+                if (pieces.length > 2 || !pieces[0]) return null;
+                rawHost = pieces[0];
+                if (pieces.length === 2) {
+                  if (!/^[0-9]+$/u.test(pieces[1])) return null;
+                  rawPort = pieces[1];
+                }
+                if (rawHost.length > 253 || rawHost.startsWith(".") || rawHost.endsWith(".")) return null;
+                const labels = rawHost.split(".");
+                if (labels.some(function (label) { return !label || label.length > 63 || label.startsWith("-") || label.endsWith("-") || !/^[A-Za-z0-9-]+$/u.test(label); })) return null;
+              }
+              let parsed;
+              try { parsed = new URL(value); } catch (_) { return null; }
+              if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+              if (parsed.username || parsed.password || !parsed.hostname || !/^[\x00-\x7f]+$/u.test(parsed.hostname)) return null;
+              if (asciiLowercase(parsed.hostname) !== asciiLowercase(rawHost)) return null;
+              const defaultPort = parsed.protocol === "https:" ? "443" : "80";
+              if (rawPort && String(Number(rawPort)) !== defaultPort) return null;
+              if (rawPort && (!/^(80|443)$/u.test(rawPort) || rawPort !== defaultPort)) return null;
+              parsed.protocol = asciiLowercase(parsed.protocol);
+              parsed.hostname = asciiLowercase(parsed.hostname);
+              parsed.port = "";
+              const canonical = parsed.href;
+              if (!canonical || encoder.encode(canonical).length > 4096 || /[\s\\\u0000-\u001f\u007f]/u.test(canonical)) return null;
+              return canonical;
+            }
+            if (globalThis.__K3BrowserPrivateSnapshotDocumentBinding_8f6d2a41 !== snapshotMarker) {
+              return {status: "rejected", code: "pageMismatch"};
+            }
+            const expectedPageURL = canonicalPageURL(boundPageURL);
+            const livePageURL = canonicalPageURL(location.href);
+            if (expectedPageURL === null || expectedPageURL !== boundPageURL || livePageURL !== expectedPageURL) {
+              return {status: "rejected", code: "pageMismatch"};
+            }
+            if (location.origin !== boundOrigin) {
+              return {status: "rejected", code: "pageMismatch"};
+            }
+            const delta = direction === "up" ? -amount : amount;
+            window.scrollBy({top: delta, left: 0, behavior: "smooth"});
+            return {status: "executed", code: "scrolled"};
+            """#
+            webView.callAsyncJavaScript(
+                script,
+                arguments: [
+                    "direction": direction,
+                    "amount": amount,
+                    "snapshotMarker": snapshotMarker,
+                    "boundPageURL": boundPageURL,
+                    "boundOrigin": boundOrigin,
+                ],
+                in: nil,
+                contentWorld: WKContentWorld.defaultClient
+            ) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let value):
+                        if let object = value as? [String: Any],
+                           let status = object["status"] as? String,
+                           let code = object["code"] as? String,
+                           status == "executed", code == "scrolled" {
+                            finish("executed:scrolled")
+                        } else {
+                            finish("rejected:pageMismatch")
+                        }
+                    case .failure: finish("rejected:webKitFailure")
                     }
+                }
+            }
+        case .openURL:
+            guard let target = call.effectiveTarget else {
+                failDispatch(context: context, message: "Validated navigation target was unavailable")
+                return
+            }
+            performNavigation(context: context, action: "Open URL", expectedTarget: target, completion: finish) {
+                self.webView.load(URLRequest(url: target.url))
+            }
+        case .back:
+            performNavigation(context: context, action: "Back", completion: finish) { self.webView.goBack() }
+        case .forward:
+            performNavigation(context: context, action: "Forward", completion: finish) { self.webView.goForward() }
+        case .reload:
+            performNavigation(context: context, action: "Reload", completion: finish) { self.webView.reload() }
+        case .fillSelector, .clickSelector, .selectOption, .submitForm:
+            executeAtomicElement(call: call, context: context, completion: finish)
+        case .exportMarkdown, .exportJSON, .exportCSV:
+            let title = call.arguments["title"]?.stringValue ?? "k3-export"
+            let body: String
+            let ext: String
+            switch call.tool {
+            case .exportMarkdown:
+                body = call.arguments["body"]?.stringValue ?? ""
+                ext = "md"
+            case .exportJSON:
+                body = call.arguments["json"]?.stringValue ?? ""
+                ext = "json"
+            case .exportCSV:
+                body = call.arguments["rows"]?.stringValue ?? ""
+                ext = "csv"
+            default:
+                return
+            }
+            finish(exportText(title: title, body: body, ext: ext) ? "Export ready" : "Export failed")
+        }
+    }
+
+    private func executeAtomicElement(call: ValidatedToolCall, context: RunContext, completion: @escaping (String) -> Void) {
+        guard activeRun == context,
+              let reference = call.target,
+              let operation = AtomicElementOperation(tool: call.tool) else {
+            failDispatch(context: context, message: "Validated element operation was unavailable")
+            return
+        }
+        let value: String?
+        switch operation {
+        case .fill, .select:
+            guard let validatedValue = call.arguments["value"]?.stringValue else {
+                failDispatch(context: context, message: "Validated element value was unavailable")
+                return
+            }
+            value = validatedValue
+        case .click, .submit:
+            value = nil
+        }
+
+        let waitsForPossibleNavigation = operation == .click || operation == .submit
+        var preparedActionID: UUID?
+        var invocationEpoch: UUID?
+        if waitsForPossibleNavigation {
+            let action = operation == .click ? "Click" : "Submit"
+            prepareNavigationAction(context: context, action: action, bindsFirstNavigation: true, completion: completion)
+            guard let pending = pendingNavigationAction, pending.runID == context.runID else {
+                failDispatch(context: context, message: "Navigation settlement could not be prepared")
+                return
+            }
+            preparedActionID = pending.actionID
+            invocationEpoch = pending.atomicInvocationEpoch
+            // Arm the exact atomic invocation window immediately before the sole
+            // AtomicElementExecutor call. This is the only window a WKNavigation
+            // or same-document transition may be captured as this action's
+            // candidate. No synthetic timeout starts before the atomic receipt:
+            // timing out first could report failure and then allow a delayed
+            // effect. A real navigation starts its timeout only after the
+            // candidate is bound post-receipt; a no-navigation effect settles
+            // only after the atomic receipt.
+            pending.atomicInvocationInFlight = true
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self, self.activeRun == context else { return }
+            let receipt = await AtomicElementExecutor.execute(
+                in: self.webView,
+                reference: reference,
+                operation: operation,
+                value: value
+            )
+            let closedReceipt = "\(receipt.status.rawValue):\(receipt.code.rawValue)"
+
+            guard waitsForPossibleNavigation else {
+                completion(closedReceipt)
+                return
+            }
+            guard let actionID = preparedActionID,
+                  let epoch = invocationEpoch,
+                  let pending = self.pendingNavigationAction,
+                  pending.actionID == actionID,
+                  pending.runID == context.runID,
+                  pending.atomicInvocationEpoch == epoch else { return }
+
+            // Clear the atomic invocation window immediately after the await
+            // returns. Any transition observed after this point is unrelated.
+            pending.atomicInvocationInFlight = false
+
+            switch receipt.status {
+            case .rejected:
+                // Rejected + any candidate: the candidate is untrusted/unrelated.
+                // Stop/fail the run; never claim the candidate.
+                self.clearPendingNavigationAction()
+                self.failDispatch(context: context, message: closedReceipt)
+            case .executed:
+                if let navigation = pending.atomicCandidateNavigation {
+                    // Executed + exact WKNavigation candidate: bind and authorize.
+                    pending.navigation = navigation
+                    pending.atomicCandidateNavigation = nil
+                    pending.didStart = true
+                    pending.noNavigationWorkItem?.cancel()
+                    if let terminalReceipt = pending.atomicCandidateTerminalReceipt {
+                        // Candidate already terminal: settle with stored receipt.
+                        self.settleNavigationAction(actionID: actionID, runID: context.runID, result: terminalReceipt)
+                    } else {
+                        // Candidate still in-flight: start normal navigation timeout.
+                        self.scheduleNavigationTimeout(for: pending)
+                    }
+                } else if pending.atomicCandidateSameDocument {
+                    // Executed + same-document candidate: settle once with closed receipt.
+                    self.settleNavigationAction(actionID: actionID, runID: context.runID, result: closedReceipt)
+                } else {
+                    // Executed + no candidate: 0.8s no-navigation grace. Any
+                    // transition after the invocation window is unrelated and
+                    // must cancel, not be claimed.
                     if pending.didStart { return }
                     let work = DispatchWorkItem { [weak self, weak pending] in
-                        guard let self = self,
-                              let pending = pending,
+                        guard let self,
+                              let pending,
                               let current = self.pendingNavigationAction,
                               current.actionID == pending.actionID,
                               current.runID == context.runID,
                               !current.didStart else { return }
-                        self.settleNavigationAction(actionID: current.actionID, runID: context.runID, result: message)
+                        self.settleNavigationAction(actionID: current.actionID, runID: context.runID, result: closedReceipt)
                     }
                     pending.noNavigationWorkItem = work
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
                 }
             }
-        }
-    }
-
-    func execute(call: ToolCall, context: RunContext, completion: @escaping (String) -> Void) {
-        guard isActive(runID: context.runID) else { return }
-        let finish: (String) -> Void = { [weak self] result in
-            guard let self = self, self.isActive(runID: context.runID) else { return }
-            completion(Redactor.text(result))
-        }
-        phase = .acting(call.tool)
-        addStep("⚙️", "Running \(call.tool)", preview(call))
-        switch call.tool {
-        case "snapshot_page", "extract_text", "extract_links", "extract_forms", "extract_tables":
-            extractSnapshot(runID: context.runID) { snap in finish(snap?.summaryText ?? "No snapshot") }
-        case "save_memory_note":
-            do {
-                let name = try MemoryStore.save(title: call.arguments["title"] ?? "K3 Note", body: call.arguments["body"] ?? agentAnswer, url: currentURL)
-                addStep("💾", "Saved note", name); finish("Saved note: \(name)")
-            } catch {
-                let message = Redactor.text(error.localizedDescription)
-                addStep("⚠️", "Note save failed", message); finish("Note save failed: \(message)")
-            }
-        case "read_memory_notes":
-            finish(MemoryStore.recent())
-        case "scroll":
-            let dir = call.arguments["direction"] ?? "down"
-            let amount = Int(call.arguments["amount"] ?? "650") ?? 650
-            let y = dir == "up" ? -amount : amount
-            runJS("window.scrollBy({top:\(y),left:0,behavior:'smooth'}); 'scrolled';") { _ in finish("Scrolled \(dir)") }
-        case "open_url":
-            if let urlString = call.arguments["url"], let url = normalizedURL(urlString) {
-                performNavigation(context: context, action: "Open URL", completion: finish) { self.webView.load(URLRequest(url: url)) }
-            } else { finish("Bad URL") }
-        case "back":
-            performNavigation(context: context, action: "Back", completion: finish) { self.webView.goBack() }
-        case "forward":
-            performNavigation(context: context, action: "Forward", completion: finish) { self.webView.goForward() }
-        case "reload":
-            performNavigation(context: context, action: "Reload", completion: finish) { self.webView.reload() }
-        case "fill_selector":
-            let selector = call.arguments["selector"] ?? ""
-            let value = call.arguments["value"] ?? ""
-            let js = """
-            (function(){ var el=document.querySelector(\(jsLiteral(selector))); if(!el){return 'selector not found';} el.focus(); el.value=\(jsLiteral(value)); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return 'filled '+\(jsLiteral(selector)); })();
-            """
-            runJS(js) { result in finish((try? result.get()) as? String ?? "Filled") }
-        case "click_selector":
-            let selector = call.arguments["selector"] ?? ""
-            let js = """
-            (function(){ var el=document.querySelector(\(jsLiteral(selector))); if(!el){return 'selector not found';} el.scrollIntoView({block:'center'}); el.click(); return 'clicked '+\(jsLiteral(selector)); })();
-            """
-            performPossibleNavigationJS(context: context, action: "Click", javascript: js, completion: finish)
-        case "select_option":
-            let selector = call.arguments["selector"] ?? ""; let value = call.arguments["value"] ?? ""
-            let js = """
-            (function(){ var el=document.querySelector(\(jsLiteral(selector))); if(!el){return 'selector not found';} el.value=\(jsLiteral(value)); el.dispatchEvent(new Event('change',{bubbles:true})); return 'selected'; })();
-            """
-            runJS(js) { result in finish((try? result.get()) as? String ?? "Selected") }
-        case "submit_form":
-            let selector = call.arguments["selector"] ?? "form"
-            let js = """
-            (function(){ var el=document.querySelector(\(jsLiteral(selector))); if(!el){return 'selector not found';} if(el.tagName.toLowerCase()!=='form'){el=el.closest('form');} if(!el){return 'form not found';} el.requestSubmit ? el.requestSubmit() : el.submit(); return 'submitted'; })();
-            """
-            performPossibleNavigationJS(context: context, action: "Submit", javascript: js, completion: finish)
-        case "export_markdown", "export_json", "export_csv":
-            let title = call.arguments["title"] ?? "k3-export"
-            let body = call.arguments["body"] ?? call.arguments["json"] ?? call.arguments["rows"] ?? ""
-            if exportText(title: title, body: body, ext: call.tool == "export_csv" ? "csv" : (call.tool == "export_json" ? "json" : "md")) {
-                finish("Export ready")
-            } else {
-                finish("Export failed")
-            }
-        default: finish("Unknown tool")
         }
     }
 
@@ -873,7 +1133,14 @@ final class BrowserState: NSObject, ObservableObject {
         UIPasteboard.general.string = Redactor.text(steps.map { "\($0.icon) \($0.title) — \($0.detail)" }.joined(separator: "\n"))
     }
 
-    func exportLog() { exportText(title: "k3-agent-run", body: Redactor.text(steps.map { "- \($0.icon) **\($0.title)**: \($0.detail)" }.joined(separator: "\n")), ext: "md") }
+    func exportLog() {
+        // Mission Control export must go through the same schema validation,
+        // approval, and commit gate as model-generated exports. Never call
+        // exportText directly from Mission Control; exportText remains the write
+        // sink used by executeValidated only.
+        let body = Redactor.exportBody(steps.map { "- \($0.icon) **\($0.title)**: \($0.detail)" }.joined(separator: "\n"))
+        stageManualApproval(call: ToolCall(id: UUID().uuidString, tool: .exportMarkdown, arguments: .object(["title": .string("k3-agent-run"), "body": .string(body)])))
+    }
 
     func saveCurrentAnswerNote() {
         do {
@@ -924,12 +1191,13 @@ final class BrowserState: NSObject, ObservableObject {
         \(snapshot.summaryText.prefix(12000))
 
         AVAILABLE TOOLS:
-        snapshot_page, extract_text, extract_links, extract_forms, extract_tables, save_memory_note, read_memory_notes, scroll, open_url, back, forward, reload, fill_selector, click_selector, select_option, submit_form, export_markdown, export_json, export_csv.
+        \(ToolRegistry.promptToolList).
 
         Return ONLY JSON.
         Final: {"type":"final","message":"..."}
-        Tool: {"type":"tool_call","tool":"fill_selector","arguments":{"selector":"input[name=q]","value":"query"},"reason":"..."}
-        Use one tool per response. For click/fill/submit/navigation, propose the tool and wait for approval.
+        Tool: {"type":"tool_call","tool":"fill_selector","arguments":{"ref":"COPY_EXACT_CURRENT_SNAPSHOT_REF","value":"query"},"reason":"..."}
+        Opaque element refs come only from the current snapshot and expire whenever the page changes. fill_selector, click_selector, select_option, and submit_form must use a current snapshot ref; never invent or substitute a raw selector.
+        Use one tool per response. For click/fill/select/submit/navigation, propose the tool and wait for approval.
         """
     }
 
@@ -937,21 +1205,83 @@ final class BrowserState: NSObject, ObservableObject {
 
 extension BrowserState: WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        guard let pending = pendingNavigationAction, isActive(runID: pending.runID) else { return }
-        if let boundNavigation = pending.navigation {
-            guard boundNavigation === navigation else { return }
-        } else {
-            guard pending.bindsFirstNavigation else { return }
-            pending.navigation = navigation
+        guard let navigation else { return }
+        let runtimeID = navigationID(for: navigation)
+        guard startedNavigationIDs.insert(runtimeID).inserted else { return }
+
+        // Exact bound direct navigation (open/back/forward/reload): the pending
+        // action already holds this WKNavigation from performNavigation.
+        if let pending = pendingNavigationAction,
+           isActive(runID: pending.runID),
+           let boundNavigation = pending.navigation,
+           boundNavigation === navigation {
+            _ = pageIdentity.mainFrameProvisionalStart(navigationID: runtimeID, expectedTarget: pending.expectedTarget)
+            invalidatePageDerivedAuthority()
+            pending.didStart = true
+            pending.noNavigationWorkItem?.cancel()
+            scheduleNavigationTimeout(for: pending)
+            return
         }
-        pending.didStart = true
-        pending.noNavigationWorkItem?.cancel()
-        scheduleNavigationTimeout(for: pending)
+
+        // Candidate capture: a possible-navigation action may preserve the exact
+        // WKNavigation as a candidate ONLY while that same action's atomic
+        // invocation is in flight. Do not report/schedule action settlement yet.
+        // Still advance page identity and invalidate old page authority.
+        if let pending = pendingNavigationAction,
+           isActive(runID: pending.runID),
+           pending.atomicInvocationInFlight,
+           pending.atomicCandidateNavigation == nil {
+            pending.atomicCandidateNavigation = navigation
+            _ = pageIdentity.mainFrameProvisionalStart(navigationID: runtimeID, expectedTarget: nil)
+            invalidatePageDerivedAuthority()
+            return
+        }
+
+        // Unrelated navigation outside any authorized window: fail-closed.
+        _ = pageIdentity.mainFrameProvisionalStart(navigationID: runtimeID, expectedTarget: nil)
+        cancelRunForPageTransition("Navigation was not initiated by the active agent action")
+        invalidatePageDerivedAuthority()
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        guard let navigation else { return }
+        let runtimeID = navigationID(for: navigation)
+        guard pageIdentity.inFlightNavigationID == runtimeID else { return }
+        guard let url = webView.url, let target = try? CanonicalPageTarget(validating: url) else {
+            cancelRunForPageTransition("Committed page target is invalid", asError: true)
+            invalidatePageDerivedAuthority()
+            return
+        }
+        _ = pageIdentity.mainFrameCommit(target, navigationID: runtimeID)
+        // open_url authority: the approved expectedTarget is authoritative, not
+        // page metadata. If the exact bound pending action expected a different
+        // committed target, the approved action must not succeed. Consume is
+        // already done: cancel/fail the run, invalidate all page-derived
+        // authority/token, and prevent didFinish from reporting success.
+        // back/forward/reload/click/submit have nil expectedTarget here.
+        if let pending = pendingNavigationAction,
+           pending.navigation === navigation,
+           let expected = pending.expectedTarget,
+           expected != target {
+            cancelRunForPageTransition("The committed page did not match the approved target", asError: true)
+            invalidatePageDerivedAuthority()
+        }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let navigation else { return }
+        defer { retireNavigation(navigation) }
         guard let pending = pendingNavigationAction,
-              let boundNavigation = pending.navigation,
+              isActive(runID: pending.runID) else { return }
+        // When the exact navigation is only a not-yet-authorized candidate, store
+        // a closed bounded terminal receipt and do not settle. The atomic receipt
+        // will bind or reject the candidate; only then may this receipt be used.
+        if pending.atomicCandidateNavigation === navigation {
+            pending.atomicCandidateTerminalReceipt = "\(pending.action) completed"
+            return
+        }
+        // Bound navigation after executed receipt: normal exact settlement.
+        guard let boundNavigation = pending.navigation,
               boundNavigation === navigation,
               pending.didStart else { return }
         let url = Redactor.sanitizeURLString(webView.url?.absoluteString ?? "")
@@ -959,17 +1289,42 @@ extension BrowserState: WKNavigationDelegate, WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard let navigation else { return }
+        defer { retireNavigation(navigation) }
         guard let pending = pendingNavigationAction,
-              let boundNavigation = pending.navigation,
-              boundNavigation === navigation else { return }
+              isActive(runID: pending.runID) else { return }
+        if pending.atomicCandidateNavigation === navigation {
+            pending.atomicCandidateTerminalReceipt = "\(pending.action) failed"
+            return
+        }
+        guard let boundNavigation = pending.navigation,
+              boundNavigation === navigation,
+              pending.didStart else { return }
         settleNavigationAction(actionID: pending.actionID, runID: pending.runID, result: "\(pending.action) failed: \(error.localizedDescription)")
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard let navigation else { return }
+        defer { retireNavigation(navigation) }
         guard let pending = pendingNavigationAction,
-              let boundNavigation = pending.navigation,
-              boundNavigation === navigation else { return }
+              isActive(runID: pending.runID) else { return }
+        if pending.atomicCandidateNavigation === navigation {
+            pending.atomicCandidateTerminalReceipt = "\(pending.action) failed"
+            return
+        }
+        guard let boundNavigation = pending.navigation,
+              boundNavigation === navigation,
+              pending.didStart else { return }
         settleNavigationAction(actionID: pending.actionID, runID: pending.runID, result: "\(pending.action) failed: \(error.localizedDescription)")
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        _ = pageIdentity.webContentProcessTerminated()
+        navigationBindings.removeAll(keepingCapacity: false)
+        startedNavigationIDs.removeAll(keepingCapacity: false)
+        lastObservedURLString = nil
+        cancelRunForPageTransition("The web content process terminated", asError: true)
+        invalidatePageDerivedAuthority()
     }
 }
 

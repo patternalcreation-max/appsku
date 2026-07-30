@@ -7,38 +7,6 @@ enum Redactor {
         "cardnumber", "card_number", "privatekey", "private_key", "mnemonic", "seed"
     ]
 
-    static func isSensitiveKey(_ key: String) -> Bool {
-        let normalized = key.lowercased().replacingOccurrences(of: "-", with: "_")
-        if normalized == "value" || normalized == "body" { return true }
-        return sensitiveFragments.contains { normalized.contains($0) }
-    }
-
-    static func redact(value: String, forKey key: String) -> String {
-        isSensitiveKey(key) && !value.isEmpty ? "[REDACTED]" : sanitizeURLString(value)
-    }
-
-    static func redactedArguments(_ arguments: [String: String]) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: arguments.map { key, value in
-            (key, redact(value: value, forKey: key))
-        })
-    }
-
-    static func preview(tool: String, arguments: [String: String]) -> String {
-        if tool.hasPrefix("export_") {
-            let content = arguments["body"] ?? arguments["json"] ?? arguments["rows"] ?? ""
-            let safeContent = exportBody(content)
-            let excerpt = String(safeContent.prefix(160)).replacingOccurrences(of: "\n", with: " ↵ ")
-            let title = arguments["title"].map { redact(value: $0, forKey: "title") } ?? ""
-            let suffix = safeContent.count > 160 ? "…" : ""
-            return "\(tool) title=\(title), content=\(excerpt)\(suffix) [\(safeContent.count) chars]"
-        }
-        let fields = redactedArguments(arguments)
-            .sorted { $0.key < $1.key }
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: ", ")
-        return fields.isEmpty ? tool : "\(tool) \(fields)"
-    }
-
     static func exportBody(_ raw: String) -> String {
         text(raw)
     }
