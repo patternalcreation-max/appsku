@@ -489,7 +489,7 @@ final class BrowserState: NSObject, ObservableObject {
                     completion?(nil)
                 }
             }
-        }
+        })
     }
 
     static func decodeSnapshot(_ object: [String: Any], identity: SnapshotIdentity, snapshotBinding: String) -> (snapshot: PageSnapshot, references: [StableElementReference]) {
@@ -1009,7 +1009,7 @@ final class BrowserState: NSObject, ObservableObject {
                     case .failure: finish("rejected:webKitFailure")
                     }
                 }
-            }
+            })
         case .openURL:
             guard let target = call.effectiveTarget else {
                 failDispatch(context: context, message: "Validated navigation target was unavailable")
