@@ -41,8 +41,13 @@ jobs:
         run: |
           python3 K3Browser/scripts/validate_release_a.py
           python3 K3Browser/scripts/validate_release_a5.py
-          python3 K3Browser/scripts/validate_agent_dock.py
+          python3 K3Browser/scripts/validate_peak1_slice_a.py
+          python3 K3Browser/scripts/validate_peak1_slice_b.py
+          python3 K3Browser/scripts/validate_peak2_slice_a.py
+          python3 K3Browser/scripts/validate_peak2_slice_b.py
+          python3 K3Browser/scripts/validate_peak34.py
           python3 K3Browser/scripts/validate_ui_architecture.py
+          python3 K3Browser/scripts/validate_agent_dock.py
 
       - name: Install xcodegen
         run: brew install xcodegen
