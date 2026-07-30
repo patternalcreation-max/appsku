@@ -198,7 +198,7 @@ private enum ModelSummarySanitizer {
     static func clean(_ raw: String, _ maximumBytes: Int) -> String {
         let allowed = raw.unicodeScalars.filter { scalar in
             if scalar == "\n" || scalar == "\t" { return true }
-            if scalar.properties.isControl { return false }
+            if scalar.properties.generalCategory == .control { return false }
             switch scalar.value {
             case 0x202A...0x202E, 0x2066...0x2069: return false
             default: return true

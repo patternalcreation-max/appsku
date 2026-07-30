@@ -108,7 +108,7 @@ def check_canonical_page_target(source: str) -> None:
     check("CPT rejects backslash", '!raw.contains("\\\\")' in source and '!absolute.contains("\\\\")' in source)
 
     # No whitespace / control chars
-    check("CPT rejects whitespace/control", "isWhitespace" in source and "isControl" in source)
+    check("CPT rejects whitespace/control", "isWhitespace" in source and ".control" in source)
 
     # No nondefault port
     check("CPT rejects nondefault port", 'let defaultPort = scheme == "https" ? 443 : 80' in source and "guard port == defaultPort else { throw TargetError.nonDefaultPort }" in source)

@@ -18,8 +18,8 @@ enum ExportService {
     static func exportLinksMarkdown(links: [PageLink]) -> String {
         var lines: [String] = ["# Extracted Links\n"]
         for link in links {
-            let text = link.text.isEmpty ? link.url : link.text
-            lines.append("- [\(text)](\(link.url))")
+            let text = link.text.isEmpty ? link.href : link.text
+            lines.append("- [\(text)](\(link.href))")
         }
         return lines.joined(separator: "\n")
     }

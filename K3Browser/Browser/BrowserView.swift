@@ -465,7 +465,7 @@ final class BrowserState: NSObject, ObservableObject {
             arguments: ["snapshotBinding": snapshotBinding],
             in: nil,
             contentWorld: WKContentWorld.defaultClient
-        ) { [weak self] result in
+        ) { [weak self] (result: Result<Any?, Error>) in
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let runID, !self.isActive(runID: runID) { return }
@@ -994,7 +994,7 @@ final class BrowserState: NSObject, ObservableObject {
                 ],
                 in: nil,
                 contentWorld: WKContentWorld.defaultClient
-            ) { result in
+            ) { (result: Result<Any?, Error>) in
                 DispatchQueue.main.async {
                     switch result {
                     case .success(let value):

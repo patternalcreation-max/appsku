@@ -19,7 +19,7 @@ struct CanonicalPageTarget: Codable, Equatable, Hashable {
     init(validating raw: String) throws {
         guard !raw.isEmpty,
               raw.utf8.count <= 4_096,
-              raw.unicodeScalars.allSatisfy({ !$0.properties.isWhitespace && !$0.properties.isControl }),
+              raw.unicodeScalars.allSatisfy({ !$0.properties.isWhitespace && $0.properties.generalCategory != .control }),
               !raw.contains("\\"),
               let parsed = URL(string: raw) else {
             throw TargetError.invalid
@@ -31,7 +31,7 @@ struct CanonicalPageTarget: Codable, Equatable, Hashable {
         let absolute = candidate.absoluteString
         guard !absolute.isEmpty,
               absolute.utf8.count <= 4_096,
-              absolute.unicodeScalars.allSatisfy({ !$0.properties.isWhitespace && !$0.properties.isControl }),
+              absolute.unicodeScalars.allSatisfy({ !$0.properties.isWhitespace && $0.properties.generalCategory != .control }),
               !absolute.contains("\\"),
               var components = URLComponents(url: candidate, resolvingAgainstBaseURL: false),
               let rawScheme = components.scheme else {
@@ -48,7 +48,7 @@ struct CanonicalPageTarget: Codable, Equatable, Hashable {
               !authority.isEmpty,
               !authority.contains("@"),
               !authority.contains("%"),
-              authority.unicodeScalars.allSatisfy({ $0.isASCII && !$0.properties.isWhitespace && !$0.properties.isControl }) else {
+              authority.unicodeScalars.allSatisfy({ $0.isASCII && !$0.properties.isWhitespace && $0.properties.generalCategory != .control }) else {
             throw TargetError.ambiguousHost
         }
 
@@ -91,7 +91,7 @@ struct CanonicalPageTarget: Codable, Equatable, Hashable {
     static func resolveNavigationInput(_ raw: String) throws -> CanonicalPageTarget {
         guard !raw.isEmpty,
               raw.utf8.count <= 4_096,
-              raw.unicodeScalars.allSatisfy({ !$0.properties.isControl }) else {
+              raw.unicodeScalars.allSatisfy({ $0.properties.generalCategory != .control }) else {
             throw TargetError.invalid
         }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
