@@ -464,7 +464,7 @@ final class BrowserState: NSObject, ObservableObject {
             SnapshotSanitizer.javascript,
             arguments: ["snapshotBinding": snapshotBinding],
             in: nil,
-            contentWorld: WKContentWorld.defaultClient,
+            in: WKContentWorld.defaultClient,
             completionHandler: { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -993,7 +993,7 @@ final class BrowserState: NSObject, ObservableObject {
                     "boundOrigin": boundOrigin,
                 ],
                 in: nil,
-                contentWorld: WKContentWorld.defaultClient,
+                in: WKContentWorld.defaultClient,
             completionHandler: { result in
                 DispatchQueue.main.async {
                     switch result {

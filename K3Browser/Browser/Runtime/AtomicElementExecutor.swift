@@ -61,7 +61,7 @@ enum AtomicElementExecutor {
                 functionBody,
                 arguments: arguments,
                 in: nil,
-                contentWorld: WKContentWorld.defaultClient
+                in: WKContentWorld.defaultClient
             )
             return decode(raw)
         } catch {
