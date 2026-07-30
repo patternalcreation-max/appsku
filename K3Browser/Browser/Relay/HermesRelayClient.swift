@@ -119,7 +119,8 @@ final class HermesRelayClient {
                 }
                 if let http = response as? HTTPURLResponse, http.statusCode >= 300 {
                     let raw = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                    completion(.failure(NSError(domain: "K3Relay", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Relay HTTP \(http.statusCode): \(Redactor.text(String(raw.prefix(200)))"])))
+                    let desc = "Relay HTTP \(http.statusCode): \(Redactor.text(String(raw.prefix(200))))"
+                    completion(.failure(NSError(domain: "K3Relay", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: desc])))
                     return
                 }
                 guard let data = data,
