@@ -37,6 +37,7 @@ struct RelaySettings: Codable, Equatable {
         enabled: false
     )
 
+    // Token persisted in Keychain; only endpoint+enabled in JSON file.
     static var storageURL: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("K3Browser", isDirectory: true)
@@ -44,17 +45,26 @@ struct RelaySettings: Codable, Equatable {
         return dir.appendingPathComponent("relay.json")
     }
 
+    // Wrapper for file-stored fields (token excluded).
+    private struct FilePayload: Codable {
+        var endpoint: String
+        var enabled: Bool
+    }
+
     static func load() -> RelaySettings {
-        guard let data = try? Data(contentsOf: storageURL),
-              let decoded = try? JSONDecoder().decode(RelaySettings.self, from: data) else {
-            return .default
+        let token = KeychainStore.load(account: "relay.token")
+        if let data = try? Data(contentsOf: storageURL),
+           let decoded = try? JSONDecoder().decode(FilePayload.self, from: data) {
+            return RelaySettings(endpoint: decoded.endpoint, token: token, enabled: decoded.enabled)
         }
-        return decoded
+        return .default
     }
 
     func save() {
-        let encoded = (try? JSONEncoder().encode(self)) ?? Data()
+        let payload = FilePayload(endpoint: endpoint, enabled: enabled)
+        let encoded = (try? JSONEncoder().encode(payload)) ?? Data()
         try? encoded.write(to: RelaySettings.storageURL, options: .atomic)
+        _ = KeychainStore.save(token, account: "relay.token")
     }
 }
 
