@@ -38,8 +38,14 @@ struct MissionControlView: View {
                     NavigationLink(destination: ManualToolsView(state: state, elementReference: $elementReference, value: $value)) {
                         missionRow(symbol: "wrench.and.screwdriver", title: "Manual Tools", detail: "Actions are staged for approval")
                     }
+                    NavigationLink(destination: WorkflowsView(state: state)) {
+                        missionRow(symbol: "list.bullet.rectangle.portrait", title: "Workflows", detail: "Recipes and data export")
+                    }
                     NavigationLink(destination: AgentSettingsView(settings: settings)) {
                         missionRow(symbol: "gearshape", title: "Agent Settings", detail: settings.status)
+                    }
+                    NavigationLink(destination: RelaySettingsView()) {
+                        missionRow(symbol: "antenna.radiowaves.left.and.right", title: "Relay", detail: "Optional Hermes remote brain")
                     }
                 }
             }
