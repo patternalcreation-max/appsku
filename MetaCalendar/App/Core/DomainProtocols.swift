@@ -122,7 +122,8 @@ protocol CalendarProjecting: Sendable {
 }
 
 /// Unified interface for astronomy providers.
-/// The existing `AstronomyEngine` is wrapped unchanged.
+/// The existing `AstronomyEngine` uses static methods; this protocol
+/// allows injection and testing.
 protocol AstronomyProviding: Sendable {
     var methodID: String { get }
     var methodVersion: String { get }
@@ -137,9 +138,28 @@ protocol AstronomyProviding: Sendable {
     ) -> (sunrise: Date?, sunset: Date?)
 }
 
-/// Existing AstronomyEngine already conforms implicitly.
-extension AstronomyEngine: AstronomyProviding {
-    var methodID: String { providerID }
+/// Adapter that wraps the static `AstronomyEngine` to satisfy `AstronomyProviding`.
+/// The engine itself is unchanged — this is a zero-cost bridge.
+struct EmbeddedAstronomyProvider: AstronomyProviding {
+    let methodID: String = AstronomyEngine.providerID
+    let methodVersion: String = AstronomyEngine.version
+
+    func solarLongitude(julianDay: Double) -> Double {
+        AstronomyEngine.solarLongitude(julianDay: julianDay)
+    }
+
+    func lunarPhase(julianDay: Double) -> Double {
+        AstronomyEngine.lunarPhase(julianDay: julianDay)
+    }
+
+    func sunRiseSet(
+        date: Date,
+        latitude: Double,
+        longitude: Double,
+        timeZone: TimeZone
+    ) -> (sunrise: Date?, sunset: Date?) {
+        AstronomyEngine.sunRiseSet(date: date, latitude: latitude, longitude: longitude, timeZone: timeZone)
+    }
 }
 
 // MARK: - M1.4: Feature Flags
