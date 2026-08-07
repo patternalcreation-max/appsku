@@ -24,35 +24,21 @@ struct ContentView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             TodayView()
-                .tabItem {
-                    Label("Today", systemImage: "sun.max.fill")
-                }
+                .tabItem { Label("Today", systemImage: "sun.max.fill") }
                 .tag(0)
             
             CalendarGridView()
-                .tabItem {
-                    Label("Calendar", systemImage: "calendar")
-                }
+                .tabItem { Label("Calendar", systemImage: "calendar") }
                 .tag(1)
             
             ExploreView()
-                .tabItem {
-                    Label("Explore", systemImage: "arrow.triangle.swap")
-                }
+                .tabItem { Label("Explore", systemImage: "arrow.triangle.swap") }
                 .tag(2)
             
-            ExploreCyclesView()
-                .tabItem {
-                    Label("Cycles", systemImage: "circle.grid.cross")
-                }
-                .tag(3)
-            
             SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
-                }
-                .tag(4)
+                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
+                .tag(3)
         }
-        .tint(AppTheme.accent)
+        .tint(DS.primary)
     }
 }

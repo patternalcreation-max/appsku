@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Today Screen
+// MARK: - Today Screen v2
 
 struct TodayView: View {
     @Environment(AppState.self) private var appState
@@ -8,169 +8,156 @@ struct TodayView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                contextHeader
+            VStack(spacing: DS.space20) {
+                contextHero
                 astronomyStrip
-                calendarCards
-                provenanceFooter
+                calendarCardsSection
+                upcomingEventsSection
+                quoteFooter
             }
-            .padding(.horizontal)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DS.space16)
+            .padding(.bottom, 40)
         }
-        .background(AppTheme.bgPrimary.ignoresSafeArea())
-        .refreshable {
-            appState.refreshToday()
-        }
-        .task {
-            appState.refreshToday()
-        }
+        .background(DS.bgBase.ignoresSafeArea())
+        .refreshable { appState.refreshToday() }
+        .task { appState.refreshToday() }
     }
     
-    // Context Header
-    private var contextHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(appState.displayTimeZone.identifier)
-                        .font(.system(size: 15, design: .monospaced).weight(.medium))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text(gmtOffsetString)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(AppTheme.textSecondary)
-                }
-                Spacer()
+    // MARK: - Context Hero
+    private var contextHero: some View {
+        VStack(alignment: .leading, spacing: DS.space12) {
+            // Time display
+            HStack(alignment: .firstTextBaseline, spacing: DS.space8) {
                 Text(timeString)
-                    .font(.system(size: 28, design: .rounded).weight(.bold))
-                    .foregroundStyle(AppTheme.accent)
+                    .font(.system(size: 42, design: .rounded).weight(.bold))
+                    .foregroundStyle(DS.textPrimary)
+                Text(gmtOffsetString)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundStyle(DS.primary)
             }
             
-            HStack(spacing: 6) {
-                Image(systemName: appState.timeZoneMode == .followSystem ? "location.fill" : "lock.fill")
-                    .font(.system(size: 11))
-                Text(appState.timeZoneMode.displayName)
-                    .font(.system(size: 12))
+            // Date display
+            Text(fullDateString)
+                .font(.system(size: 15))
+                .foregroundStyle(DS.textSecondary)
+            
+            // Timezone + mode
+            HStack(spacing: DS.space8) {
+                Label {
+                    Text(appState.displayTimeZone.identifier)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(DS.textTertiary)
+                } icon: {
+                    Image(systemName: appState.timeZoneMode == .followSystem ? "location.fill" : "lock.fill")
+                        .foregroundStyle(DS.primary)
+                        .font(.system(size: 11))
+                }
+                
+                if let astro = appState.todayBundle?.astronomy, astro.sunrise != nil {
+                    Divider().frame(height: 12)
+                    Label {
+                        Text(appState.locationEnabled ? "Jakarta" : "Location off")
+                            .font(.system(size: 12))
+                            .foregroundStyle(DS.textTertiary)
+                    } icon: {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundStyle(DS.accent)
+                            .font(.system(size: 11))
+                    }
+                }
             }
-            .foregroundStyle(AppTheme.textTertiary)
         }
-        .padding(16)
-        .background(AppTheme.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DS.space20)
+        .background(
+            LinearGradient(
+                colors: [DS.primary.opacity(0.12), DS.bgCard],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.radiusXL, style: .continuous))
     }
     
-    // Astronomy Strip
+    // MARK: - Astronomy Strip
     @ViewBuilder
     private var astronomyStrip: some View {
         if let astro = appState.todayBundle?.astronomy {
-            HStack(spacing: 12) {
-                // Moon phase
-                VStack(spacing: 4) {
-                    Text(astro.moonPhaseEmoji)
-                        .font(.system(size: 28))
-                    Text("\(Int(astro.moonIllumination * 100))%")
-                        .font(.system(size: 11, design: .rounded).weight(.semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Text("Moon")
-                        .font(.system(size: 9))
-                        .foregroundStyle(AppTheme.textTertiary)
-                }
-                .frame(maxWidth: .infinity)
-                
-                Divider().frame(height: 40)
-                
-                // Solar longitude
-                VStack(spacing: 4) {
-                    Image(systemName: "sun.max.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(AppTheme.accentWarm)
-                    Text(String(format: "%.0f°", astro.solarLongitude))
-                        .font(.system(size: 11, design: .rounded).weight(.semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    Text("Sun λ")
-                        .font(.system(size: 9))
-                        .foregroundStyle(AppTheme.textTertiary)
-                }
-                .frame(maxWidth: .infinity)
-                
-                Divider().frame(height: 40)
-                
-                // Solar term
-                VStack(spacing: 4) {
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.green)
-                    Text(astro.solarTerm.split(separator: " ").first.map(String.init) ?? "")
-                        .font(.system(size: 11, design: .rounded).weight(.semibold))
-                        .foregroundStyle(AppTheme.textSecondary)
-                    .lineLimit(1)
-                    Text("Term")
-                        .font(.system(size: 9))
-                        .foregroundStyle(AppTheme.textTertiary)
-                }
-                .frame(maxWidth: .infinity)
-                
-                if astro.sunrise != nil {
-                    Divider().frame(height: 40)
-                    
-                    VStack(spacing: 4) {
-                        Image(systemName: "sunrise.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.orange)
-                        if let sr = astro.sunrise {
-                            Text(timeFormatter.string(from: sr))
-                                .font(.system(size: 11, design: .rounded).weight(.semibold))
-                                .foregroundStyle(AppTheme.textSecondary)
-                        }
-                        Text("Sunrise")
-                            .font(.system(size: 9))
-                            .foregroundStyle(AppTheme.textTertiary)
+            GlassCard(padding: DS.space12) {
+                HStack(spacing: 0) {
+                    AstroStripItem(icon: "\(astro.moonPhaseEmoji)", iconColor: .white, value: "\(Int(astro.moonIllumination * 100))%", label: astro.moonPhaseName)
+                    Divider().frame(height: 44)
+                    AstroStripItem(icon: "sun.max.fill", iconColor: DS.accent, value: String(format: "%.0f°", astro.solarLongitude), label: "Solar λ")
+                    Divider().frame(height: 44)
+                    AstroStripItem(icon: "leaf.fill", iconColor: DS.success, value: astro.solarTerm.split(separator: " ").first.map(String.init) ?? "", label: "Solar Term")
+                    if astro.sunrise != nil {
+                        Divider().frame(height: 44)
+                        AstroStripItem(icon: "sunrise.fill", iconColor: .orange, value: timeOnly(astro.sunrise), label: "Sunrise")
                     }
-                    .frame(maxWidth: .infinity)
                 }
             }
-            .padding(14)
-            .background(AppTheme.bgCard)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
         }
     }
     
-    // Calendar Cards
-    private var calendarCards: some View {
-        LazyVStack(spacing: 10) {
+    // MARK: - Calendar Cards
+    private var calendarCardsSection: some View {
+        VStack(alignment: .leading, spacing: DS.space8) {
+            SectionTitle(title: "Today Across Calendars", icon: "calendar.badge.clock")
+            
             if let bundle = appState.todayBundle {
-                ForEach(bundle.projections) { proj in
-                    CalendarCard(projection: proj)
-                        .onTapGesture {
-                            selectedProjection = proj
-                        }
-                        .accessibilityLabel("\(proj.calendarSystemID.displayName): \(proj.displayString). \(proj.subtitle)")
+                ForEach(Array(bundle.projections.enumerated()), id: \.element.id) { idx, proj in
+                    Button {
+                        selectedProjection = proj
+                    } label: {
+                        CalendarCardV2(projection: proj, rank: idx)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
         .sheet(item: $selectedProjection) { proj in
-            ProvenanceSheet(projection: proj)
+            ProvenanceSheetV2(projection: proj)
                 .presentationDetents([.medium, .large])
         }
     }
     
-    // Provenance Footer
-    private var provenanceFooter: some View {
-        VStack(spacing: 6) {
-            Text("One moment, several calendar views.")
-                .font(.system(size: 12, design: .serif).italic())
-                .foregroundStyle(AppTheme.textTertiary)
-            Text("Method and source always visible.")
-                .font(.system(size: 11))
-                .foregroundStyle(AppTheme.textTertiary)
+    // MARK: - Upcoming Events
+    private var upcomingEventsSection: some View {
+        VStack(alignment: .leading, spacing: DS.space8) {
+            SectionTitle(title: "Upcoming Events", icon: "sparkles")
+            
+            if appState.upcomingEvents.isEmpty {
+                GlassCard {
+                    Text("No major events in the next 90 days")
+                        .font(DS.fontBody)
+                        .foregroundStyle(DS.textTertiary)
+                }
+            } else {
+                ForEach(Array(appState.upcomingEvents.prefix(8))) { event in
+                    EventRow(event: event, daysUntil: event.daysFromToday)
+                        .background(DS.bgCard)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.radiusSM))
+                }
+            }
         }
-        .padding(.top, 8)
     }
     
-    // Helpers
+    // MARK: - Footer
+    private var quoteFooter: some View {
+        VStack(spacing: 4) {
+            Text("One moment, several calendar views.")
+                .font(.system(size: 12, design: .serif).italic())
+                .foregroundStyle(DS.textTertiary)
+        }
+        .padding(.top, DS.space8)
+    }
+    
+    // MARK: - Helpers
     private var gmtOffsetString: String {
-        let offset = appState.displayTimeZone.secondsFromGMT() / 3600
-        let hours = abs(offset)
+        let offset = appState.displayTimeZone.secondsFromGMT()
+        let hours = abs(offset) / 3600
+        let mins = (abs(offset) % 3600) / 60
         let sign = offset >= 0 ? "+" : "-"
-        return String(format: "GMT%@%.1f", sign, Double(hours))
+        return String(format: "GMT%@%d:%02d", sign, hours, mins)
     }
     
     private var timeString: String {
@@ -180,10 +167,18 @@ struct TodayView: View {
         return fmt.string(from: Date())
     }
     
-    private var timeFormatter: DateFormatter {
-        let f = DateFormatter()
-        f.timeStyle = .short
-        f.timeZone = appState.displayTimeZone
-        return f
+    private var fullDateString: String {
+        let fmt = DateFormatter()
+        fmt.dateStyle = .full
+        fmt.timeZone = appState.displayTimeZone
+        return fmt.string(from: Date())
+    }
+    
+    private func timeOnly(_ date: Date?) -> String {
+        guard let date else { return "—" }
+        let fmt = DateFormatter()
+        fmt.timeStyle = .short
+        fmt.timeZone = appState.displayTimeZone
+        return fmt.string(from: date)
     }
 }
