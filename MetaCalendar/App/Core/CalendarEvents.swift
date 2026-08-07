@@ -25,27 +25,33 @@ enum EventCategory: String, Codable, Sendable, CaseIterable, Identifiable {
     case national
     case seasonal
     case observance
+    case astronomical
+    case sport
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .religious:  return "Religious"
-        case .cultural:   return "Cultural"
-        case .national:   return "National"
-        case .seasonal:   return "Seasonal"
-        case .observance: return "Observance"
+        case .religious:    return "Religious"
+        case .cultural:     return "Cultural"
+        case .national:     return "National"
+        case .seasonal:     return "Seasonal"
+        case .observance:   return "Observance"
+        case .astronomical: return "Astronomy"
+        case .sport:        return "Sport"
         }
     }
 
     /// SF Symbol used when no emoji is available.
     var systemImage: String {
         switch self {
-        case .religious:  return "moon.fill"
-        case .cultural:   return "theatermasks.fill"
-        case .national:   return "flag.fill"
-        case .seasonal:   return "leaf.fill"
-        case .observance: return "sparkles"
+        case .religious:     return "moon.fill"
+        case .cultural:      return "theatermasks.fill"
+        case .national:      return "flag.fill"
+        case .seasonal:      return "leaf.fill"
+        case .observance:    return "sparkles"
+        case .astronomical:  return "moon.stars.fill"
+        case .sport:         return "trophy.fill"
         }
     }
 }

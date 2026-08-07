@@ -31,9 +31,23 @@ enum MetaSolarEngine {
     static let devEpochFixedDay: Int64 = FixedDay.fromGregorian(year: 2000, month: 1, day: 1)
     static let devEpochYear: Int = 2000
     
+    // User-friendly month names: each aligns ~1:1 with a Gregorian month
+    // Month 1 starts Jan 1, each month = 28 days, so month N ≈ Gregorian month N
+    // Names use a dual format: "Prima (Jan)" so users always know where they are
     static let monthNames = [
-        "Aurora", "Borealis", "Chroma", "Delphi", "Echo", "Flux", "Genesis",
-        "Helios", "Iris", "Juno", "Kairos", "Lumen", "Meridian"
+        "Prima (Jan)",      // 1  ≈ January
+        "Secunda (Feb)",    // 2  ≈ February (starts ~Jan 29)
+        "Tertia (Mar)",     // 3  ≈ February/March
+        "Quarta (Apr)",     // 4  ≈ March/April
+        "Quinta (May)",     // 5  ≈ April/May
+        "Sexta (Jun)",      // 6  ≈ May/Jun
+        "Septima (Jul)",    // 7  ≈ June/July
+        "Octava (Aug)",     // 8  ≈ July/August
+        "Nona (Sep)",       // 9  ≈ August/September
+        "Decima (Oct)",     // 10 ≈ September/October
+        "Undecima (Nov)",   // 11 ≈ October/November
+        "Duodecima (Dec)",  // 12 ≈ November/December
+        "Finale (Year-End)" // 13 ≈ December (last 28 days)
     ]
     
     static let profile = MetaSolarProfile(
