@@ -146,7 +146,7 @@ struct CycleLabView: View {
                     Text("Dalam 10 tahun, siklus ini sejajar \(count) kali.")
                         .font(.metaBody).foregroundStyle(Meta.ink)
 
-                    ForEach(0..<min(count, 5), id: \.self) { i in
+                    ForEach(Array(0..<min(count, 5)), id: \.self) { i in
                         let days = realign * (i + 1)
                         let years = Double(days) / 365.25
                         HStack {
