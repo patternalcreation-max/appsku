@@ -175,7 +175,7 @@ enum CalendarEngine {
         case .javanese:
             // For Javanese, we need to find the fixed day from wuku/weton
             // Simplified: use the wuku/weton as an offset from the anchor
-            fixedDay = JavaneseAdapter.anchorFixedDay + Int64(day)  // simplified
+            fixedDay = JavaneseAdapter.anchorFixedDayPublic + Int64(day)  // simplified
         }
         
         guard let fd = fixedDay else { return [] }

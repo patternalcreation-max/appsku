@@ -47,6 +47,7 @@ enum JavaneseAdapter {
     //   - Wuku = Sinta (index 0, day 0 of 210-day cycle)
     // Verified: Jan 1 1900 was Monday. Sinta wuku started on that day per Javanese calendar tradition.
     private static let anchorFixedDay: Int64 = FixedDay.fromGregorian(year: 1900, month: 1, day: 1)
+    static let anchorFixedDayPublic: Int64 = FixedDay.fromGregorian(year: 1900, month: 1, day: 1)
     private static let anchorPasaran: Int64 = 1  // Pahing
     
     // MARK: - Cycle Calculations

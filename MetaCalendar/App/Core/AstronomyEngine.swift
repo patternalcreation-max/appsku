@@ -124,7 +124,7 @@ enum AstronomyEngine {
         
         // Solar noon (approximate)
         let longitudeHours = longitude / 15.0
-        let solarNoon = 12.0 - longitudeHours + timeZone.secondsFromGMT() / 3600.0
+        let solarNoon = 12.0 - longitudeHours + Double(timeZone.secondsFromGMT()) / 3600.0
         
         let sunriseHour = solarNoon - hourAngle
         let sunsetHour = solarNoon + hourAngle
@@ -169,6 +169,6 @@ enum AstronomyEngine {
                 current = (deg, name)
             }
         }
-        return current.name
+        return current.1
     }
 }
