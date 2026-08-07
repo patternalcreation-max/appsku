@@ -1,32 +1,28 @@
 import SwiftUI
 
-// MARK: - Settings Screen
+// MARK: - Settings v2
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: DS.space20) {
                 timezoneSection
-                hijriSection
-                javaneseSection
+                calendarProfilesSection
                 displayOrderSection
                 astronomySection
                 aboutSection
             }
-            .padding(.horizontal)
-            .padding(.bottom, 32)
+            .padding(.horizontal, DS.space16)
+            .padding(.bottom, 40)
         }
-        .background(AppTheme.bgPrimary.ignoresSafeArea())
+        .background(DS.bgBase.ignoresSafeArea())
     }
     
-    // Timezone
     private var timezoneSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Timezone", systemImage: "clock.fill")
-                .font(.headline)
-                .foregroundStyle(AppTheme.textPrimary)
+        VStack(alignment: .leading, spacing: DS.space12) {
+            SectionTitle(title: "Timezone", icon: "clock.fill")
             
             Picker("Mode", selection: Binding(
                 get: { appState.timeZoneMode },
@@ -37,181 +33,116 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             
-            HStack {
-                Text("Identifier")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.textTertiary)
-                Spacer()
-                Text(appState.displayTimeZone.identifier)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
+            InfoRowV2(label: "Identifier", value: appState.displayTimeZone.identifier)
             
             let offset = appState.displayTimeZone.secondsFromGMT()
             let hours = abs(offset) / 3600
             let mins = (abs(offset) % 3600) / 60
             let sign = offset >= 0 ? "+" : "-"
+            InfoRowV2(label: "GMT Offset", value: String(format: "GMT%@%d:%02d", sign, hours, mins))
+        }
+        .padding(DS.space16)
+        .background(DS.bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+    }
+    
+    private var calendarProfilesSection: some View {
+        VStack(alignment: .leading, spacing: DS.space12) {
+            SectionTitle(title: "Calendar Profiles", icon: "calendar.badge.plus")
+            
+            // Hijri
+            VStack(alignment: .leading, spacing: DS.space8) {
+                Text("Hijri Calculation Method")
+                    .font(DS.fontBody).foregroundStyle(DS.textPrimary)
+                
+                ForEach(HijriProfile.allCases) { profile in
+                    profileRow(profile: profile, isSelected: appState.ruleset.hijriProfile == profile) {
+                        appState.ruleset.hijriProfile = profile
+                        appState.refreshToday()
+                    }
+                }
+            }
+            
+            Divider().frame(height: 1).overlay(DS.divider)
+            
+            // Javanese
+            VStack(alignment: .leading, spacing: DS.space8) {
+                Text("Javanese Tradition")
+                    .font(DS.fontBody).foregroundStyle(DS.textPrimary)
+                
+                ForEach(JavaneseProfile.allCases) { profile in
+                    profileRow(profile: profile, isSelected: appState.ruleset.javaneseProfile == profile) {
+                        appState.ruleset.javaneseProfile = profile
+                        appState.refreshToday()
+                    }
+                }
+            }
+        }
+        .padding(DS.space16)
+        .background(DS.bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+    }
+    
+    private func profileRow<T: Identifiable>(profile: T, isSelected: Bool, onTap: @escaping () -> Void) -> some View {
+        Button {
+            onTap()
+        } label: {
             HStack {
-                Text("GMT Offset")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.textTertiary)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? DS.primary : DS.textTertiary)
+                Text(String(describing: profile))
+                    .font(DS.fontBody)
+                    .foregroundStyle(DS.textPrimary)
                 Spacer()
-                Text(String(format: "GMT%@%d:%02d", sign, hours, mins))
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(AppTheme.textSecondary)
             }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
-        .padding(16)
-        .background(AppTheme.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .buttonStyle(.plain)
     }
     
-    // Hijri profile
-    private var hijriSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Hijri Profile", systemImage: "moon.fill")
-                .font(.headline)
-                .foregroundStyle(AppTheme.textPrimary)
-            
-            ForEach(HijriProfile.allCases) { profile in
-                Button {
-                    appState.ruleset.hijriProfile = profile
-                    appState.refreshToday()
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(profile.displayName)
-                                .font(.system(size: 15))
-                                .foregroundStyle(AppTheme.textPrimary)
-                            Text(profile.rawValue)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(AppTheme.textTertiary)
-                        }
-                        Spacer()
-                        if appState.ruleset.hijriProfile == profile {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                
-                if profile != HijriProfile.allCases.last {
-                    Divider()
-                }
-            }
-        }
-        .padding(16)
-        .background(AppTheme.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-    
-    // Javanese profile
-    private var javaneseSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Javanese Profile", systemImage: "circle.grid.cross.fill")
-                .font(.headline)
-                .foregroundStyle(AppTheme.textPrimary)
-            
-            ForEach(JavaneseProfile.allCases) { profile in
-                Button {
-                    appState.ruleset.javaneseProfile = profile
-                    appState.refreshToday()
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(profile.displayName)
-                                .font(.system(size: 15))
-                                .foregroundStyle(AppTheme.textPrimary)
-                            Text(profile.rawValue)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(AppTheme.textTertiary)
-                        }
-                        Spacer()
-                        if appState.ruleset.javaneseProfile == profile {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(AppTheme.accent)
-                        }
-                    }
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                
-                if profile != JavaneseProfile.allCases.last {
-                    Divider()
-                }
-            }
-        }
-        .padding(16)
-        .background(AppTheme.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-    
-    // Display order
     private var displayOrderSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Calendar Display Order", systemImage: "list.number")
-                .font(.headline)
-                .foregroundStyle(AppTheme.textPrimary)
+        VStack(alignment: .leading, spacing: DS.space12) {
+            SectionTitle(title: "Display Order", icon: "list.number")
             
             ForEach(Array(appState.ruleset.displayOrder.enumerated()), id: \.element) { idx, system in
                 HStack {
                     Text("\(idx + 1).")
-                        .font(.system(size: 15, design: .rounded).weight(.semibold))
-                        .foregroundStyle(AppTheme.textTertiary)
+                        .font(DS.fontBodyMono)
+                        .foregroundStyle(DS.textTertiary)
                         .frame(width: 24)
                     
                     Image(systemName: system.iconName)
-                        .foregroundStyle(AppTheme.systemColor(system))
+                        .foregroundStyle(DS.systemColor(system))
                     
                     Text(system.displayName)
-                        .font(.system(size: 15))
-                        .foregroundStyle(AppTheme.textPrimary)
+                        .font(DS.fontBody)
+                        .foregroundStyle(DS.textPrimary)
                     
                     Spacer()
                     
-                    // Move up/down buttons
-                    Button {
-                        moveOrder(system: system, direction: .up)
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 12))
-                            .foregroundStyle(idx == 0 ? AppTheme.textTertiary : AppTheme.textSecondary)
-                    }
-                    .disabled(idx == 0)
-                    .buttonStyle(.plain)
+                    Button { moveOrder(system: system, direction: .up) } label: {
+                        Image(systemName: "chevron.up").font(.system(size: 12))
+                            .foregroundStyle(idx == 0 ? DS.textTertiary : DS.textSecondary)
+                    }.disabled(idx == 0).buttonStyle(.plain)
                     
-                    Button {
-                        moveOrder(system: system, direction: .down)
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 12))
-                            .foregroundStyle(idx == appState.ruleset.displayOrder.count - 1 ? AppTheme.textTertiary : AppTheme.textSecondary)
-                    }
-                    .disabled(idx == appState.ruleset.displayOrder.count - 1)
-                    .buttonStyle(.plain)
+                    Button { moveOrder(system: system, direction: .down) } label: {
+                        Image(systemName: "chevron.down").font(.system(size: 12))
+                            .foregroundStyle(idx == appState.ruleset.displayOrder.count - 1 ? DS.textTertiary : DS.textSecondary)
+                    }.disabled(idx == appState.ruleset.displayOrder.count - 1).buttonStyle(.plain)
                 }
                 .padding(.vertical, 4)
-                
-                if idx < appState.ruleset.displayOrder.count - 1 {
-                    Divider()
-                }
+                if idx < appState.ruleset.displayOrder.count - 1 { Divider().overlay(DS.divider) }
             }
         }
-        .padding(16)
-        .background(AppTheme.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(DS.space16)
+        .background(DS.bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
     }
     
-    // Astronomy
     private var astronomySection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Astronomy Location", systemImage: "location.fill")
-                .font(.headline)
-                .foregroundStyle(AppTheme.textPrimary)
+        VStack(alignment: .leading, spacing: DS.space12) {
+            SectionTitle(title: "Astronomy Location", icon: "location.fill")
             
             Toggle(isOn: Binding(
                 get: { appState.locationEnabled },
@@ -219,58 +150,44 @@ struct SettingsView: View {
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Enable Sunrise/Sunset")
-                        .font(.system(size: 15))
-                        .foregroundStyle(AppTheme.textPrimary)
-                    Text("Uses default location for calculation demo")
-                        .font(.system(size: 12))
-                        .foregroundStyle(AppTheme.textTertiary)
+                        .font(DS.fontBody).foregroundStyle(DS.textPrimary)
+                    Text("Uses Jakarta coordinates for demo")
+                        .font(DS.fontCaption).foregroundStyle(DS.textTertiary)
                 }
             }
-            .tint(AppTheme.accent)
+            .tint(DS.primary)
         }
-        .padding(16)
-        .background(AppTheme.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(DS.space16)
+        .background(DS.bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
     }
     
-    // About
     private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("About", systemImage: "info.circle")
-                .font(.headline)
-                .foregroundStyle(AppTheme.textPrimary)
+        VStack(alignment: .leading, spacing: DS.space8) {
+            SectionTitle(title: "About", icon: "info.circle")
             
-            InfoRow(label: "Engine", value: "Meta Calendar Engine")
-            InfoRow(label: "MetaSolar Profile", value: MetaSolarEngine.profile.id)
-            InfoRow(label: "Astronomy Provider", value: AstronomyEngine.providerID)
-            InfoRow(label: "Version", value: AstronomyEngine.version)
-            InfoRow(label: "Accuracy", value: AstronomyEngine.expectedErrorEnvelope)
+            InfoRowV2(label: "Engine", value: "Meta Calendar v1.1.0")
+            InfoRowV2(label: "MetaSolar", value: MetaSolarEngine.profile.id)
+            InfoRowV2(label: "Astronomy", value: AstronomyEngine.providerID)
+            InfoRowV2(label: "Accuracy", value: AstronomyEngine.expectedErrorEnvelope)
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Privacy")
-                    .font(.caption)
-                    .foregroundStyle(AppTheme.textTertiary)
-                Text("All calculations are performed on-device. No account, no server, no tracking. Location is optional and used only for sunrise/sunset calculations.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(AppTheme.textSecondary)
-            }
-            .padding(.top, 4)
+            Text("All calculations performed on-device. No account, no server, no tracking.")
+                .font(DS.fontCaption)
+                .foregroundStyle(DS.textSecondary)
+                .padding(.top, 4)
         }
-        .padding(16)
-        .background(AppTheme.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(DS.space16)
+        .background(DS.bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
     }
     
-    // Helpers
     enum MoveDirection { case up, down }
     
     private func moveOrder(system: CalendarSystemID, direction: MoveDirection) {
         var order = appState.ruleset.displayOrder
         guard let idx = order.firstIndex(of: system) else { return }
-        
         let newIdx = direction == .up ? idx - 1 : idx + 1
         guard newIdx >= 0, newIdx < order.count else { return }
-        
         order.swapAt(idx, newIdx)
         appState.ruleset.displayOrder = order
         appState.refreshToday()

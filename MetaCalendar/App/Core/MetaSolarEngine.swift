@@ -44,6 +44,40 @@ enum MetaSolarEngine {
         status: .experimental
     )
     
+    // MARK: - Current Date Helpers
+    
+    /// Current MetaSolar year
+    static func currentYear() -> Int {
+        let cal = Calendar(identifier: .gregorian)
+        let todayFD = FixedDay.fromGregorian(
+            year: cal.component(.year, from: Date()),
+            month: cal.component(.month, from: Date()),
+            day: cal.component(.day, from: Date())
+        )
+        let coord = coordinate(forFixedDay: todayFD)
+        switch coord {
+        case .monthDay(let y, _, _): return y
+        case .yearBridge(let y): return y
+        case .leapBridge(let y): return y
+        }
+    }
+    
+    /// Current MetaSolar month (1-13)
+    static func currentMonth() -> Int {
+        let cal = Calendar(identifier: .gregorian)
+        let todayFD = FixedDay.fromGregorian(
+            year: cal.component(.year, from: Date()),
+            month: cal.component(.month, from: Date()),
+            day: cal.component(.day, from: Date())
+        )
+        let coord = coordinate(forFixedDay: todayFD)
+        switch coord {
+        case .monthDay(_, let m, _): return m
+        case .yearBridge: return 13  // bridge after month 13
+        case .leapBridge: return 13
+        }
+    }
+    
     // MARK: - Leap Year (97/400 arithmetic pattern — Gregorian-compatible)
     
     static func isLeapYear(_ year: Int) -> Bool {
