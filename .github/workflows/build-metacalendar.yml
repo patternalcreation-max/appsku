@@ -34,15 +34,27 @@ jobs:
         working-directory: MetaCalendar
         run: |
           set +e
-          xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -destination 'generic/platform=iOS'             -configuration Release             -derivedDataPath build             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
+          xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -configuration Release             -derivedDataPath build             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "========== SWIFT COMPILER ERRORS =========="
-            grep -iE "error:|warning:" build_output.log | grep -v "^$" | head -40
-            echo "========== LAST 20 LINES =========="
-            tail -20 build_output.log
-            echo "=========================================="
+            echo "========== ALL ERRORS =========="
+            grep -E "error:" build_output.log | head -30
+            echo "========== LAST 30 LINES =========="
+            tail -30 build_output.log
+            echo "================================="
+            
+            # Emit annotations
+            grep -E "error:" build_output.log | while IFS= read -r line; do
+              FILE_PART=$(echo "$line" | sed 's|^/Users/runner/work/appsku/appsku/||' | cut -d: -f1)
+              LINE_PART=$(echo "$line" | cut -d: -f2)
+              MSG_PART=$(echo "$line" | sed 's|.*error: ||' | head -c 180)
+              if echo "$LINE_PART" | grep -qE '^[0-9]+$'; then
+                echo "::error file=${FILE_PART},line=${LINE_PART}::${MSG_PART}"
+              else
+                echo "::error::${MSG_PART}"
+              fi
+            done
           fi
           
           exit $EXIT_CODE
@@ -64,6 +76,14 @@ jobs:
           name: MetaCalendar-ipa
           path: MetaCalendar/build/MetaCalendar.ipa
           retention-days: 90
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: MetaCalendar/build_output.log
+          retention-days: 7
 
       - name: Create Release on Tag
         if: startsWith(github.ref, 'refs/tags/') && success()
