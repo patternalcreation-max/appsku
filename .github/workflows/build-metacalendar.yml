@@ -20,9 +20,6 @@ jobs:
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.4.app 2>/dev/null || \
-          sudo xcode-select -s /Applications/Xcode_16.3.app 2>/dev/null || \
-          sudo xcode-select -s /Applications/Xcode_16.2.app 2>/dev/null || \
           sudo xcode-select -s $(ls -d /Applications/Xcode*.app | head -1)
           xcodebuild -version
 
@@ -37,30 +34,20 @@ jobs:
         working-directory: MetaCalendar
         run: |
           set +e
-          xcodebuild build \
-            -project MetaCalendar.xcodeproj \
-            -scheme MetaCalendar \
-            -sdk iphoneos \
-            -configuration Release \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
+          xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -configuration Release             -derivedDataPath build             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
-          # Emit Swift compile errors as GitHub annotations
-          grep -E "^/.*error:" build_output.log | while IFS= read -r line; do
-            # Extract file:line:col from path for annotation
+          # Print ALL errors to stdout
+          echo "=== BUILD ERRORS ==="
+          grep "error:" build_output.log || echo "(no error lines found)"
+          echo "=== END ==="
+          
+          # Also emit annotations
+          grep -E "error:" build_output.log | while IFS= read -r line; do
             file=$(echo "$line" | sed 's|^/Users/runner/work/appsku/appsku/||' | cut -d: -f1)
             lineno=$(echo "$line" | cut -d: -f2)
-            msg=$(echo "$line" | sed 's|^[^:]*:[0-9]*:[0-9]*: error: ||' | head -c 180)
+            msg=$(echo "$line" | sed 's|^[^:]*:[0-9]*:[0-9]*: error: ||;s|^[^:]*:[0-9]*: error: ||' | head -c 180)
             echo "::error file=${file},line=${lineno}::${msg}"
-          done || true
-          
-          # Also emit generic errors
-          grep -i "error:" build_output.log | grep -v "^/" | while IFS= read -r line; do
-            echo "::error::$(echo "$line" | head -c 200)"
           done || true
           
           exit $EXIT_CODE
@@ -70,7 +57,6 @@ jobs:
         run: |
           mkdir -p build/Payload
           APP_PATH=$(find build/Build/Products -name "*.app" -type d | head -1)
-          echo "Found app at: $APP_PATH"
           cp -r "$APP_PATH" build/Payload/
           cd build && zip -r MetaCalendar.ipa Payload
           ls -la MetaCalendar.ipa
@@ -91,10 +77,8 @@ jobs:
           retention-days: 7
 
       - name: Create Release on Tag
-        if: startsWith(github.ref, 'refs/tags/metacalendar-v')
-        run: |
-          gh release create ${{ github.ref_name }} MetaCalendar/build/MetaCalendar.ipa \
-            --title "MetaCalendar ${{ github.ref_name }}" \
-            --notes "Multi-calendar iOS app — MetaSolar-13, Gregorian, Chinese, Hijri, Javanese"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: startsWith(github.ref, 'refs/tags/') && success()
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MetaCalendar/build/MetaCalendar.ipa
+          generate_release_notes: true
