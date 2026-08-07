@@ -41,14 +41,12 @@ enum JavaneseAdapter {
     static let saptawaraNeptu = [5, 4, 3, 7, 8, 6, 9]
     
     // MARK: - Anchors
-    // Anchor: January 1, 1900 CE (Monday) = fixed day 693961
-    // On this day:
-    //   - Pasaran = Pahing (index 1)
-    //   - Wuku = Sinta (index 0, day 0 of 210-day cycle)
-    // Verified: Jan 1 1900 was Monday. Sinta wuku started on that day per Javanese calendar tradition.
-    private static let anchorFixedDay: Int64 = FixedDay.fromGregorian(year: 1900, month: 1, day: 1)
-    static let anchorFixedDayPublic: Int64 = FixedDay.fromGregorian(year: 1900, month: 1, day: 1)
-    private static let anchorPasaran: Int64 = 1  // Pahing
+    // Cultural anchor: 17 August 1945 (Indonesian Independence Day) = Jumat Legi
+    // This is the most culturally verified date in Indonesian/Javanese record.
+    // RD 710260. Pasaran Legi = index 0. Weekday Jumat/Friday = index 5.
+    private static let anchorFixedDay: Int64 = FixedDay.fromGregorian(year: 1945, month: 8, day: 17)
+    static let anchorFixedDayPublic: Int64 = FixedDay.fromGregorian(year: 1945, month: 8, day: 17)
+    private static let anchorPasaran: Int64 = 0  // Legi (17 Aug 1945 = Jumat Legi)
     
     // MARK: - Cycle Calculations
     
