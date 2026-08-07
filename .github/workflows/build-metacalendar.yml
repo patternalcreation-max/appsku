@@ -35,7 +35,6 @@ jobs:
         run: |
           set +e
           
-          # Find available simulator
           SIMULATOR=$(xcrun simctl list devices available -j | python3 -c "
           import json, sys
           data = json.load(sys.stdin)
@@ -49,7 +48,6 @@ jobs:
           
           if [ -z "$SIMULATOR" ]; then
             echo "No simulator found, skipping tests"
-            echo "NO_SIMULATOR" > test_result.txt
             exit 0
           fi
           
@@ -63,11 +61,10 @@ jobs:
             2>&1 | tee test_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
-          # Extract test summary
           echo "=== TEST SUMMARY ==="
           grep -E "Test Suite|Test Case|passed|failed|Executed" test_output.log | tail -30
           
-          # Push test output to build-logs branch for visibility
+          # Push test output to test-logs branch for visibility
           cd $GITHUB_WORKSPACE
           git stash || true
           git checkout -B test-logs || true
@@ -92,13 +89,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-output
-          path: test_output.log
+          path: MetaCalendar/test_output.log
           retention-days: 30
 
   build:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Clean workspace and DerivedData
+        run: |
+          rm -rf MetaCalendar/build
+          rm -rf ~/Library/Developer/Xcode/DerivedData/MetaCalendar-*
+          echo "Workspace cleaned"
 
       - name: Select Xcode
         run: |
@@ -112,7 +115,46 @@ jobs:
         working-directory: MetaCalendar
         run: xcodegen generate 2>&1
 
-      - name: Build .app (unsigned)
+      - name: Read version from project.yml
+        id: version
+        working-directory: MetaCalendar
+        run: |
+          MARKETING=$(grep 'MARKETING_VERSION:' project.yml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          BUILD=$(grep 'CURRENT_PROJECT_VERSION:' project.yml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "marketing=$MARKETING" >> $GITHUB_OUTPUT
+          echo "build=$BUILD" >> $GITHUB_OUTPUT
+          echo "Expected version: $MARKETING ($BUILD)"
+
+      - name: Generate BuildManifest.json
+        working-directory: MetaCalendar
+        run: |
+          GIT_COMMIT=$(git rev-parse HEAD)
+          GIT_SHORT=$(git rev-parse --short HEAD)
+          BUILD_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          MARKETING="${{ steps.version.outputs.marketing }}"
+          BUILD_NUM="${{ steps.version.outputs.build }}"
+          
+          cat > App/Resources/BuildManifest.json << EOF
+          {
+            "gitCommit": "$GIT_COMMIT",
+            "gitShort": "$GIT_SHORT",
+            "marketingVersion": "$MARKETING",
+            "buildNumber": "$BUILD_NUM",
+            "buildConfiguration": "Release",
+            "buildTimestampUTC": "$BUILD_TS",
+            "fixedDayMethodVersion": "2.0",
+            "astronomyProviderID": "astronomy.embedded-standard-v1",
+            "astronomyProviderVersion": "1.0.0",
+            "eclipseCatalogSource": "NASA GSFC 2020-2035",
+            "meteorShowerSource": "IMO calendar",
+            "xcodeVersion": "$(xcodebuild -version | head -1)"
+          }
+          EOF
+          
+          echo "BuildManifest generated:"
+          cat App/Resources/BuildManifest.json
+
+      - name: Build .app (unsigned, clean)
         working-directory: MetaCalendar
         run: |
           set +e
@@ -152,18 +194,80 @@ jobs:
           
           exit $EXIT_CODE
 
-      - name: Verify Assets.car exists
+      - name: Verify app bundle
         if: success()
         working-directory: MetaCalendar
         run: |
           APP_PATH=$(find build/Build/Products -name "*.app" -type d | head -1)
           echo "APP: $APP_PATH"
+          
+          echo "=== Bundle contents ==="
           ls -la "$APP_PATH/"
+          
+          # Assert Assets.car exists
           if [ ! -f "$APP_PATH/Assets.car" ]; then
-            echo "WARNING: Assets.car not found in .app bundle"
-          else
-            echo "Assets.car found: $(du -h "$APP_PATH/Assets.car")"
+            echo "FATAL: Assets.car not found!"
+            exit 1
           fi
+          echo "✓ Assets.car present"
+          
+          # Assert BuildManifest.json exists
+          if [ ! -f "$APP_PATH/BuildManifest.json" ]; then
+            echo "FATAL: BuildManifest.json not found!"
+            exit 1
+          fi
+          echo "✓ BuildManifest.json present"
+          
+          # Assert Info.plist version
+          INFO_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Info.plist" 2>/dev/null)
+          INFO_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Info.plist" 2>/dev/null)
+          EXPECTED_VERSION="${{ steps.version.outputs.marketing }}"
+          EXPECTED_BUILD="${{ steps.version.outputs.build }}"
+          
+          echo "Info.plist version: $INFO_VERSION ($INFO_BUILD)"
+          echo "Expected version: $EXPECTED_VERSION ($EXPECTED_BUILD)"
+          
+          if [ "$INFO_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "FATAL: Version mismatch! Info.plist=$INFO_VERSION, expected=$EXPECTED_VERSION"
+            exit 1
+          fi
+          if [ "$INFO_BUILD" != "$EXPECTED_BUILD" ]; then
+            echo "FATAL: Build mismatch! Info.plist=$INFO_BUILD, expected=$EXPECTED_BUILD"
+            exit 1
+          fi
+          echo "✓ Version matches: $INFO_VERSION ($INFO_BUILD)"
+          
+          # Assert no coverage sections
+          COV_SECTIONS=$(otool -l "$APP_PATH/MetaCalendar" 2>/dev/null | grep -c "__llvm_cov\|__LLVM_COV" || echo "0")
+          if [ "$COV_SECTIONS" -gt 0 ]; then
+            echo "FATAL: Coverage sections found in binary!"
+            otool -l "$APP_PATH/MetaCalendar" 2>/dev/null | grep "__llvm_cov\|__LLVM_COV"
+            exit 1
+          fi
+          echo "✓ No coverage sections"
+          
+          # Assert M2 markers exist in binary
+          M2_MARKERS=$(strings "$APP_PATH/MetaCalendar" | grep -c "RiseSetResult\|AstronomyProvenance\|midnightSun\|polarNight" || echo "0")
+          if [ "$M2_MARKERS" -lt 1 ]; then
+            echo "FATAL: M2 markers (RiseSetResult, AstronomyProvenance, midnightSun, polarNight) not found in binary!"
+            exit 1
+          fi
+          echo "✓ M2 markers present ($M2_MARKERS matches)"
+          
+          # Record executable SHA
+          EXEC_SHA=$(shasum -a 256 "$APP_PATH/MetaCalendar" | awk '{print $1}')
+          echo "Executable SHA-256: $EXEC_SHA"
+          
+          # Record BuildManifest git commit
+          BUNDLE_COMMIT=$(python3 -c "import json; print(json.load(open('$APP_PATH/BuildManifest.json'))['gitShort'])" 2>/dev/null)
+          HEAD_COMMIT=$(git rev-parse --short HEAD)
+          echo "Bundle commit: $BUNDLE_COMMIT"
+          echo "HEAD commit: $HEAD_COMMIT"
+          if [ "$BUNDLE_COMMIT" != "$HEAD_COMMIT" ]; then
+            echo "FATAL: Bundle commit ($BUNDLE_COMMIT) != HEAD ($HEAD_COMMIT) — stale build!"
+            exit 1
+          fi
+          echo "✓ Build from correct commit"
 
       - name: Package IPA
         if: success()
@@ -174,6 +278,10 @@ jobs:
           cp -r "$APP_PATH" build/Payload/
           cd build && zip -r MetaCalendar.ipa Payload
           ls -la MetaCalendar.ipa
+          
+          # Record IPA SHA
+          IPA_SHA=$(shasum -a 256 MetaCalendar.ipa | awk '{print $1}')
+          echo "IPA SHA-256: $IPA_SHA"
 
       - name: Upload IPA Artifact
         if: success()

@@ -13,8 +13,8 @@ targets:
       base:
         PRODUCT_NAME: MetaCalendar
         PRODUCT_BUNDLE_IDENTIFIER: com.metacalendar.app
-        MARKETING_VERSION: "2.1.2"
-        CURRENT_PROJECT_VERSION: "3"
+        MARKETING_VERSION: "2.2.0"
+        CURRENT_PROJECT_VERSION: "5"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGNING_REQUIRED: NO
