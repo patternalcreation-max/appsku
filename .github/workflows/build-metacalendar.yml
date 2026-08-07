@@ -133,26 +133,19 @@ jobs:
           BUILD_TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           MARKETING="${{ steps.version.outputs.marketing }}"
           BUILD_NUM="${{ steps.version.outputs.build }}"
+          XCODE_VER=$(xcodebuild -version | head -1)
           
-          cat > App/Resources/BuildManifest.json << EOF
-          {
-            "gitCommit": "$GIT_COMMIT",
-            "gitShort": "$GIT_SHORT",
-            "marketingVersion": "$MARKETING",
-            "buildNumber": "$BUILD_NUM",
-            "buildConfiguration": "Release",
-            "buildTimestampUTC": "$BUILD_TS",
-            "fixedDayMethodVersion": "2.0",
-            "astronomyProviderID": "astronomy.embedded-standard-v1",
-            "astronomyProviderVersion": "1.0.0",
-            "eclipseCatalogSource": "NASA GSFC 2020-2035",
-            "meteorShowerSource": "IMO calendar",
-            "xcodeVersion": "$(xcodebuild -version | head -1)"
-          }
-          EOF
+          mkdir -p App/Resources
+          cat > App/Resources/BuildManifest.json <<MANIFEST_EOF
+          {"gitCommit":"$GIT_COMMIT","gitShort":"$GIT_SHORT","marketingVersion":"$MARKETING","buildNumber":"$BUILD_NUM","buildConfiguration":"Release","buildTimestampUTC":"$BUILD_TS","fixedDayMethodVersion":"2.0","astronomyProviderID":"astronomy.embedded-standard-v1","astronomyProviderVersion":"1.0.0","eclipseCatalogSource":"NASA GSFC 2020-2035","meteorShowerSource":"IMO calendar","xcodeVersion":"$XCODE_VER"}
+          MANIFEST_EOF
           
           echo "BuildManifest generated:"
           cat App/Resources/BuildManifest.json
+
+      - name: Regenerate Xcode Project (with BuildManifest)
+        working-directory: MetaCalendar
+        run: xcodegen generate 2>&1
 
       - name: Build .app (unsigned, clean)
         working-directory: MetaCalendar
