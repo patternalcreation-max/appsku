@@ -65,7 +65,7 @@ enum CalendarSystemID: String, Codable, Sendable, CaseIterable, Identifiable {
         case .metaSolar: return "sun.max.fill"
         case .gregorian: return "calendar"
         case .chinese: return "moon.stars.fill"
-        case .hijri: return "moon crescent filling"
+        case .hijri: return "moon.fill"
         case .javanese: return "circle.grid.cross.fill"
         }
     }

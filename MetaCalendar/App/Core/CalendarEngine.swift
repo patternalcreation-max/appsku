@@ -162,9 +162,6 @@ enum CalendarEngine {
             // Use Foundation to resolve Chinese date
             var cal = Calendar(identifier: .chinese)
             cal.timeZone = timeZone
-            let comp = DateComponents()
-            _ = comp
-            // Chinese resolution requires era; use Foundation
             let dateComp = DateComponents(year: year, month: month, day: day)
             if let date = cal.date(from: dateComp) {
                 let gCal = Calendar(identifier: .gregorian)

@@ -48,11 +48,21 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
-          grep -i "error:" build_output.log || true
-          grep -i "error:" build_output.log | while IFS= read -r line; do
-            safe=$(echo "$line" | sed 's/:/ /3g' | head -c 200)
-            echo "::error::$safe"
+          
+          # Emit Swift compile errors as GitHub annotations
+          grep -E "^/.*error:" build_output.log | while IFS= read -r line; do
+            # Extract file:line:col from path for annotation
+            file=$(echo "$line" | sed 's|^/Users/runner/work/appsku/appsku/||' | cut -d: -f1)
+            lineno=$(echo "$line" | cut -d: -f2)
+            msg=$(echo "$line" | sed 's|^[^:]*:[0-9]*:[0-9]*: error: ||' | head -c 180)
+            echo "::error file=${file},line=${lineno}::${msg}"
           done || true
+          
+          # Also emit generic errors
+          grep -i "error:" build_output.log | grep -v "^/" | while IFS= read -r line; do
+            echo "::error::$(echo "$line" | head -c 200)"
+          done || true
+          
           exit $EXIT_CODE
 
       - name: Package IPA
