@@ -338,6 +338,19 @@ struct MetaProjectionCard: View {
                     if expanded {
                         Divider().overlay(Meta.hairline).padding(.vertical, Meta.s)
 
+                        // Epistemic class badge
+                        HStack(spacing: Meta.s) {
+                            Text(projection.status.epistemicClass.rawValue.uppercased())
+                                .font(.metaEyebrow)
+                                .foregroundStyle(accentColor)
+                                .kerning(1.2)
+                            Text("·")
+                                .foregroundStyle(Meta.inkMuted)
+                            Text(Meta.statusLabel(projection.status))
+                                .font(.metaCaption)
+                                .foregroundStyle(Meta.inkMuted)
+                        }
+
                         MetaInfoRow(label: "Metode", value: projection.rulesetID)
                         MetaInfoRow(label: "Batas", value: "Tengah malam · \(projection.calendarSystemID.rawValue)")
                         MetaInfoRow(label: "Provenans", value: projection.provenance)
@@ -515,6 +528,7 @@ struct MetaProvenanceSheet: View {
                                 .font(.metaTitle)
                                 .foregroundStyle(Meta.ink)
                             MetaInfoRow(label: "Ruleset", value: projection.rulesetID)
+                            MetaInfoRow(label: "Kelas Epistemik", value: projection.status.epistemicClass.rawValue)
                             MetaInfoRow(label: "Status", value: Meta.statusLabel(projection.status))
                             MetaInfoRow(label: "Provenans", value: projection.provenance)
                         }
