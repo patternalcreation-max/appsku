@@ -14,7 +14,7 @@ struct TimelineView: View {
         case cultural = "🎭 Budaya"
         case religious = "🕌 Agama"
         case sport = "⚽ Olahraga"
-        case national = "_flag Nasional"
+        case national = "🇮🇩 Nasional"
         case global = "🌍 Global"
         var id: String { rawValue }
     }
