@@ -22,15 +22,18 @@ struct ContentView: View {
             TodayView()
                 .tabItem { Label("Hari Ini", systemImage: "sun.max.fill") }
                 .tag(0)
+            WorldEventsView()
+                .tabItem { Label("Dunia", systemImage: "globe.americas.fill") }
+                .tag(1)
             CalendarGridView()
                 .tabItem { Label("Kalender", systemImage: "calendar") }
-                .tag(1)
+                .tag(2)
             ExploreView()
                 .tabItem { Label("Konversi", systemImage: "arrow.triangle.swap") }
-                .tag(2)
+                .tag(3)
             SettingsView()
                 .tabItem { Label("Pengaturan", systemImage: "gearshape.fill") }
-                .tag(3)
+                .tag(4)
         }
         .tint(Meta.jade)
     }
