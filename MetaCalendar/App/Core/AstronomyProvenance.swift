@@ -18,6 +18,20 @@ struct AstronomicalResult<Value> {
     var epistemicClass: EpistemicClass { provenance.epistemicClass }
 }
 
+/// Typed origin for astronomy data — distinguishes HOW a value was produced.
+/// More specific than EpistemicClass: a NASA catalog is "observed" epistemically
+/// but is an "authoritativeCatalog" in origin, not an "observedFeed".
+enum AstronomyDataOrigin: String, Sendable, Equatable {
+    /// Computed from first-principles formula (e.g., solar longitude from Meeus)
+    case algorithmic
+    /// Curated from an authoritative source (e.g., NASA GSFC eclipse catalog)
+    case authoritativeCatalog
+    /// Approximate fixed-date table (e.g., meteor shower peaks)
+    case approximateTable
+    /// Live or near-real-time observational feed (e.g., NOAA Kp index)
+    case observedFeed
+}
+
 /// Provenance specific to astronomy calculations.
 /// Reuses the M1 EpistemicClass + Availability system.
 struct AstronomyProvenance {
@@ -25,6 +39,7 @@ struct AstronomyProvenance {
     let methodVersion: String
     let source: String
     let epistemicClass: EpistemicClass
+    let dataOrigin: AstronomyDataOrigin
     let availability: Availability
     let accuracyDescription: String
     /// Supported date range as (startYear, endYear). nil = global.
@@ -44,6 +59,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "Meeus, Astronomical Algorithms, 2nd ed., Ch. 25 (simplified)",
         epistemicClass: .calculated,
+        dataOrigin: .algorithmic,
         availability: .available,
         accuracyDescription: "±0.01° for 1950–2050; degrades outside ±100yr from J2000",
         supportedRange: (1900, 2100),
@@ -55,6 +71,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "Mean synodic month arithmetic (linear interpolation from JD 2451550.1)",
         epistemicClass: .calculated,
+        dataOrigin: .algorithmic,
         availability: .approximate,
         accuracyDescription: "±0.3 days (real synodic month varies ±7h; no perturbation terms)",
         supportedRange: nil,
@@ -66,6 +83,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "Phase name from fixed fractional thresholds; illumination from cosine approximation",
         epistemicClass: .calculated,
+        dataOrigin: .algorithmic,
         availability: .approximate,
         accuracyDescription: "~5% illumination error; phase boundaries fixed, not adaptive",
         supportedRange: nil,
@@ -77,6 +95,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "NOAA Solar Calculations (simplified SPA, Fourier declination series)",
         epistemicClass: .calculated,
+        dataOrigin: .algorithmic,
         availability: .approximate,
         accuracyDescription: "Up to ~1 hour error (missing equation of time, refraction, solar disk)",
         supportedRange: nil,
@@ -88,6 +107,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "Standard formula: JD = unixTime/86400 + 2440587.5",
         epistemicClass: .calculated,
+        dataOrigin: .algorithmic,
         availability: .available,
         accuracyDescription: "Exact for all Unix timestamps",
         supportedRange: nil,
@@ -99,6 +119,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "24 solar terms mapped to solar longitude at 15° intervals",
         epistemicClass: .calculated,
+        dataOrigin: .algorithmic,
         availability: .available,
         accuracyDescription: "Same as solar longitude (±0.01° → term boundary within ~1 hour)",
         supportedRange: (1900, 2100),
@@ -110,6 +131,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "IMO (International Meteor Organization) annual meteor shower calendar",
         epistemicClass: .traditional,
+        dataOrigin: .approximateTable,
         availability: .approximate,
         accuracyDescription: "Peak dates ±1-3 days year-to-year; fixed month/day approximation",
         supportedRange: nil,
@@ -121,6 +143,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "Approximate fixed Gregorian dates (Mar 20, Jun 21, Sep 22, Dec 21)",
         epistemicClass: .calculated,
+        dataOrigin: .approximateTable,
         availability: .approximate,
         accuracyDescription: "±1 day from true astronomical event; should derive from solar longitude crossing",
         supportedRange: nil,
@@ -132,6 +155,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "NASA GSFC Eclipse Web Site (eclipse.gsfc.nasa.gov), Five Millennium Canon",
         epistemicClass: .observed,
+        dataOrigin: .authoritativeCatalog,
         availability: .available,
         accuracyDescription: "Exact dates and types from authoritative NASA catalog",
         supportedRange: (2020, 2035),
@@ -143,6 +167,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "Compiled from NASA, ESA, and historical astronomy records",
         epistemicClass: .symbolic,
+        dataOrigin: .approximateTable,
         availability: .available,
         accuracyDescription: "Editorial selection; dates exact for the original event",
         supportedRange: nil,
@@ -154,6 +179,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "JPL Small-Body Database (Halley perihelion predictions)",
         epistemicClass: .observed,
+        dataOrigin: .authoritativeCatalog,
         availability: .available,
         accuracyDescription: "Exact perihelion predictions from JPL",
         supportedRange: (2061, 2134),
@@ -165,6 +191,7 @@ enum AstronomyProvenanceCatalog {
         methodVersion: "1.0",
         source: "Compiled from astronomical almanacs (perigee + full moon coincidence)",
         epistemicClass: .observed,
+        dataOrigin: .authoritativeCatalog,
         availability: .available,
         accuracyDescription: "Predicted dates ±hours; actual perigee varies",
         supportedRange: (2025, 2028),
