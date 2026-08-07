@@ -78,25 +78,26 @@ final class CalendarCharacterizationTests: XCTestCase {
         }
     }
 
-    func testMetaSolar_coordinate_Jan29_2000_is_month1_day29() {
+    func testMetaSolar_coordinate_Jan29_2000_is_month2_day1() {
         let fd = FixedDay.fromGregorian(year: 2000, month: 1, day: 29)
         let coord = MetaSolarEngine.coordinate(forFixedDay: fd)
         if case .monthDay(_, let month, let day) = coord {
-            XCTAssertEqual(month, 1, "Day 29 of year should still be month 1")
-            XCTAssertEqual(day, 29)
+            // Day 29 of year: dayOfYear=28 (0-based) → month 2, day 1
+            XCTAssertEqual(month, 2, "Day 29 → month 2, day 1")
+            XCTAssertEqual(day, 1)
         } else {
             XCTFail("Expected monthDay but got \(coord)")
         }
     }
 
-    func testMetaSolar_coordinate_Feb25_2000_is_month1_day56() {
+    func testMetaSolar_coordinate_Feb25_2000_is_month2_day28() {
         // Jan has 31 days, so Feb 25 = day 56 → month 2, day 28
         let fd = FixedDay.fromGregorian(year: 2000, month: 2, day: 25)
         let coord = MetaSolarEngine.coordinate(forFixedDay: fd)
         if case .monthDay(_, let month, let day) = coord {
-            // day 56: month = (56-1)/28 + 1 = 3, day = (56-1)%28 + 1 = 1
-            XCTAssertEqual(month, 3, "Day 56 → month 3, day 1 (0-based: 55/28=1, 55%28=27 → month 2, day 28)")
-            XCTAssertEqual(day, 1)
+            // dayOfYear=55 (0-based) → month 55/28+1=2, day 55%28+1=28
+            XCTAssertEqual(month, 2, "Day 56 → month 2, day 28")
+            XCTAssertEqual(day, 28)
         } else {
             XCTFail("Expected monthDay but got \(coord)")
         }
