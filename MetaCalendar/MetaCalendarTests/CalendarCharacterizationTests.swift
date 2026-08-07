@@ -145,7 +145,8 @@ final class CalendarCharacterizationTests: XCTestCase {
         // Jumat = saptawara 5, Legi = pasaran 0
         XCTAssertEqual(saptawara, 5, "17 Aug 1945 should be Jumat (saptawara 5)")
         XCTAssertEqual(pasaran, 0, "17 Aug 1945 should be Legi (pasaran 0)")
-        XCTAssertEqual(weton, 5, "Weton day should be 5 for Jumat Legi (5*1+0)")
+        // wetonDay uses floorMod(offset, 35) relative to anchor → 0 for the anchor itself
+        XCTAssertEqual(weton, 0, "Weton cycle day for the anchor itself is 0")
     }
 
     func testJavanese_weton_cycle_35_days() {
