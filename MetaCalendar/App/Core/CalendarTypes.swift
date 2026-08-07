@@ -168,48 +168,91 @@ enum TimeZoneMode: Codable, Sendable, Equatable, Hashable {
 
 /// Fixed day number (ordinal day count) — the backbone of all calendar conversions.
 /// Uses RD (Rata Die / Fixed Day) system: Jan 1, 1 CE (Gregorian proleptic) = RD 1.
-/// Algorithm from "Calendrical Calculations" by Reingold & Dershowitz.
+/// Algorithm from "Calendrical Calculations" by Reingold & Dershowitz (CC4).
 enum FixedDay {
     
-    /// Convert Gregorian date to fixed day number
+    /// Convert Gregorian date to fixed day number (Rata Die).
+    /// CC4 formula: fixed-from-gregorian.
     static func fromGregorian(year: Int, month: Int, day: Int) -> Int64 {
         let y = Int64(year)
         let m = Int64(month)
         let d = Int64(day)
         
-        // From Calendrical Calculations (Reingold-Dershowitz)
-        let prevY = y - (m <= 2 ? 1 : 0)
-        let leapDays = prevY / 4 - prevY / 100 + prevY / 400
+        // CC4: standard Rata Die
+        // For months Jan/Feb, treat as months 13/14 of previous year
+        let adjustedY = m <= 2 ? y - 1 : y
+        let adjustedM = m <= 2 ? m + 12 : m
         
-        return 365 * (y - 1) + leapDays + Int64(floor(Double(367 * (m - 2 + 12 * ((14 - m) / 12))) / 12.0)) + d - 1 - 1721425 + 1
-    }
-    
-    /// Convert fixed day number to Gregorian date
-    static func toGregorian(_ fixedDay: Int64) -> (year: Int, month: Int, day: Int) {
-        // From Calendrical Calculations
-        let d0 = fixedDay + 1721425
-        let d1 = d0 + 306  // shift to March-based year
-        let y1 = Int64(floor(Double((10000 * d1 + 14780)) / 3652425.0))
-        var day2 = d1 - Int64(365 * y1) - Int64(floor(Double(y1) / 4.0)) + Int64(floor(Double(y1) / 100.0)) - Int64(floor(Double(y1) / 400.0))
+        let leapDays = adjustedY / 4 - adjustedY / 100 + adjustedY / 400
+        let monthTerm = (367 * adjustedM - 362) / 12
         
-        var year = y1
-        if day2 < 0 {
-            year -= 1
-            day2 = d1 - Int64(365 * year) - Int64(floor(Double(year) / 4.0)) + Int64(floor(Double(year) / 100.0)) - Int64(floor(Double(year) / 400.0))
+        // Correction for Jan/Feb in leap years
+        let correction: Int64
+        if adjustedM > 2 {
+            correction = 0
+        } else if (adjustedY % 4 == 0 && adjustedY % 100 != 0) || (adjustedY % 400 == 0) {
+            correction = -1
+        } else {
+            correction = -2
         }
         
-        let mp = Int64(floor(Double(100 * day2 + 52) / 3060.0))
-        let month = mp < 10 ? mp + 3 : mp - 9
-        let day = day2 - Int64(floor(Double(306 * (mp + 1)) / 10.0)) + 1
-        let finalYear = month <= 2 ? year + 1 : year
+        return 365 * adjustedY + leapDays + monthTerm + correction + d
+    }
+    
+    /// Convert fixed day number to Gregorian date (CC4 algorithm).
+    static func toGregorian(_ fixedDay: Int64) -> (year: Int, month: Int, day: Int) {
+        // CC4 fixed-to-gregorian
+        let d0 = fixedDay - 1  // zero-based
         
-        return (Int(finalYear), Int(month), Int(day))
+        let n400 = d0 / 146097
+        let d1 = d0 % 146097
+        let n100 = d1 / 36524
+        let d2 = d1 % 36524
+        let n4 = d2 / 1461
+        let d3 = d2 % 1461
+        var n1 = d3 / 365
+        
+        // Adjust for the overcount in 400-year cycle
+        if n100 == 4 || n1 == 4 {
+            n1 = 3
+        }
+        
+        let year = 400 * n400 + 100 * n100 + 4 * n4 + n1 + 1
+        
+        // Day of year (0-based)
+        let dayOfYear = d0 - (365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400)
+        
+        // Month estimation
+        let priorDays: [Int64] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+        let leapDays: [Int64] = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+        let isLeap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+        let days = isLeap ? leapDays : priorDays
+        
+        var month = 12
+        for m in stride(from: 11, through: 0, by: -1) {
+            if dayOfYear >= days[m] {
+                month = m + 1
+                break
+            }
+        }
+        
+        let day = dayOfYear - Int64(days[month - 1]) + 1
+        
+        return (Int(year), Int(month), Int(day))
     }
     
     /// Get the weekday (0=Sunday, 1=Monday, ..., 6=Saturday) for a fixed day
-    /// RD 1 (Jan 1, 1 CE) was a Monday. So weekday = (fixedDay + 1) % 7 gives 0=Sunday
+    /// RD 1 (Jan 1, 1 CE) was a Monday, so RD % 7 gives: 1=Mon, 2=Tue, ..., 0=Sun
     static func weekday(_ fixedDay: Int64) -> Int {
-        return Int(((fixedDay % 7) + 7) % 7)
+        let wd = fixedDay % 7
+        // Map: 0=Sunday, 1=Monday, ..., 6=Saturday
+        // RD 7 = Saturday → 7%7=0, but should be 6
+        // RD 1 = Monday → 1%7=1 ✓
+        // So we need: if wd==0 return 6 (Saturday), else return wd-1 for 0-indexed?
+        // Actually: RD 1=Monday(1), RD 2=Tuesday(2), ... RD 6=Saturday(6), RD 7=Sunday(0)
+        // RD%7: 1→1(Mon), 2→2(Tue), 3→3(Wed), 4→4(Thu), 5→5(Fri), 6→6(Sat), 7→0(Sun)
+        // This gives 0=Sun, 1=Mon, ..., 6=Sat ✓
+        return Int(((wd % 7) + 7) % 7)
     }
     
     /// Julian Day Number from fixed day
