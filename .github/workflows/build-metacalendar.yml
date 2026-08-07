@@ -20,8 +20,8 @@ jobs:
 
       - name: Select Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode_16.2.app 2>/dev/null || \
-          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | head -1)
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | tail -1)
           xcodebuild -version
 
       - name: Install XcodeGen
@@ -35,28 +35,18 @@ jobs:
         working-directory: MetaCalendar
         run: |
           set +e
-          xcodebuild build \
-            -project MetaCalendar.xcodeproj \
-            -scheme MetaCalendar \
-            -sdk iphoneos \
-            -configuration Release \
-            -derivedDataPath build \
-            ASSETCATALOG_COMPILER_SKIP_VALIDATION=YES \
-            ENABLE_BITCODE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
+          
+          # Try building with different approaches
+          xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -configuration Release             -derivedDataPath build             -destination 'generic/platform=iOS'             ARCHS=arm64             ONLY_ACTIVE_ARCH=NO             ASSETCATALOG_COMPILER_SKIP_VALIDATION=YES             ENABLE_BITCODE=NO             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
           if [ $EXIT_CODE -ne 0 ]; then
-            # Push build log to build-logs branch for easy access
             cd $GITHUB_WORKSPACE
             git stash || true
             git checkout -B build-logs || true
             cp MetaCalendar/build_output.log .
             git add build_output.log
-            git -c user.name="github-actions" -c user.email="actions@github.com" commit -m "build log for run ${GITHUB_SHA:0:7}" || true
+            git -c user.name="github-actions" -c user.email="actions@github.com" commit -m "build log" || true
             git push --force origin build-logs 2>/dev/null || true
             git checkout main || true
           fi
