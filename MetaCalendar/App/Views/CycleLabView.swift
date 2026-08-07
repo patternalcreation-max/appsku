@@ -91,7 +91,7 @@ struct CycleLabView: View {
                 let realign = AlignmentFinder.cycleRealignment(days: selected)
 
                 MetaInfoRow(label: "Siklus dipilih", value: selected.map { "\($0)" }.joined(separator: ", "))
-                MetaInfoRow(label: "FPB", value: "\(AlignmentFinder.gcd(selected.reduce(0) { AlignmentFinder.gcd($0, $1) }))")
+                MetaInfoRow(label: "FPB", value: "\(gcdList(selected))")
                 MetaInfoRow(label: "KPK", value: "\(realign)")
                 MetaInfoRow(label: "Realignment", value: AlignmentFinder.formatDuration(realign))
 
@@ -161,5 +161,10 @@ struct CycleLabView: View {
                 }
             }
         }
+    }
+
+    private func gcdList(_ values: [Int]) -> Int {
+        guard !values.isEmpty else { return 0 }
+        return values.dropFirst().reduce(values.first ?? 1) { AlignmentFinder.gcd($0, $1) }
     }
 }
