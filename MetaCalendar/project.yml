@@ -8,7 +8,7 @@ targets:
     type: application
     platform: iOS
     sources:
-      - MetaCalendar/App
+      - App
     settings:
       base:
         PRODUCT_NAME: MetaCalendar
