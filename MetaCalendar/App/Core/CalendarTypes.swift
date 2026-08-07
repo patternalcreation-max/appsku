@@ -172,63 +172,59 @@ enum TimeZoneMode: Codable, Sendable, Equatable, Hashable {
 enum FixedDay {
     
     /// Convert Gregorian date to fixed day number (Rata Die).
-    /// CC4 formula: fixed-from-gregorian.
+    /// RD 1 = Jan 1, 1 CE (Gregorian proleptic).
+    /// Uses cumulative-days-before-month lookup + standard leap-day formula.
     static func fromGregorian(year: Int, month: Int, day: Int) -> Int64 {
         let y = Int64(year)
         let m = Int64(month)
         let d = Int64(day)
         
-        // CC4: standard Rata Die
-        // For months Jan/Feb, treat as months 13/14 of previous year
-        let adjustedY = m <= 2 ? y - 1 : y
-        let adjustedM = m <= 2 ? m + 12 : m
+        // Cumulative days before start of each month (non-leap year)
+        // Jan=0, Feb=31, Mar=59, ..., Dec=334
+        let priorDays: [Int64] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
         
-        let leapDays = adjustedY / 4 - adjustedY / 100 + adjustedY / 400
-        let monthTerm = (367 * adjustedM - 362) / 12
+        // Leap year adjustment: add 1 if past Feb in a leap year
+        let isLeap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)
+        let leapAdjust: Int64 = (m > 2 && isLeap) ? 1 : 0
         
-        // Correction for Jan/Feb in leap years
-        let correction: Int64
-        if adjustedM > 2 {
-            correction = 0
-        } else if (adjustedY % 4 == 0 && adjustedY % 100 != 0) || (adjustedY % 400 == 0) {
-            correction = -1
-        } else {
-            correction = -2
-        }
+        // Days before this year
+        let prevY = y - 1
+        let yearDays = 365 * prevY + prevY / 4 - prevY / 100 + prevY / 400
         
-        return 365 * adjustedY + leapDays + monthTerm + correction + d
+        // Total RD = days-before-year + days-before-month + day-of-month
+        return yearDays + priorDays[Int(m - 1)] + leapAdjust + d
     }
     
-    /// Convert fixed day number to Gregorian date (CC4 algorithm).
+    /// Convert fixed day number to Gregorian date.
+    /// Inverse of fromGregorian.
     static func toGregorian(_ fixedDay: Int64) -> (year: Int, month: Int, day: Int) {
-        // CC4 fixed-to-gregorian
-        let d0 = fixedDay - 1  // zero-based
+        // Compute year first using 400-year cycle
+        let d0 = fixedDay - 1  // zero-based from RD 1
         
         let n400 = d0 / 146097
         let d1 = d0 % 146097
-        let n100 = d1 / 36524
+        var n100 = d1 / 36524
         let d2 = d1 % 36524
         let n4 = d2 / 1461
         let d3 = d2 % 1461
         var n1 = d3 / 365
         
-        // Adjust for the overcount in 400-year cycle
-        if n100 == 4 || n1 == 4 {
-            n1 = 3
-        }
+        if n100 == 4 { n100 = 3 }
+        if n1 == 4 { n1 = 3 }
         
         let year = 400 * n400 + 100 * n100 + 4 * n4 + n1 + 1
         
         // Day of year (0-based)
-        let dayOfYear = d0 - (365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400)
+        let yearStart = 365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
+        let dayOfYear = fixedDay - yearStart - 1  // 0-based
         
-        // Month estimation
+        // Find month using cumulative days
         let priorDays: [Int64] = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
         let leapDays: [Int64] = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
         let isLeap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
         let days = isLeap ? leapDays : priorDays
         
-        var month = 12
+        var month: Int = 12
         for m in stride(from: 11, through: 0, by: -1) {
             if dayOfYear >= days[m] {
                 month = m + 1
@@ -236,9 +232,9 @@ enum FixedDay {
             }
         }
         
-        let day = dayOfYear - Int64(days[month - 1]) + 1
+        let day = Int(dayOfYear - days[month - 1]) + 1
         
-        return (Int(year), Int(month), Int(day))
+        return (Int(year), Int(month), day)
     }
     
     /// Get the weekday (0=Sunday, 1=Monday, ..., 6=Saturday) for a fixed day
