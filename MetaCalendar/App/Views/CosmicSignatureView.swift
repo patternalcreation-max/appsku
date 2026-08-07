@@ -211,7 +211,8 @@ struct SignatureCard: View {
     }
 
     private var sunLabel: String {
-        let lon = AstronomyEngine.solarLongitude(for: date)
+        let jdn = Double(FixedDay.toJulianDayNumber(fixedDay)) + 0.5
+        let lon = AstronomyEngine.solarLongitude(julianDay: jdn)
         let season: String
         if lon < 80 || lon > 355 { season = "Musim Dingin" }
         else if lon < 170 { season = "Musim Semi" }

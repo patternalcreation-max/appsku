@@ -83,12 +83,12 @@ enum CycleCondition: Identifiable, Hashable {
             return false
 
         case .hijriMonth(let target):
-            let (hMonth, _) = HijriAdapter.hijriFromFixedDay(fixedDay)
-            return hMonth == target
+            let hijri = HijriAdapter.hijriFromFixedDay(fixedDay)
+            return hijri.month == target
 
         case .hijriDay(let target):
-            let (_, hDay) = HijriAdapter.hijriFromFixedDay(fixedDay)
-            return hDay == target
+            let hijri = HijriAdapter.hijriFromFixedDay(fixedDay)
+            return hijri.day == target
 
         case .chineseLunarMonth(let target):
             let chineseMonth = ChineseAdapter.lunarMonth(forFixedDay: fixedDay)
@@ -255,10 +255,8 @@ extension ChineseAdapter {
 
 extension AstronomyEngine {
     static func moonPhaseAngle(forFixedDay fd: Int64) -> Double {
-        let (y, m, d) = FixedDay.toGregorian(fd)
-        let cal = Calendar(identifier: .gregorian)
-        let date = cal.date(from: DateComponents(year: y, month: m, day: d, hour: 12)) ?? Date()
-        let (_, _, phase) = AstronomyEngine.lunarPhase(for: date)
-        return phase
+        let jdn = Double(FixedDay.toJulianDayNumber(fd)) + 0.5
+        let phaseFraction = AstronomyEngine.lunarPhase(julianDay: jdn)
+        return phaseFraction * 360.0  // Convert 0-1 to 0-360 degrees
     }
 }
