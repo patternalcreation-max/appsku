@@ -37,22 +37,19 @@ jobs:
           xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -configuration Release             -derivedDataPath build             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
-          # Print ALL errors to stdout
-          echo "=== BUILD ERRORS ==="
-          grep "error:" build_output.log || echo "(no error lines found)"
-          echo "=== END ==="
-          
-          # Also emit annotations
-          grep -E "error:" build_output.log | while IFS= read -r line; do
-            file=$(echo "$line" | sed 's|^/Users/runner/work/appsku/appsku/||' | cut -d: -f1)
-            lineno=$(echo "$line" | cut -d: -f2)
-            msg=$(echo "$line" | sed 's|^[^:]*:[0-9]*:[0-9]*: error: ||;s|^[^:]*:[0-9]*: error: ||' | head -c 180)
-            echo "::error file=${file},line=${lineno}::${msg}"
-          done || true
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "========== BUILD FAILED =========="
+            echo "--- Swift compiler errors ---"
+            grep -E "error:" build_output.log | head -30
+            echo "--- Last 30 lines of build log ---"
+            tail -30 build_output.log
+            echo "=================================="
+          fi
           
           exit $EXIT_CODE
 
       - name: Package IPA
+        if: success()
         working-directory: MetaCalendar
         run: |
           mkdir -p build/Payload
@@ -62,19 +59,12 @@ jobs:
           ls -la MetaCalendar.ipa
 
       - name: Upload IPA Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MetaCalendar-ipa
           path: MetaCalendar/build/MetaCalendar.ipa
           retention-days: 90
-
-      - name: Upload Build Log on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: metacalendar-build-log
-          path: MetaCalendar/build_output.log
-          retention-days: 7
 
       - name: Create Release on Tag
         if: startsWith(github.ref, 'refs/tags/') && success()
