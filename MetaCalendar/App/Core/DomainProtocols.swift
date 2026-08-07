@@ -140,6 +140,7 @@ protocol AstronomyProviding: Sendable {
 
 /// Adapter that wraps the static `AstronomyEngine` to satisfy `AstronomyProviding`.
 /// The engine itself is unchanged — this is a zero-cost bridge.
+/// M2: Adds provenance-returning variants (existing methods unchanged).
 struct EmbeddedAstronomyProvider: AstronomyProviding {
     let methodID: String = AstronomyEngine.providerID
     let methodVersion: String = AstronomyEngine.version
@@ -159,6 +160,45 @@ struct EmbeddedAstronomyProvider: AstronomyProviding {
         timeZone: TimeZone
     ) -> (sunrise: Date?, sunset: Date?) {
         AstronomyEngine.sunRiseSet(date: date, latitude: latitude, longitude: longitude, timeZone: timeZone)
+    }
+
+    // MARK: - M2: Provenance-returning variants
+
+    func solarLongitudeWithProvenance(julianDay: Double) -> AstronomicalResult<Double> {
+        AstronomicalResult(
+            value: AstronomyEngine.solarLongitude(julianDay: julianDay),
+            provenance: AstronomyProvenanceCatalog.solarLongitude
+        )
+    }
+
+    func lunarPhaseWithProvenance(julianDay: Double) -> AstronomicalResult<Double> {
+        AstronomicalResult(
+            value: AstronomyEngine.lunarPhase(julianDay: julianDay),
+            provenance: AstronomyProvenanceCatalog.lunarPhase
+        )
+    }
+
+    func sunRiseSetTyped(
+        date: Date,
+        latitude: Double,
+        longitude: Double,
+        timeZone: TimeZone
+    ) -> RiseSetResult {
+        let (sunrise, sunset) = AstronomyEngine.sunRiseSet(
+            date: date, latitude: latitude, longitude: longitude, timeZone: timeZone
+        )
+        if sunrise == nil && sunset == nil {
+            // Distinguish: midnight sun returns (date, date), polar night returns (nil, nil)
+            // The existing engine returns (date, date) for midnight sun
+            return .polarNight
+        }
+        if sunrise == sunset {
+            return .midnightSun
+        }
+        guard let sr = sunrise, let ss = sunset else {
+            return .unknown
+        }
+        return .rises(sunrise: sr, sunset: ss)
     }
 }
 
