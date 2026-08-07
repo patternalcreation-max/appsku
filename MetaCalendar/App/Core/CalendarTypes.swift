@@ -152,7 +152,7 @@ enum JavaneseProfile: String, Codable, Sendable, CaseIterable, Identifiable {
 
 // MARK: - Timezone Modes (per blueprint §3.2)
 
-enum TimeZoneMode: Codable, Sendable, Equatable {
+enum TimeZoneMode: Codable, Sendable, Equatable, Hashable {
     case followSystem
     case locked(identifier: String)
     
@@ -180,7 +180,6 @@ enum FixedDay {
         // From Calendrical Calculations (Reingold-Dershowitz)
         let prevY = y - (m <= 2 ? 1 : 0)
         let leapDays = prevY / 4 - prevY / 100 + prevY / 400
-        let correction = m <= 2 ? 0 : (2 + (prevY % 4 == 0 && (prevY % 100 != 0 || prevY % 400 == 0)) ? -1 : 0)
         
         return 365 * (y - 1) + leapDays + Int64(floor(Double(367 * (m - 2 + 12 * ((14 - m) / 12))) / 12.0)) + d - 1 - 1721425 + 1
     }
