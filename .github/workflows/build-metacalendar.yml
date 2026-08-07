@@ -13,6 +13,72 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | tail -1)
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        working-directory: MetaCalendar
+        run: xcodegen generate 2>&1
+
+      - name: Run Tests
+        working-directory: MetaCalendar
+        run: |
+          set +e
+          
+          # Find available simulator
+          SIMULATOR=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get('devices', {}).items():
+              if 'iOS' in runtime:
+                  for d in devices:
+                      if d.get('isAvailable', False):
+                          print(d['name'])
+                          sys.exit(0)
+          " 2>/dev/null)
+          
+          if [ -z "$SIMULATOR" ]; then
+            echo "No simulator found"
+            SIMULATOR="iPhone 16"
+          fi
+          
+          echo "Using simulator: $SIMULATOR"
+          
+          xcodebuild test \
+            -project MetaCalendar.xcodeproj \
+            -scheme MetaCalendar \
+            -destination "platform=iOS Simulator,name=$SIMULATOR" \
+            -enableCodeCoverage NO \
+            2>&1 | tee test_output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          
+          # Extract test summary
+          echo "=== TEST SUMMARY ==="
+          grep -E "Test Suite|Test Case|passed|failed|Executed" test_output.log | tail -30
+          
+          # Save test output
+          cp test_output.log $GITHUB_WORKSPACE/
+          
+          exit $EXIT_CODE
+
+      - name: Upload Test Output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test_output.log
+          retention-days: 30
+
   build:
     runs-on: macos-15
     steps:
@@ -34,7 +100,22 @@ jobs:
         working-directory: MetaCalendar
         run: |
           set +e
-          xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -configuration Release             -derivedDataPath build             -destination 'generic/platform=iOS'             ARCHS=arm64             ONLY_ACTIVE_ARCH=NO             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
+          xcodebuild build \
+            -project MetaCalendar.xcodeproj \
+            -scheme MetaCalendar \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'generic/platform=iOS' \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            ENABLE_CODE_COVERAGE=NO \
+            CLANG_ENABLE_CODE_COVREAGE=NO \
+            2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
           if [ $EXIT_CODE -ne 0 ]; then
@@ -54,6 +135,19 @@ jobs:
           fi
           
           exit $EXIT_CODE
+
+      - name: Verify Assets.car exists
+        if: success()
+        working-directory: MetaCalendar
+        run: |
+          APP_PATH=$(find build/Build/Products -name "*.app" -type d | head -1)
+          echo "APP: $APP_PATH"
+          ls -la "$APP_PATH/"
+          if [ ! -f "$APP_PATH/Assets.car" ]; then
+            echo "WARNING: Assets.car not found in .app bundle"
+          else
+            echo "Assets.car found: $(du -h "$APP_PATH/Assets.car")"
+          fi
 
       - name: Package IPA
         if: success()
