@@ -1,0 +1,19 @@
+{
+  "name": "Meta Calendar",
+  "subtitle": "Multi-calendar engine",
+  "icon": "https://raw.githubusercontent.com/USER/REPO/main/App/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+  "apps": [
+    {
+      "name": "Meta Calendar",
+      "bundleIdentifier": "com.metacalendar.app",
+      "version": "1.0.0",
+      "versionDate": "2026-08-07",
+      "downloadURL": "https://github.com/USER/REPO/releases/download/v1.0.0/MetaCalendar.ipa",
+      "developerName": "Meta Calendar",
+      "iconURL": "https://raw.githubusercontent.com/USER/REPO/main/App/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+      "size": 0,
+      "screenshots": [],
+      "versions": []
+    }
+  ]
+}
