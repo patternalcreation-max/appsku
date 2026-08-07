@@ -480,7 +480,6 @@ enum CalendarEvents {
     }
 
     /// Forward (clockwise) angular distance from `a` to `b`, result in [0, 360).
-    @inlinable
     private static func forwardAngle(_ a: Double, _ b: Double) -> Double {
         var d = (b - a).truncatingRemainder(dividingBy: 360.0)
         if d < 0 { d += 360 }
