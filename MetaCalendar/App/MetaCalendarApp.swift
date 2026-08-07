@@ -22,8 +22,8 @@ struct ContentView: View {
             TodayView()
                 .tabItem { Label("Hari Ini", systemImage: "sun.max.fill") }
                 .tag(0)
-            WorldEventsView()
-                .tabItem { Label("Dunia", systemImage: "globe.americas.fill") }
+            TimelineView()
+                .tabItem { Label("Linimasa", systemImage: "calendar.badge.clock") }
                 .tag(1)
             CalendarGridView()
                 .tabItem { Label("Kalender", systemImage: "calendar") }
