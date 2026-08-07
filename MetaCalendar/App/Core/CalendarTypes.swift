@@ -170,6 +170,11 @@ enum TimeZoneMode: Codable, Sendable, Equatable, Hashable {
 /// Uses RD (Rata Die / Fixed Day) system: Jan 1, 1 CE (Gregorian proleptic) = RD 1.
 /// Algorithm from "Calendrical Calculations" by Reingold & Dershowitz (CC4).
 enum FixedDay {
+    /// Algorithm version. Bumped when the conversion formula changes.
+    /// v1.0: Original CC4 adaptation (had 367-day offset bug)
+    /// v2.0: Fixed with explicit cumulative-days lookup table
+    static let methodVersion = "2.0"
+
     
     /// Convert Gregorian date to fixed day number (Rata Die).
     /// RD 1 = Jan 1, 1 CE (Gregorian proleptic).

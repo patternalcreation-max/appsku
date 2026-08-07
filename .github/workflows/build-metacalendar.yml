@@ -79,6 +79,14 @@ jobs:
           
           exit $EXIT_CODE
 
+      - name: Upload .xcresult
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-xcresult
+          path: MetaCalendar/build/Test/*.xcresult
+          retention-days: 30
+
       - name: Upload Test Output
         if: always()
         uses: actions/upload-artifact@v4
@@ -122,7 +130,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
             ENABLE_CODE_COVERAGE=NO \
-            CLANG_ENABLE_CODE_COVREAGE=NO \
+            CLANG_ENABLE_CODE_COVERAGE=NO \
             2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
