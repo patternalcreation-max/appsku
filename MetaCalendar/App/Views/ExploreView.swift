@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Explore v2
+// MARK: - Explore v3 (Meta design + Indonesian)
 
 struct ExploreView: View {
     @Environment(AppState.self) private var appState
@@ -10,103 +10,102 @@ struct ExploreView: View {
     @State private var inputDay: Int = Calendar(identifier: .gregorian).component(.day, from: Date())
     @State private var convertedProjections: [CalendarProjection] = []
     @State private var hasConverted: Bool = false
-    
+
     var body: some View {
         ScrollView {
-            VStack(spacing: DS.space20) {
+            VStack(spacing: Meta.xl) {
                 converterCard
                 if hasConverted { resultsSection }
                 cyclesSection
             }
-            .padding(.horizontal, DS.space16)
-            .padding(.bottom, 40)
+            .padding(.horizontal, Meta.l)
+            .padding(.bottom, 130)
         }
-        .background(DS.bgBase.ignoresSafeArea())
+        .background(MetaBackground())
     }
-    
+
     private var converterCard: some View {
-        VStack(alignment: .leading, spacing: DS.space12) {
-            SectionTitle(title: "Convert Date", icon: "arrow.triangle.swap")
-            
-            Picker("Source", selection: $sourceSystem) {
+        VStack(alignment: .leading, spacing: Meta.n) {
+            Text("KONVERSI TANGGAL")
+                .font(.metaEyebrow).foregroundStyle(Meta.gold).kerning(1.35)
+            Text("Konversi")
+                .font(.metaTitle).foregroundStyle(Meta.ink)
+
+            Picker("Sumber", selection: $sourceSystem) {
                 ForEach(CalendarSystemID.allCases) { sys in
-                    Text(sys.displayName).tag(sys)
+                    Text(Meta.systemTitle(sys)).tag(sys)
                 }
             }
             .pickerStyle(.segmented)
-            
-            HStack(spacing: DS.space12) {
-                inputField(label: "Year", value: $inputYear)
-                inputField(label: "Month", value: $inputMonth)
-                inputField(label: "Day", value: $inputDay)
+
+            HStack(spacing: Meta.n) {
+                inputField(label: "Tahun", value: $inputYear)
+                inputField(label: "Bulan", value: $inputMonth)
+                inputField(label: "Hari", value: $inputDay)
             }
-            
+
             Button { convert() } label: {
                 HStack {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                    Text("Convert to All Calendars")
+                    Text("Konversi ke Semua Kalender")
                 }
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(DS.onPrimary)
+                .foregroundStyle(Meta.canvas)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(DS.primary)
-                .clipShape(RoundedRectangle(cornerRadius: DS.radiusMD))
+                .background(Meta.jade)
+                .clipShape(RoundedRectangle(cornerRadius: Meta.rMD))
             }
         }
-        .padding(DS.space16)
-        .background(DS.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+        .padding(Meta.l)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rLG))
     }
-    
+
     private func inputField(label: String, value: Binding<Int>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(DS.fontCaption).foregroundStyle(DS.textTertiary)
+            Text(label).font(.metaCaption).foregroundStyle(Meta.inkMuted)
             TextField(label, value: value, format: .number)
                 .textFieldStyle(.roundedBorder)
                 .keyboardType(.numberPad)
         }
     }
-    
+
     private var resultsSection: some View {
-        VStack(alignment: .leading, spacing: DS.space8) {
-            SectionTitle(title: "Results", icon: "checkmark.seal")
+        VStack(spacing: Meta.n) {
+            MetaSection(title: "Hasil Konversi")
             ForEach(convertedProjections) { proj in
-                CalendarCardV2(projection: proj, rank: -1)
+                MetaProjectionCard(projection: proj)
             }
         }
     }
-    
+
     private var cyclesSection: some View {
-        VStack(alignment: .leading, spacing: DS.space8) {
-            SectionTitle(title: "Quick Reference", icon: "book")
-            
-            cycleCard(title: "Pasaran (5-Day)", entries: JavaneseAdapter.pasaranNames.enumerated().map { ($0.element, "Neptu: \(JavaneseAdapter.pasaranNeptu[$0.offset])") })
-            cycleCard(title: "Saptawara (7-Day)", entries: JavaneseAdapter.saptawaraNames.enumerated().map { ($0.element, "Neptu: \(JavaneseAdapter.saptawaraNeptu[$0.offset])") })
-            cycleCard(title: "Wuku (210-Day)", entries: JavaneseAdapter.wukuNames.enumerated().map { ($0.element, "Wuku \($0.offset + 1)/30") })
+        VStack(alignment: .leading, spacing: Meta.n) {
+            MetaSection(title: "Referensi Siklus")
+            cycleCard(title: "Pasaran (5 Hari)", entries: JavaneseAdapter.pasaranNames.enumerated().map { ($0.element, "Neptu: \(JavaneseAdapter.pasaranNeptu[$0.offset])") })
+            cycleCard(title: "Saptawara (7 Hari)", entries: JavaneseAdapter.saptawaraNames.enumerated().map { ($0.element, "Neptu: \(JavaneseAdapter.saptawaraNeptu[$0.offset])") })
+            cycleCard(title: "Wuku (210 Hari)", entries: JavaneseAdapter.wukuNames.enumerated().map { ($0.element, "Wuku \($0.offset + 1)/30") })
         }
     }
-    
+
     private func cycleCard(title: String, entries: [(String, String)]) -> some View {
-        VStack(alignment: .leading, spacing: DS.space8) {
-            Text(title)
-                .font(.system(size: 13, design: .rounded).weight(.semibold))
-                .foregroundStyle(DS.textPrimary)
-            
+        VStack(alignment: .leading, spacing: Meta.s) {
+            Text(title).font(.metaHeadline).foregroundStyle(Meta.ink)
             ForEach(entries, id: \.0) { name, value in
                 HStack {
-                    Text(name).font(DS.fontBody).foregroundStyle(DS.textSecondary)
+                    Text(name).font(.metaBody).foregroundStyle(Meta.inkMuted)
                     Spacer()
-                    Text(value).font(DS.fontBodyMono).foregroundStyle(DS.textPrimary)
+                    Text(value).font(.metaMono).foregroundStyle(Meta.ink)
                 }
-                Divider()
+                Divider().overlay(Meta.hairline)
             }
         }
-        .padding(DS.space16)
-        .background(DS.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+        .padding(Meta.l)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rLG))
     }
-    
+
     private func convert() {
         convertedProjections = CalendarEngine.resolve(
             sourceSystem: sourceSystem, year: inputYear, month: inputMonth, day: inputDay,

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Calendar Grid v2
+// MARK: - Calendar Grid v3 (Meta design system)
 
 struct CalendarGridView: View {
     @Environment(AppState.self) private var appState
@@ -8,190 +8,175 @@ struct CalendarGridView: View {
     @State private var bridgeData: [DayCellData] = []
     @State private var selectedCell: DayCellData? = nil
     @State private var cellEvents: [Int64: [CalendarEvent]] = [:]
-    
-    private let weekdays = ["S", "S", "R", "K", "J", "S", "S"]
-    private let weekdaysFull = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    
+
+    private let weekdaysFull = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
+
     var body: some View {
         ScrollView {
-            VStack(spacing: DS.space16) {
+            VStack(spacing: Meta.n) {
                 monthHeaderBar
                 weekdayLabels
                 calendarGrid
                 bridgeSection
                 yearInfoBar
             }
-            .padding(.horizontal, DS.space16)
-            .padding(.bottom, 40)
+            .padding(.horizontal, Meta.l)
+            .padding(.bottom, 130)
         }
-        .background(DS.bgBase.ignoresSafeArea())
+        .background(MetaBackground())
         .onAppear { loadGrid() }
         .onChange(of: appState.selectedMetaSolarMonth) { _, _ in loadGrid() }
         .onChange(of: appState.selectedMetaSolarYear) { _, _ in loadGrid() }
         .sheet(item: $selectedCell) { cell in
-            DayDetailSheetV2(cell: cell)
-                .presentationDetents([.large])
+            DayDetailSheetV2(cell: cell).presentationDetents([.large])
         }
     }
-    
-    // Month nav bar
+
     private var monthHeaderBar: some View {
         HStack {
             Button { prevMonth() } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(DS.textSecondary)
+                    .foregroundStyle(Meta.inkMuted)
                     .frame(width: 36, height: 36)
-                    .background(DS.bgCard)
+                    .background(Meta.surface)
                     .clipShape(Circle())
             }
-            
             Spacer()
-            
             VStack(spacing: 2) {
                 Text(monthName)
                     .font(.system(size: 22, design: .rounded).weight(.bold))
-                    .foregroundStyle(DS.systemColor(.metaSolar))
-                Text("Month \(appState.selectedMetaSolarMonth) / 13 · \(appState.selectedMetaSolarYear)")
-                    .font(DS.fontCaption)
-                    .foregroundStyle(DS.textSecondary)
+                    .foregroundStyle(Meta.coral)
+                Text("Bulan \(appState.selectedMetaSolarMonth) / 13 · \(appState.selectedMetaSolarYear)")
+                    .font(.metaCaption).foregroundStyle(Meta.inkMuted)
             }
-            
             Spacer()
-            
             Button { nextMonth() } label: {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(DS.textSecondary)
+                    .foregroundStyle(Meta.inkMuted)
                     .frame(width: 36, height: 36)
-                    .background(DS.bgCard)
+                    .background(Meta.surface)
                     .clipShape(Circle())
             }
         }
-        .padding(.top, DS.space8)
+        .padding(.top, Meta.n)
     }
-    
-    // Weekday labels
+
     private var weekdayLabels: some View {
         HStack(spacing: 0) {
             ForEach(weekdaysFull, id: \.self) { day in
                 Text(day)
-                    .font(DS.fontMicro)
-                    .foregroundStyle(DS.textTertiary)
+                    .font(.metaEyebrow)
+                    .foregroundStyle(Meta.inkMuted)
                     .frame(maxWidth: .infinity)
             }
         }
     }
-    
-    // Grid
+
     private var calendarGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 7), spacing: 3) {
             ForEach(gridData) { cell in
-                DayCellV2(cell: cell, isToday: isToday(cell), hasEvent: cellEvents[cell.fixedDay] != nil)
+                DayCellV3(cell: cell, isToday: isToday(cell), hasEvent: cellEvents[cell.fixedDay] != nil)
                     .onTapGesture { selectedCell = cell }
             }
         }
     }
-    
-    // Bridge section
+
     @ViewBuilder
     private var bridgeSection: some View {
         if !bridgeData.isEmpty {
-            VStack(alignment: .leading, spacing: DS.space8) {
+            VStack(alignment: .leading, spacing: Meta.s) {
                 HStack {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(DS.warning)
-                    Text("Intercalary Bridge Days")
+                    Image(systemName: "sparkles").foregroundStyle(Meta.gold)
+                    Text("Hari Jembatan")
                         .font(.system(size: 13, design: .rounded).weight(.semibold))
-                        .foregroundStyle(DS.textPrimary)
+                        .foregroundStyle(Meta.ink)
                 }
-                
-                HStack(spacing: DS.space12) {
+                HStack(spacing: Meta.n) {
                     ForEach(bridgeData) { cell in
-                        BridgeDayPill(cell: cell)
-                            .onTapGesture { selectedCell = cell }
+                        BridgeDayPill(cell: cell).onTapGesture { selectedCell = cell }
                     }
                 }
             }
-            .padding(DS.space12)
-            .background(DS.bgCard)
-            .clipShape(RoundedRectangle(cornerRadius: DS.radiusMD))
-            .padding(.top, DS.space4)
+            .padding(Meta.n)
+            .background(Meta.surface)
+            .clipShape(RoundedRectangle(cornerRadius: Meta.rMD))
+            .padding(.top, Meta.s)
         }
     }
-    
-    // Year info
+
     private var yearInfoBar: some View {
-        HStack(spacing: DS.space16) {
-            YearStat(label: "Days", value: "\(MetaSolarEngine.daysInYear(appState.selectedMetaSolarYear))")
+        HStack(spacing: Meta.xl) {
+            yearStat("Hari", "\(MetaSolarEngine.daysInYear(appState.selectedMetaSolarYear))")
             Divider().frame(height: 32)
-            YearStat(label: "Leap", value: MetaSolarEngine.isLeapYear(appState.selectedMetaSolarYear) ? "Yes" : "No")
+            yearStat("Kabisat", MetaSolarEngine.isLeapYear(appState.selectedMetaSolarYear) ? "Ya" : "Tidak")
             Divider().frame(height: 32)
-            YearStat(label: "Structure", value: "13×28")
+            yearStat("Struktur", "13×28")
         }
-        .padding(DS.space12)
-        .background(DS.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusMD))
+        .padding(Meta.n)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rMD))
     }
-    
+
+    private func yearStat(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.system(size: 16, design: .rounded).weight(.bold)).foregroundStyle(Meta.ink)
+            Text(label).font(.system(size: 10)).foregroundStyle(Meta.inkMuted)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var monthName: String {
         let names = MetaSolarEngine.monthNames
         let idx = appState.selectedMetaSolarMonth - 1
-        return idx < names.count ? names[idx] : "M\(appState.selectedMetaSolarMonth)"
+        return idx < names.count ? names[idx] : "B\(appState.selectedMetaSolarMonth)"
     }
-    
+
     // MARK: - Data
     private func loadGrid() {
         let year = appState.selectedMetaSolarYear
         let month = appState.selectedMetaSolarMonth
-        
         var cells: [DayCellData] = []
         for day in 1...28 {
             let coord = MetaSolarDayCoordinate.monthDay(year: year, month: month, day: day)
             let fd = MetaSolarEngine.fixedDay(for: coord) ?? 0
-            let weekday = FixedDay.weekday(fd)
-            let (gy, gm, gd) = FixedDay.toGregorian(fd)
-            let pasaran = JavaneseAdapter.pasaranIndex(fixedDay: fd)
-            
             cells.append(DayCellData(
-                coordinate: coord, dayNumber: day, weekday: weekday,
-                gregorianDay: gd, gregorianMonth: gm, gregorianYear: gy,
-                pasaranName: String(JavaneseAdapter.pasaranNames[pasaran].prefix(3)),
+                coordinate: coord, dayNumber: day, weekday: FixedDay.weekday(fd),
+                gregorianDay: FixedDay.toGregorian(fd).day,
+                gregorianMonth: FixedDay.toGregorian(fd).month,
+                gregorianYear: FixedDay.toGregorian(fd).year,
+                pasaranName: String(JavaneseAdapter.pasaranNames[JavaneseAdapter.pasaranIndex(fixedDay: fd)].prefix(4)),
                 fixedDay: fd
             ))
         }
         gridData = cells
-        
         let bridges = MetaSolarEngine.bridgeDays(year: year)
         bridgeData = bridges.compactMap { coord in
             guard let fd = MetaSolarEngine.fixedDay(for: coord) else { return nil }
-            let (gy, gm, gd) = FixedDay.toGregorian(fd)
             return DayCellData(
                 coordinate: coord, dayNumber: 0, weekday: FixedDay.weekday(fd),
-                gregorianDay: gd, gregorianMonth: gm, gregorianYear: gy,
-                pasaranName: String(JavaneseAdapter.pasaranNames[JavaneseAdapter.pasaranIndex(fixedDay: fd)].prefix(3)),
-                fixedDay: fd
+                gregorianDay: FixedDay.toGregorian(fd).day,
+                gregorianMonth: FixedDay.toGregorian(fd).month,
+                gregorianYear: FixedDay.toGregorian(fd).year,
+                pasaranName: "", fixedDay: fd
             )
         }
-        
-        // Load events for this month
         cellEvents = CalendarEvents.eventsForMonth(year: year, month: month, calendar: .metaSolar)
     }
-    
+
     private func prevMonth() {
         if appState.selectedMetaSolarMonth > 1 { appState.selectedMetaSolarMonth -= 1 }
         else { appState.selectedMetaSolarMonth = 13; appState.selectedMetaSolarYear -= 1 }
     }
-    
     private func nextMonth() {
         if appState.selectedMetaSolarMonth < 13 { appState.selectedMetaSolarMonth += 1 }
         else { appState.selectedMetaSolarMonth = 1; appState.selectedMetaSolarYear += 1 }
     }
-    
     private func isToday(_ cell: DayCellData) -> Bool {
         let cal = Calendar(identifier: .gregorian)
-        let today = cal.dateComponents([.year, .month, .day], from: Date())
-        return today.year == cell.gregorianYear && today.month == cell.gregorianMonth && today.day == cell.gregorianDay
+        let t = cal.dateComponents([.year, .month, .day], from: Date())
+        return t.year == cell.gregorianYear && t.month == cell.gregorianMonth && t.day == cell.gregorianDay
     }
 }
 
@@ -209,34 +194,29 @@ struct DayCellData: Identifiable {
     let fixedDay: Int64
 }
 
-struct DayCellV2: View {
+struct DayCellV3: View {
     let cell: DayCellData
     let isToday: Bool
     let hasEvent: Bool
-    
+
     var body: some View {
         VStack(spacing: 2) {
             Text("\(cell.dayNumber)")
                 .font(.system(size: 17, design: .rounded).weight(.bold))
-                .foregroundStyle(isToday ? DS.primary : DS.textPrimary)
-            
+                .foregroundStyle(isToday ? Meta.jade : Meta.ink)
             Text("\(cell.gregorianDay)")
                 .font(.system(size: 9, design: .rounded))
-                .foregroundStyle(DS.textTertiary)
-            
+                .foregroundStyle(Meta.inkMuted)
             Text(cell.pasaranName)
                 .font(.system(size: 7))
-                .foregroundStyle(DS.systemColor(.javanese).opacity(0.6))
+                .foregroundStyle(Meta.violet.opacity(0.6))
         }
         .frame(maxWidth: .infinity, minHeight: 54)
-        .background(isToday ? DS.primary.opacity(0.10) : DS.bgCard)
+        .background(isToday ? Meta.jade.opacity(0.10) : Meta.surfaceRaised)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(alignment: .topTrailing) {
             if hasEvent {
-                Circle()
-                    .fill(DS.accent)
-                    .frame(width: 5, height: 5)
-                    .padding(3)
+                Circle().fill(Meta.coral).frame(width: 5, height: 5).padding(3)
             }
         }
     }
@@ -244,122 +224,89 @@ struct DayCellV2: View {
 
 struct BridgeDayPill: View {
     let cell: DayCellData
-    
     var body: some View {
         VStack(spacing: 2) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 14))
-                .foregroundStyle(DS.warning)
-            Text(cell.coordinate.isBridge ? "Bridge" : "★")
-                .font(.system(size: 9, design: .rounded).weight(.semibold))
-                .foregroundStyle(DS.warning)
-            Text("\(cell.gregorianDay)")
-                .font(.system(size: 9))
-                .foregroundStyle(DS.textTertiary)
+            Image(systemName: "sparkles").font(.system(size: 14)).foregroundStyle(Meta.gold)
+            Text(cell.coordinate.isBridge ? "Jembatan" : "★")
+                .font(.system(size: 9, design: .rounded).weight(.semibold)).foregroundStyle(Meta.gold)
+            Text("\(cell.gregorianDay)").font(.system(size: 9)).foregroundStyle(Meta.inkMuted)
         }
         .frame(width: 72, height: 60)
-        .background(DS.warning.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusSM))
+        .background(Meta.gold.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rSM))
     }
 }
 
-struct YearStat: View {
-    let label: String
-    let value: String
-    
-    var body: some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.system(size: 16, design: .rounded).weight(.bold))
-                .foregroundStyle(DS.textPrimary)
-            Text(label)
-                .font(.system(size: 10))
-                .foregroundStyle(DS.textTertiary)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-// MARK: - Day Detail Sheet v2
+// MARK: - Day Detail Sheet v3
 
 struct DayDetailSheetV2: View {
     let cell: DayCellData
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) var dismiss
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: DS.space16) {
-                    // MetaSolar title
-                    GlassCard {
-                        VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Meta.xl) {
+                    MetaCard {
+                        VStack(alignment: .leading, spacing: Meta.s) {
                             Text(MetaSolarEngine.displayString(for: cell.coordinate))
-                                .font(DS.fontDisplay)
-                                .foregroundStyle(DS.systemColor(.metaSolar))
+                                .font(.metaTitle)
+                                .foregroundStyle(Meta.coral)
                             Text(MetaSolarEngine.subtitle(for: cell.coordinate))
-                                .font(DS.fontBody)
-                                .foregroundStyle(DS.textSecondary)
+                                .font(.metaBody).foregroundStyle(Meta.inkMuted)
                         }
                     }
-                    
-                    // All calendars
-                    SectionTitle(title: "All Calendars", icon: "globe")
+
+                    MetaSection(title: "Semua Kalender")
                     ForEach(getProjections()) { proj in
-                        CalendarCardV2(projection: proj, rank: -1)
+                        MetaProjectionCard(projection: proj)
                     }
-                    
-                    // Javanese deep
-                    SectionTitle(title: "Javanese Cycles", icon: "circle.grid.cross")
-                    GlassCard {
+
+                    MetaSection(title: "Siklus Jawa")
+                    MetaCard {
                         let sapta = JavaneseAdapter.saptawaraIndex(fixedDay: cell.fixedDay)
                         let pasaran = JavaneseAdapter.pasaranIndex(fixedDay: cell.fixedDay)
                         let weton = JavaneseAdapter.wetonDay(fixedDay: cell.fixedDay)
                         let (wuku, _) = JavaneseAdapter.wukuIndex(fixedDay: cell.fixedDay)
                         let neptu = JavaneseAdapter.totalNeptu(fixedDay: cell.fixedDay)
-                        
-                        VStack(spacing: DS.space8) {
-                            InfoRowV2(label: "Saptawara", value: JavaneseAdapter.saptawaraNames[sapta])
-                            InfoRowV2(label: "Pasaran", value: JavaneseAdapter.pasaranNames[pasaran])
-                            InfoRowV2(label: "Weton", value: "\(JavaneseAdapter.wetonName(saptawara: sapta, pasaran: pasaran)) (\(weton + 1)/35)")
-                            InfoRowV2(label: "Wuku", value: JavaneseAdapter.wukuNames[wuku])
-                            InfoRowV2(label: "Neptu", value: "\(neptu)")
-                            InfoRowV2(label: "Day Detail", value: "S:\(JavaneseAdapter.saptawaraNeptu[sapta]) + P:\(JavaneseAdapter.pasaranNeptu[pasaran])")
+                        VStack(spacing: Meta.s) {
+                            MetaInfoRow(label: "Saptawara", value: JavaneseAdapter.saptawaraNames[sapta])
+                            MetaInfoRow(label: "Pasaran", value: JavaneseAdapter.pasaranNames[pasaran])
+                            MetaInfoRow(label: "Weton", value: "\(JavaneseAdapter.wetonName(saptawara: sapta, pasaran: pasaran)) (\(weton + 1)/35)")
+                            MetaInfoRow(label: "Wuku", value: JavaneseAdapter.wukuNames[wuku])
+                            MetaInfoRow(label: "Neptu", value: "\(neptu)")
                         }
                     }
-                    
-                    // Events on this day
+
                     let dayEvents = CalendarEvents.eventsOnFixedDay(cell.fixedDay)
                     if !dayEvents.isEmpty {
-                        SectionTitle(title: "Events on This Day", icon: "calendar.badge.exclamationmark")
+                        MetaSection(title: "Peristiwa di Hari Ini")
                         ForEach(dayEvents) { ev in
                             HStack {
                                 Text(ev.emoji)
-                                Text(ev.name)
-                                    .font(DS.fontBody)
-                                    .foregroundStyle(DS.textPrimary)
+                                Text(ev.name).font(.metaBody).foregroundStyle(Meta.ink)
                                 Spacer()
-                                Text(ev.category.rawValue.capitalized)
-                                    .font(DS.fontMicro)
-                                    .foregroundStyle(DS.textTertiary)
+                                Text(ev.category.displayName)
+                                    .font(.metaCaption).foregroundStyle(Meta.inkMuted)
                             }
-                            .padding(DS.space12)
-                            .background(DS.bgCard)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.radiusSM))
+                            .padding(Meta.n)
+                            .background(Meta.surface)
+                            .clipShape(RoundedRectangle(cornerRadius: Meta.rSM))
                         }
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, Meta.l)
             }
             .navigationTitle(MetaSolarEngine.displayString(for: cell.coordinate))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) { Button("Selesai") { dismiss() } }
             }
-            .background(DS.bgBase.ignoresSafeArea())
+            .background(MetaBackground())
         }
     }
-    
+
     private func getProjections() -> [CalendarProjection] {
         var gCal = Calendar(identifier: .gregorian)
         gCal.timeZone = appState.displayTimeZone

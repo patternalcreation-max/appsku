@@ -1,98 +1,85 @@
 import SwiftUI
 
-// MARK: - Settings v2
+// MARK: - Settings v3 (Meta design + Indonesian)
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
-    
+
     var body: some View {
         ScrollView {
-            VStack(spacing: DS.space20) {
+            VStack(spacing: Meta.xl) {
                 timezoneSection
-                calendarProfilesSection
+                profilesSection
                 displayOrderSection
                 astronomySection
                 aboutSection
             }
-            .padding(.horizontal, DS.space16)
-            .padding(.bottom, 40)
+            .padding(.horizontal, Meta.l)
+            .padding(.bottom, 130)
         }
-        .background(DS.bgBase.ignoresSafeArea())
+        .background(MetaBackground())
     }
-    
+
     private var timezoneSection: some View {
-        VStack(alignment: .leading, spacing: DS.space12) {
-            SectionTitle(title: "Timezone", icon: "clock.fill")
-            
+        VStack(alignment: .leading, spacing: Meta.n) {
+            Text("ZONA WAKTU")
+                .font(.metaEyebrow).foregroundStyle(Meta.gold).kerning(1.35)
             Picker("Mode", selection: Binding(
                 get: { appState.timeZoneMode },
                 set: { appState.timeZoneMode = $0; appState.refreshToday() }
             )) {
-                Text("Follow System").tag(TimeZoneMode.followSystem)
-                Text("Locked").tag(TimeZoneMode.locked(identifier: appState.timeZone.identifier))
+                Text("Ikuti Sistem").tag(TimeZoneMode.followSystem)
+                Text("Kunci").tag(TimeZoneMode.locked(identifier: appState.timeZone.identifier))
             }
             .pickerStyle(.segmented)
-            
-            InfoRowV2(label: "Identifier", value: appState.displayTimeZone.identifier)
-            
+            MetaInfoRow(label: "ID", value: appState.displayTimeZone.identifier)
             let offset = appState.displayTimeZone.secondsFromGMT()
-            let hours = abs(offset) / 3600
-            let mins = (abs(offset) % 3600) / 60
-            let sign = offset >= 0 ? "+" : "-"
-            InfoRowV2(label: "GMT Offset", value: String(format: "GMT%@%d:%02d", sign, hours, mins))
+            MetaInfoRow(label: "GMT", value: String(format: "GMT%@%d:%02d", offset >= 0 ? "+" : "-", abs(offset) / 3600, (abs(offset) % 3600) / 60))
         }
-        .padding(DS.space16)
-        .background(DS.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+        .padding(Meta.l)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rLG))
     }
-    
-    private var calendarProfilesSection: some View {
-        VStack(alignment: .leading, spacing: DS.space12) {
-            SectionTitle(title: "Calendar Profiles", icon: "calendar.badge.plus")
-            
-            // Hijri
-            VStack(alignment: .leading, spacing: DS.space8) {
-                Text("Hijri Calculation Method")
-                    .font(DS.fontBody).foregroundStyle(DS.textPrimary)
-                
-                ForEach(HijriProfile.allCases) { profile in
-                    profileRow(profile: profile, isSelected: appState.ruleset.hijriProfile == profile) {
-                        appState.ruleset.hijriProfile = profile
-                        appState.refreshToday()
+
+    private var profilesSection: some View {
+        VStack(alignment: .leading, spacing: Meta.n) {
+            Text("PROFIL KALENDAR")
+                .font(.metaEyebrow).foregroundStyle(Meta.gold).kerning(1.35)
+
+            VStack(alignment: .leading, spacing: Meta.s) {
+                Text("Metode Hisab Hijriah").font(.metaHeadline).foregroundStyle(Meta.ink)
+                ForEach(HijriProfile.allCases) { p in
+                    profileRow(title: p.displayName, subtitle: p.rawValue, isSelected: appState.ruleset.hijriProfile == p) {
+                        appState.ruleset.hijriProfile = p; appState.refreshToday()
                     }
                 }
             }
-            
-            Divider().frame(height: 1).overlay(DS.divider)
-            
-            // Javanese
-            VStack(alignment: .leading, spacing: DS.space8) {
-                Text("Javanese Tradition")
-                    .font(DS.fontBody).foregroundStyle(DS.textPrimary)
-                
-                ForEach(JavaneseProfile.allCases) { profile in
-                    profileRow(profile: profile, isSelected: appState.ruleset.javaneseProfile == profile) {
-                        appState.ruleset.javaneseProfile = profile
-                        appState.refreshToday()
+
+            Divider().overlay(Meta.hairline)
+
+            VStack(alignment: .leading, spacing: Meta.s) {
+                Text("Tradisi Jawa").font(.metaHeadline).foregroundStyle(Meta.ink)
+                ForEach(JavaneseProfile.allCases) { p in
+                    profileRow(title: p.displayName, subtitle: p.rawValue, isSelected: appState.ruleset.javaneseProfile == p) {
+                        appState.ruleset.javaneseProfile = p; appState.refreshToday()
                     }
                 }
             }
         }
-        .padding(DS.space16)
-        .background(DS.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+        .padding(Meta.l)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rLG))
     }
-    
-    private func profileRow<T: Identifiable>(profile: T, isSelected: Bool, onTap: @escaping () -> Void) -> some View {
-        Button {
-            onTap()
-        } label: {
+
+    private func profileRow(title: String, subtitle: String, isSelected: Bool, onTap: @escaping () -> Void) -> some View {
+        Button { onTap() } label: {
             HStack {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? DS.primary : DS.textTertiary)
-                Text(String(describing: profile))
-                    .font(DS.fontBody)
-                    .foregroundStyle(DS.textPrimary)
+                    .foregroundStyle(isSelected ? Meta.jade : Meta.inkMuted)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.metaBody).foregroundStyle(Meta.ink)
+                    Text(subtitle).font(.system(size: 11, design: .monospaced)).foregroundStyle(Meta.inkMuted)
+                }
                 Spacer()
             }
             .padding(.vertical, 6)
@@ -100,89 +87,74 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     private var displayOrderSection: some View {
-        VStack(alignment: .leading, spacing: DS.space12) {
-            SectionTitle(title: "Display Order", icon: "list.number")
-            
+        VStack(alignment: .leading, spacing: Meta.n) {
+            Text("URUTAN TAMPILAN")
+                .font(.metaEyebrow).foregroundStyle(Meta.gold).kerning(1.35)
             ForEach(Array(appState.ruleset.displayOrder.enumerated()), id: \.element) { idx, system in
                 HStack {
-                    Text("\(idx + 1).")
-                        .font(DS.fontBodyMono)
-                        .foregroundStyle(DS.textTertiary)
-                        .frame(width: 24)
-                    
-                    Image(systemName: system.iconName)
-                        .foregroundStyle(DS.systemColor(system))
-                    
-                    Text(system.displayName)
-                        .font(DS.fontBody)
-                        .foregroundStyle(DS.textPrimary)
-                    
+                    Text("\(idx + 1).").font(.metaMono).foregroundStyle(Meta.inkMuted).frame(width: 24)
+                    Image(systemName: system.iconName).foregroundStyle(Meta.systemAccent(system))
+                    Text(Meta.systemTitle(system)).font(.metaBody).foregroundStyle(Meta.ink)
                     Spacer()
-                    
                     Button { moveOrder(system: system, direction: .up) } label: {
                         Image(systemName: "chevron.up").font(.system(size: 12))
-                            .foregroundStyle(idx == 0 ? DS.textTertiary : DS.textSecondary)
+                            .foregroundStyle(idx == 0 ? Meta.inkMuted.opacity(0.3) : Meta.inkMuted)
                     }.disabled(idx == 0).buttonStyle(.plain)
-                    
                     Button { moveOrder(system: system, direction: .down) } label: {
                         Image(systemName: "chevron.down").font(.system(size: 12))
-                            .foregroundStyle(idx == appState.ruleset.displayOrder.count - 1 ? DS.textTertiary : DS.textSecondary)
+                            .foregroundStyle(idx == appState.ruleset.displayOrder.count - 1 ? Meta.inkMuted.opacity(0.3) : Meta.inkMuted)
                     }.disabled(idx == appState.ruleset.displayOrder.count - 1).buttonStyle(.plain)
                 }
                 .padding(.vertical, 4)
-                if idx < appState.ruleset.displayOrder.count - 1 { Divider().overlay(DS.divider) }
+                if idx < appState.ruleset.displayOrder.count - 1 { Divider().overlay(Meta.hairline) }
             }
         }
-        .padding(DS.space16)
-        .background(DS.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+        .padding(Meta.l)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rLG))
     }
-    
+
     private var astronomySection: some View {
-        VStack(alignment: .leading, spacing: DS.space12) {
-            SectionTitle(title: "Astronomy Location", icon: "location.fill")
-            
+        VStack(alignment: .leading, spacing: Meta.n) {
+            Text("LOKASI ASTRONOMI")
+                .font(.metaEyebrow).foregroundStyle(Meta.gold).kerning(1.35)
             Toggle(isOn: Binding(
                 get: { appState.locationEnabled },
                 set: { appState.locationEnabled = $0; appState.refreshToday() }
             )) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Enable Sunrise/Sunset")
-                        .font(DS.fontBody).foregroundStyle(DS.textPrimary)
-                    Text("Uses Jakarta coordinates for demo")
-                        .font(DS.fontCaption).foregroundStyle(DS.textTertiary)
+                    Text("Aktifkan Matahari Terbit/Terbenam")
+                        .font(.metaBody).foregroundStyle(Meta.ink)
+                    Text("Menggunakan koordinat Jakarta untuk demo")
+                        .font(.metaCaption).foregroundStyle(Meta.inkMuted)
                 }
             }
-            .tint(DS.primary)
+            .tint(Meta.jade)
         }
-        .padding(DS.space16)
-        .background(DS.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+        .padding(Meta.l)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rLG))
     }
-    
+
     private var aboutSection: some View {
-        VStack(alignment: .leading, spacing: DS.space8) {
-            SectionTitle(title: "About", icon: "info.circle")
-            
-            InfoRowV2(label: "Engine", value: "Meta Calendar v1.1.0")
-            InfoRowV2(label: "MetaSolar", value: MetaSolarEngine.profile.id)
-            InfoRowV2(label: "Astronomy", value: AstronomyEngine.providerID)
-            InfoRowV2(label: "Accuracy", value: AstronomyEngine.expectedErrorEnvelope)
-            
-            Text("All calculations performed on-device. No account, no server, no tracking.")
-                .font(DS.fontCaption)
-                .foregroundStyle(DS.textSecondary)
-                .padding(.top, 4)
+        VStack(alignment: .leading, spacing: Meta.s) {
+            Text("TENTANG")
+                .font(.metaEyebrow).foregroundStyle(Meta.gold).kerning(1.35)
+            MetaInfoRow(label: "Versi", value: "Meta Calendar v1.2.0")
+            MetaInfoRow(label: "MetaSolar", value: MetaSolarEngine.profile.id)
+            MetaInfoRow(label: "Astronomi", value: AstronomyEngine.providerID)
+            MetaInfoRow(label: "Akurasi", value: AstronomyEngine.expectedErrorEnvelope)
+            Text("Semua perhitungan dilakukan di perangkat. Tanpa akun, tanpa server, tanpa pelacakan.")
+                .font(.metaCaption).foregroundStyle(Meta.inkMuted).padding(.top, Meta.s)
         }
-        .padding(DS.space16)
-        .background(DS.bgCard)
-        .clipShape(RoundedRectangle(cornerRadius: DS.radiusLG))
+        .padding(Meta.l)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rLG))
     }
-    
+
     enum MoveDirection { case up, down }
-    
     private func moveOrder(system: CalendarSystemID, direction: MoveDirection) {
         var order = appState.ruleset.displayOrder
         guard let idx = order.firstIndex(of: system) else { return }
