@@ -31,6 +31,7 @@ jobs:
         run: xcodegen generate 2>&1
 
       - name: Build .app (unsigned)
+        id: build
         working-directory: MetaCalendar
         run: |
           set +e
@@ -38,12 +39,24 @@ jobs:
           EXIT_CODE=${PIPESTATUS[0]}
           
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "========== BUILD FAILED =========="
-            echo "--- Swift compiler errors ---"
-            grep -E "error:" build_output.log | head -30
-            echo "--- Last 30 lines of build log ---"
-            tail -30 build_output.log
-            echo "=================================="
+            echo "BUILD_FAILED=true" >> $GITHUB_OUTPUT
+            
+            # Extract errors and create annotations
+            echo "=== SWIFT COMPILER ERRORS ==="
+            grep -E "error:" build_output.log | while IFS= read -r line; do
+              echo "$line"
+              # Try to emit as annotation
+              FILE_PART=$(echo "$line" | grep -oE "^/[^:]+" | sed 's|.*appsku/||' || true)
+              LINE_PART=$(echo "$line" | grep -oE ":[0-9]+:" | head -1 | tr -d ':' || true)
+              MSG_PART=$(echo "$line" | sed 's|.*error: ||' | head -c 180 || true)
+              if [ -n "$FILE_PART" ] && [ -n "$LINE_PART" ]; then
+                echo "::error file=${FILE_PART},line=${LINE_PART}::${MSG_PART}"
+              else
+                echo "::error::${MSG_PART}"
+              fi
+            done
+            
+            echo "=== BUILD FAILED (exit $EXIT_CODE) ==="
           fi
           
           exit $EXIT_CODE
