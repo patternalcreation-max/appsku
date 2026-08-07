@@ -20,6 +20,7 @@ jobs:
 
       - name: Select Xcode
         run: |
+          sudo xcode-select -s /Applications/Xcode_16.2.app 2>/dev/null || \
           sudo xcode-select -s $(ls -d /Applications/Xcode*.app | head -1)
           xcodebuild -version
 
@@ -34,7 +35,18 @@ jobs:
         working-directory: MetaCalendar
         run: |
           set +e
-          xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -configuration Release             -derivedDataPath build             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
+          xcodebuild build \
+            -project MetaCalendar.xcodeproj \
+            -scheme MetaCalendar \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            ASSETCATALOG_COMPILER_SKIP_VALIDATION=YES \
+            ENABLE_BITCODE=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
           if [ $EXIT_CODE -ne 0 ]; then
