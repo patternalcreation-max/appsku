@@ -201,23 +201,27 @@ enum FixedDay {
     }
     
     /// Convert fixed day number to Gregorian date.
-    /// Inverse of fromGregorian.
+    /// Inverse of fromGregorian. Uses CC4 fixed-to-gregorian algorithm.
     static func toGregorian(_ fixedDay: Int64) -> (year: Int, month: Int, day: Int) {
-        // Compute year using 400-year cycle
         let d0 = fixedDay - 1  // zero-based from RD 1
         
-        var n400 = d0 / 146097
-        var d1 = d0 % 146097
-        var n100 = d1 / 36524
-        if n100 == 4 { n100 = 3 }
-        var d2 = d1 - n100 * 36524
-        var n4 = d2 / 1461
-        if n4 == 4 { n4 = 3 }
-        let d3 = d2 - n4 * 1461
-        var n1 = d3 / 365
-        if n1 == 4 { n1 = 3 }
+        let n400 = d0 / 146097
+        let d1 = d0 % 146097
+        let n100 = d1 / 36524
+        let d2 = d1 % 36524
+        let n4 = d2 / 1461
+        let d3 = d2 % 1461
+        let n1 = d3 / 365
         
-        let year = 400 * n400 + 100 * n100 + 4 * n4 + n1 + 1
+        // CC4 boundary rule: when n100==4 or n1==4, we're at the last day
+        // of a cycle, so the year is exactly 400*n400 + 100*n100 + 4*n4 + n1.
+        // Otherwise add 1 (the current year being counted).
+        let year: Int64
+        if n100 == 4 || n1 == 4 {
+            year = 400 * n400 + 100 * n100 + 4 * n4 + n1
+        } else {
+            year = 400 * n400 + 100 * n100 + 4 * n4 + n1 + 1
+        }
         
         // Day of year (0-based)
         let yearStart = 365 * (year - 1) + (year - 1) / 4 - (year - 1) / 100 + (year - 1) / 400
