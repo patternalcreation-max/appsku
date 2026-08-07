@@ -142,7 +142,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: Meta.s) {
             Text("TENTANG")
                 .font(.metaEyebrow).foregroundStyle(Meta.gold).kerning(1.35)
-            MetaInfoRow(label: "Versi", value: "Meta Calendar v1.2.0")
+            MetaInfoRow(label: "Versi", value: "Meta Calendar v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "2.0.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
             MetaInfoRow(label: "MetaSolar", value: MetaSolarEngine.profile.id)
             MetaInfoRow(label: "Astronomi", value: AstronomyEngine.providerID)
             MetaInfoRow(label: "Akurasi", value: AstronomyEngine.expectedErrorEnvelope)
