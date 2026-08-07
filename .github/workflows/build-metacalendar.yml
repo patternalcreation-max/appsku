@@ -20,10 +20,8 @@ jobs:
 
       - name: Select Xcode
         run: |
-          ls -d /Applications/Xcode*.app
           sudo xcode-select -s $(ls -d /Applications/Xcode*.app | tail -1)
           xcodebuild -version
-          xcrun simctl list runtimes || true
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -36,29 +34,20 @@ jobs:
         working-directory: MetaCalendar
         run: |
           set +e
-          
-          xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -configuration Release             -derivedDataPath build             -destination 'generic/platform=iOS'             ARCHS=arm64             ONLY_ACTIVE_ARCH=NO             ASSETCATALOG_COMPILER_SKIP_VALIDATION=YES             ENABLE_BITCODE=NO             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
+          xcodebuild build             -project MetaCalendar.xcodeproj             -scheme MetaCalendar             -sdk iphoneos             -configuration Release             -derivedDataPath build             -destination 'generic/platform=iOS'             ARCHS=arm64             ONLY_ACTIVE_ARCH=NO             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
           EXIT_CODE=${PIPESTATUS[0]}
           
-          # If asset catalog fails, try without it
-          if [ $EXIT_CODE -ne 0 ] && grep -q "simulator runtime" build_output.log; then
-            echo "=== Asset catalog failed, retrying without Assets.xcassets ==="
-            
-            # Remove asset catalog from project temporarily
-            sed -i '' '/ASSETCATALOG_COMPILER_APPICON_NAME/d' project.yml
-            xcodegen generate 2>&1
-            
-            xcodebuild build               -project MetaCalendar.xcodeproj               -scheme MetaCalendar               -sdk iphoneos               -configuration Release               -derivedDataPath build               -destination 'generic/platform=iOS'               ARCHS=arm64               ONLY_ACTIVE_ARCH=NO               ENABLE_BITCODE=NO               CODE_SIGNING_ALLOWED=NO               CODE_SIGNING_REQUIRED=NO               CODE_SIGN_IDENTITY=""               DEVELOPMENT_TEAM="" 2>&1 | tee build_output2.log
-            EXIT_CODE=${PIPESTATUS[0]}
-          fi
-          
           if [ $EXIT_CODE -ne 0 ]; then
+            echo "=== ERRORS ==="
+            grep "error:" build_output.log | head -20
+            echo "=== TAIL ==="
+            tail -20 build_output.log
+            
             cd $GITHUB_WORKSPACE
             git stash || true
             git checkout -B build-logs || true
-            cp MetaCalendar/build_output.log . 2>/dev/null || true
-            cp MetaCalendar/build_output2.log . 2>/dev/null || true
-            git add -A
+            cp MetaCalendar/build_output.log .
+            git add build_output.log
             git -c user.name="github-actions" -c user.email="actions@github.com" commit -m "build log" || true
             git push --force origin build-logs 2>/dev/null || true
             git checkout main || true
