@@ -1,0 +1,13 @@
+# Build artifacts
+build/
+build_output.log
+DerivedData/
+*.xcuserstate
+.xcworkspace/xcuserdata/
+.xcodeproj/xcuserdata/
+
+# macOS
+.DS_Store
+
+# XcodeGen generated
+*.xcodeproj

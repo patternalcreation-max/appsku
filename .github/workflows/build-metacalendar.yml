@@ -1,0 +1,90 @@
+name: Build MetaCalendar IPA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'MetaCalendar/**'
+      - '.github/workflows/build-metacalendar.yml'
+    tags: ['metacalendar-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app 2>/dev/null || \
+          sudo xcode-select -s /Applications/Xcode_16.3.app 2>/dev/null || \
+          sudo xcode-select -s /Applications/Xcode_16.2.app 2>/dev/null || \
+          sudo xcode-select -s $(ls -d /Applications/Xcode*.app | head -1)
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        working-directory: MetaCalendar
+        run: xcodegen generate 2>&1
+
+      - name: Build .app (unsigned)
+        working-directory: MetaCalendar
+        run: |
+          set +e
+          xcodebuild build \
+            -project MetaCalendar.xcodeproj \
+            -scheme MetaCalendar \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" 2>&1 | tee build_output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          grep -i "error:" build_output.log || true
+          grep -i "error:" build_output.log | while IFS= read -r line; do
+            safe=$(echo "$line" | sed 's/:/ /3g' | head -c 200)
+            echo "::error::$safe"
+          done || true
+          exit $EXIT_CODE
+
+      - name: Package IPA
+        working-directory: MetaCalendar
+        run: |
+          mkdir -p build/Payload
+          APP_PATH=$(find build/Build/Products -name "*.app" -type d | head -1)
+          echo "Found app at: $APP_PATH"
+          cp -r "$APP_PATH" build/Payload/
+          cd build && zip -r MetaCalendar.ipa Payload
+          ls -la MetaCalendar.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MetaCalendar-ipa
+          path: MetaCalendar/build/MetaCalendar.ipa
+          retention-days: 90
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metacalendar-build-log
+          path: MetaCalendar/build_output.log
+          retention-days: 7
+
+      - name: Create Release on Tag
+        if: startsWith(github.ref, 'refs/tags/metacalendar-v')
+        run: |
+          gh release create ${{ github.ref_name }} MetaCalendar/build/MetaCalendar.ipa \
+            --title "MetaCalendar ${{ github.ref_name }}" \
+            --notes "Multi-calendar iOS app — MetaSolar-13, Gregorian, Chinese, Hijri, Javanese"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
