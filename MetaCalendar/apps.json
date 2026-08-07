@@ -1,14 +1,14 @@
 {
   "name": "Meta Calendar",
-  "subtitle": "Multi-calendar engine",
+  "subtitle": "Alignment engine for 5 calendars",
   "icon": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/MetaCalendar/App/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
   "apps": [
     {
       "name": "Meta Calendar",
       "bundleIdentifier": "com.metacalendar.app",
-      "version": "1.4.0",
+      "version": "2.0.0",
       "versionDate": "2026-08-07",
-      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/metacalendar-v1.4.0/MetaCalendar.ipa",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/metacalendar-v2.0.0/MetaCalendar.ipa",
       "developerName": "Meta Calendar",
       "iconURL": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/MetaCalendar/App/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
       "size": 0,
