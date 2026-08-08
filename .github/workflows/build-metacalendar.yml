@@ -134,10 +134,13 @@ jobs:
           MARKETING="${{ steps.version.outputs.marketing }}"
           BUILD_NUM="${{ steps.version.outputs.build }}"
           XCODE_VER=$(xcodebuild -version | head -1)
+          ASTRO_VER=$(grep 'static let version = ' App/Core/AstronomyEngine.swift | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          ASTRO_CAP=$(grep 'astronomyCapabilityVersion = ' App/Core/AstronomyEngine.swift | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "Astronomy provider version: $ASTRO_VER (capability: $ASTRO_CAP)"
           
           mkdir -p App/Resources
           cat > App/Resources/BuildManifest.json <<MANIFEST_EOF
-          {"gitCommit":"$GIT_COMMIT","gitShort":"$GIT_SHORT","marketingVersion":"$MARKETING","buildNumber":"$BUILD_NUM","buildConfiguration":"Release","buildTimestampUTC":"$BUILD_TS","fixedDayMethodVersion":"2.0","astronomyProviderID":"astronomy.embedded-standard-v1","astronomyProviderVersion":"1.0.0","eclipseCatalogSource":"NASA GSFC 2020-2035","meteorShowerSource":"IMO calendar","xcodeVersion":"$XCODE_VER"}
+          {"gitCommit":"$GIT_COMMIT","gitShort":"$GIT_SHORT","marketingVersion":"$MARKETING","buildNumber":"$BUILD_NUM","buildConfiguration":"Release","buildTimestampUTC":"$BUILD_TS","fixedDayMethodVersion":"2.0","astronomyProviderID":"astronomy.embedded-standard-v1","astronomyProviderVersion":"$ASTRO_VER","astronomyCapabilityVersion":"$ASTRO_CAP","eclipseCatalogSource":"NASA GSFC 2020-2035","meteorShowerSource":"IMO calendar","xcodeVersion":"$XCODE_VER"}
           MANIFEST_EOF
           
           echo "BuildManifest generated:"
@@ -239,13 +242,14 @@ jobs:
           fi
           echo "✓ No coverage sections"
           
-          # Assert M2 markers exist in binary
-          M2_MARKERS=$(strings "$APP_PATH/MetaCalendar" | grep -c "RiseSetResult\|AstronomyProvenance\|midnightSun\|polarNight" || echo "0")
-          if [ "$M2_MARKERS" -lt 1 ]; then
-            echo "FATAL: M2 markers (RiseSetResult, AstronomyProvenance, midnightSun, polarNight) not found in binary!"
-            exit 1
-          fi
-          echo "✓ M2 markers present ($M2_MARKERS matches)"
+          # Assert ALL M2 markers exist in binary (provenance + polar + capability)
+          for MARKER in RiseSetResult AstronomyProvenance midnightSun polarNight metacalendar.astronomy-accuracy.v2 astronomyCapabilityVersion; do
+            if ! strings "$APP_PATH/MetaCalendar" | grep -q "$MARKER"; then
+              echo "FATAL: M2 marker '$MARKER' not found in binary!"
+              exit 1
+            fi
+            echo "✓ marker present: $MARKER"
+          done
           
           # Record executable SHA
           EXEC_SHA=$(shasum -a 256 "$APP_PATH/MetaCalendar" | awk '{print $1}')
@@ -275,6 +279,82 @@ jobs:
           # Record IPA SHA
           IPA_SHA=$(shasum -a 256 MetaCalendar.ipa | awk '{print $1}')
           echo "IPA SHA-256: $IPA_SHA"
+
+      - name: Audit Final IPA (extracted executable)
+        if: success()
+        working-directory: MetaCalendar
+        run: |
+          set -e
+          IPA="build/MetaCalendar.ipa"
+          if [ ! -f "$IPA" ]; then echo "FATAL: IPA not found at $IPA"; exit 1; fi
+
+          TMP=$(mktemp -d)
+          unzip -q "$IPA" -d "$TMP"
+          APP=$(find "$TMP/Payload" -name "*.app" -type d | head -1)
+          EXEC="$APP/MetaCalendar"
+          echo "Extracted .app: $APP"
+
+          # 1. Info.plist version from the EXTRACTED .app
+          INFO_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist" 2>/dev/null)
+          INFO_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist" 2>/dev/null)
+          EXPECTED_VERSION="${{ steps.version.outputs.marketing }}"
+          EXPECTED_BUILD="${{ steps.version.outputs.build }}"
+          echo "Extracted Info.plist: $INFO_VERSION ($INFO_BUILD)"
+          if [ "$INFO_VERSION" != "$EXPECTED_VERSION" ] || [ "$INFO_BUILD" != "$EXPECTED_BUILD" ]; then
+            echo "FATAL: Extracted IPA version $INFO_VERSION ($INFO_BUILD) != expected $EXPECTED_VERSION ($EXPECTED_BUILD)"
+            exit 1
+          fi
+          echo "✓ Extracted IPA version matches project.yml"
+
+          # 2. Marker check on the EXTRACTED executable (not intermediate build output)
+          for MARKER in RiseSetResult AstronomyProvenance midnightSun polarNight metacalendar.astronomy-accuracy.v2 astronomyCapabilityVersion; do
+            if ! strings "$EXEC" | grep -q "$MARKER"; then
+              echo "FATAL: M2 marker '$MARKER' not found in EXTRACTED IPA executable!"
+              exit 1
+            fi
+            echo "✓ extracted-IPA marker present: $MARKER"
+          done
+
+          # 3. No coverage sections on the extracted executable
+          COV=$(otool -l "$EXEC" 2>/dev/null | grep -c "__llvm_cov\|__LLVM_COV" || echo "0")
+          if [ "$COV" -gt 0 ]; then
+            echo "FATAL: Coverage sections found in EXTRACTED executable!"
+            otool -l "$EXEC" 2>/dev/null | grep "__llvm_cov\|__LLVM_COV"
+            exit 1
+          fi
+          echo "✓ No coverage sections in extracted executable"
+
+          # 4. Executable SHA-256 from the extracted binary
+          EXEC_SHA=$(shasum -a 256 "$EXEC" | awk '{print $1}')
+          echo "Extracted executable SHA-256: $EXEC_SHA"
+
+          # 5. Must NOT match the stale v2.1.2 executable (proves M2 is really compiled in)
+          PRIOR_SHA_PREFIX="dd0e6238"
+          case "$EXEC_SHA" in
+            "$PRIOR_SHA_PREFIX"*)
+              echo "FATAL: Extracted executable SHA ($EXEC_SHA) starts with $PRIOR_SHA_PREFIX — identical to stale v2.1.2 binary. M2 NOT integrated!"
+              exit 1
+              ;;
+          esac
+          echo "✓ Executable SHA differs from stale v2.1.2 (prefix $PRIOR_SHA_PREFIX...)"
+
+          # 6. BuildManifest gitCommit must match workflow HEAD (full hash)
+          MANIFEST="$APP/BuildManifest.json"
+          if [ ! -f "$MANIFEST" ]; then echo "FATAL: BuildManifest.json missing from extracted IPA"; exit 1; fi
+          MANIFEST_COMMIT=$(python3 -c "import json; print(json.load(open('$MANIFEST'))['gitCommit'])" 2>/dev/null)
+          HEAD_COMMIT=$(git rev-parse HEAD)
+          echo "Manifest gitCommit: $MANIFEST_COMMIT"
+          echo "Workflow HEAD:      $HEAD_COMMIT"
+          if [ "$MANIFEST_COMMIT" != "$HEAD_COMMIT" ]; then
+            echo "FATAL: BuildManifest gitCommit != workflow HEAD (stale/packaged build)"
+            exit 1
+          fi
+          echo "✓ BuildManifest gitCommit matches workflow HEAD"
+
+          # 7. Provenance version + capability recorded in the manifest
+          python3 -c "import json; m=json.load(open('$MANIFEST')); print('astronomyProviderVersion:', m.get('astronomyProviderVersion')); print('astronomyCapabilityVersion:', m.get('astronomyCapabilityVersion')); print('marketingVersion:', m.get('marketingVersion'))"
+
+          rm -rf "$TMP"
 
       - name: Upload IPA Artifact
         if: success()

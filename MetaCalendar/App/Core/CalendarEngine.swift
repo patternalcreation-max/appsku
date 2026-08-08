@@ -15,6 +15,16 @@ struct AstronomyData: Sendable, Equatable {
     let sunrise: Date?
     let sunset: Date?
     let provenance: String
+
+    // MARK: - M2 provenance (production-integrated)
+    /// Descriptor for how solar longitude was computed (method / source / accuracy).
+    let solarLongitudeProvenance: AstronomyProvenance
+    /// Descriptor for how lunar phase was computed.
+    let lunarPhaseProvenance: AstronomyProvenance
+    /// Typed, polar-aware sunrise/sunset result.
+    let riseSetResult: RiseSetResult
+    /// Dominant data origin for this astronomy bundle.
+    let dominantDataOrigin: AstronomyDataOrigin
 }
 
 struct ProjectionBundle: Sendable {
@@ -104,28 +114,47 @@ enum CalendarEngine {
         )
     }
     
-    /// Compute astronomy data if location is available
+    /// Compute astronomy data, routing through the provenance-aware provider so the
+    /// M2 layer (AstronomyProvenance / RiseSetResult / AstronomyDataOrigin) is part
+    /// of the production projection path — not test-only. The underlying
+    /// `AstronomyEngine` math is unchanged; this wraps it with typed provenance.
     private static func computeAstronomy(instant: Instant, timeZone: TimeZone, location: GeoPoint?) -> AstronomyData? {
+        let provider = EmbeddedAstronomyProvider()
         let jd = AstronomyEngine.julianDay(from: instant.date)
-        let solarLong = AstronomyEngine.solarLongitude(julianDay: jd)
+
+        let solarResult = provider.solarLongitudeWithProvenance(julianDay: jd)
+        let solarLong = solarResult.value
         let solarTerm = AstronomyEngine.currentSolarTerm(longitude: solarLong)
-        let moonPhase = AstronomyEngine.lunarPhase(julianDay: jd)
+
+        let lunarResult = provider.lunarPhaseWithProvenance(julianDay: jd)
+        let moonPhase = lunarResult.value
         let moonInfo = AstronomyEngine.moonPhaseInfo(phase: moonPhase)
-        
+
         var sunrise: Date? = nil
         var sunset: Date? = nil
-        
+        var riseSet: RiseSetResult = .unknown
+
         if let loc = location {
-            let (sr, ss) = AstronomyEngine.sunRiseSet(
+            riseSet = provider.sunRiseSetTyped(
                 date: instant.date,
                 latitude: loc.latitude,
                 longitude: loc.longitude,
                 timeZone: timeZone
             )
-            sunrise = sr
-            sunset = ss
+            switch riseSet {
+            case .rises(let sr, let ss):
+                sunrise = sr
+                sunset = ss
+            case .midnightSun:
+                // Sun never sets — mirror the underlying engine's (date, date) convention.
+                sunrise = instant.date
+                sunset = instant.date
+            case .polarNight, .unknown:
+                sunrise = nil
+                sunset = nil
+            }
         }
-        
+
         return AstronomyData(
             solarLongitude: solarLong,
             solarTerm: solarTerm,
@@ -135,7 +164,11 @@ enum CalendarEngine {
             moonIllumination: moonInfo.illumination,
             sunrise: sunrise,
             sunset: sunset,
-            provenance: "\(AstronomyEngine.providerID) v\(AstronomyEngine.version) · Error: \(AstronomyEngine.expectedErrorEnvelope)"
+            provenance: "\(AstronomyEngine.providerID) v\(AstronomyEngine.version) · Error: \(AstronomyEngine.expectedErrorEnvelope)",
+            solarLongitudeProvenance: solarResult.provenance,
+            lunarPhaseProvenance: lunarResult.provenance,
+            riseSetResult: riseSet,
+            dominantDataOrigin: solarResult.provenance.dataOrigin
         )
     }
     

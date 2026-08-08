@@ -109,7 +109,9 @@ enum WorldEvents {
             let fd = FixedDay.fromGregorian(year: year, month: d.month, day: d.day)
             return makeEvent(key: d.key, fixedDay: fd,
                              name: d.name, emoji: d.emoji,
-                             category: .astronomical, desc: d.desc)
+                             category: .astronomical, desc: d.desc,
+                             dataOrigin: AstronomyProvenanceCatalog.meteorShowers.dataOrigin,
+                             provenance: AstronomyProvenanceCatalog.meteorShowers)
         }
     }
 
@@ -259,7 +261,9 @@ enum WorldEvents {
                 let fd = FixedDay.fromGregorian(year: d.year, month: d.month, day: d.day)
                 return makeEvent(key: d.key, fixedDay: fd,
                                  name: d.name, emoji: d.emoji,
-                                 category: .astronomical, desc: d.desc)
+                                 category: .astronomical, desc: d.desc,
+                                 dataOrigin: AstronomyProvenanceCatalog.tabulatedEclipses.dataOrigin,
+                                 provenance: AstronomyProvenanceCatalog.tabulatedEclipses)
             }
     }
 
@@ -335,7 +339,9 @@ enum WorldEvents {
     /// matching the identifier convention used by `CalendarEvents.makeEvent`.
     private static func makeEvent(key: String, fixedDay: Int64,
                                   name: String, emoji: String,
-                                  category: EventCategory, desc: String) -> CalendarEvent {
+                                  category: EventCategory, desc: String,
+                                  dataOrigin: AstronomyDataOrigin? = nil,
+                                  provenance: AstronomyProvenance? = nil) -> CalendarEvent {
         CalendarEvent(
             id: "world.\(key).\(fixedDay)",
             name: name,
@@ -343,7 +349,9 @@ enum WorldEvents {
             category: category,
             calendarSystem: .gregorian,
             fixedDay: fixedDay,
-            description: desc
+            description: desc,
+            dataOrigin: dataOrigin,
+            provenance: provenance
         )
     }
 }

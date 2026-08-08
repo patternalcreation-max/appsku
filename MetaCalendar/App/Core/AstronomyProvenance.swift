@@ -21,7 +21,7 @@ struct AstronomicalResult<Value> {
 /// Typed origin for astronomy data — distinguishes HOW a value was produced.
 /// More specific than EpistemicClass: a NASA catalog is "observed" epistemically
 /// but is an "authoritativeCatalog" in origin, not an "observedFeed".
-enum AstronomyDataOrigin: String, Sendable, Equatable {
+enum AstronomyDataOrigin: String, Sendable, Equatable, Hashable {
     /// Computed from first-principles formula (e.g., solar longitude from Meeus)
     case algorithmic
     /// Curated from an authoritative source (e.g., NASA GSFC eclipse catalog)
@@ -34,7 +34,7 @@ enum AstronomyDataOrigin: String, Sendable, Equatable {
 
 /// Provenance specific to astronomy calculations.
 /// Reuses the M1 EpistemicClass + Availability system.
-struct AstronomyProvenance {
+struct AstronomyProvenance: Sendable {
     let methodID: String
     let methodVersion: String
     let source: String
@@ -46,6 +46,30 @@ struct AstronomyProvenance {
     let supportedRange: (startYear: Int, endYear: Int)?
     /// Retrieval date for tabulated data (ISO 8601). nil for computed.
     let retrievalDate: String?
+}
+
+// MARK: - Value Semantics
+
+extension AstronomyProvenance: Equatable {
+    static func == (lhs: AstronomyProvenance, rhs: AstronomyProvenance) -> Bool {
+        lhs.methodID == rhs.methodID
+            && lhs.methodVersion == rhs.methodVersion
+            && lhs.source == rhs.source
+            && lhs.epistemicClass == rhs.epistemicClass
+            && lhs.dataOrigin == rhs.dataOrigin
+            && lhs.availability == rhs.availability
+            && lhs.accuracyDescription == rhs.accuracyDescription
+            && lhs.retrievalDate == rhs.retrievalDate
+            && lhs.supportedRange?.startYear == rhs.supportedRange?.startYear
+            && lhs.supportedRange?.endYear == rhs.supportedRange?.endYear
+    }
+}
+
+extension AstronomyProvenance: Hashable {
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(methodID)
+        hasher.combine(methodVersion)
+    }
 }
 
 // MARK: - Provenance Catalog (static registry)
@@ -202,11 +226,33 @@ enum AstronomyProvenanceCatalog {
 // MARK: - Polar/Edge-Case Type
 
 /// Typed result for sunrise/sunset that distinguishes polar conditions.
-enum RiseSetResult {
+enum RiseSetResult: Equatable, Sendable {
     case rises(sunrise: Date, sunset: Date)
     case midnightSun    // Sun never sets
     case polarNight     // Sun never rises
     case unknown        // Calculation inconclusive (edge latitude)
+
+    /// Stable machine-readable label. The literal case names are surfaced to
+    /// the production binary through the diagnostics/provenance display, so the
+    /// polar-condition markers survive optimization and are visible via `strings`.
+    var conditionLabel: String {
+        switch self {
+        case .rises:      return "rises"
+        case .midnightSun: return "midnightSun"
+        case .polarNight:  return "polarNight"
+        case .unknown:     return "unknown"
+        }
+    }
+
+    /// Human-readable label for UI display.
+    var humanLabel: String {
+        switch self {
+        case .rises:                  return "Sun rises & sets"
+        case .midnightSun:            return "Midnight sun (never sets)"
+        case .polarNight:             return "Polar night (never rises)"
+        case .unknown:                return "Unknown"
+        }
+    }
 
     var availability: Availability {
         switch self {

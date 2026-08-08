@@ -69,6 +69,11 @@ struct CalendarEvent: Identifiable, Sendable, Equatable, Hashable {
     let fixedDay: Int64
     let description: String
 
+    /// M2: explicit origin of the underlying astronomical data. nil for non-astronomy events.
+    let dataOrigin: AstronomyDataOrigin?
+    /// M2: full provenance descriptor (method/source/accuracy). nil for non-astronomy events.
+    let provenance: AstronomyProvenance?
+
     /// Convenience: Gregorian (year, month, day) of the event.
     var gregorianDate: (year: Int, month: Int, day: Int) {
         FixedDay.toGregorian(fixedDay)
@@ -305,7 +310,9 @@ enum CalendarEvents {
         if let qingming = nearestQingming(forGregorianYear: year) {
             events.append(makeEvent(system: .chinese, key: "qingming", fixedDay: qingming,
                                     name: "Qingming Festival", emoji: "🌿", category: .cultural,
-                                    desc: "Tomb-sweeping day; falls on the 'Pure Brightness' solar term (~April 5)."))
+                                    desc: "Tomb-sweeping day; falls on the 'Pure Brightness' solar term (~April 5).",
+                                    dataOrigin: AstronomyProvenanceCatalog.solarTerms.dataOrigin,
+                                    provenance: AstronomyProvenanceCatalog.solarTerms))
         }
 
         return events
@@ -381,7 +388,9 @@ enum CalendarEvents {
         for d in defs {
             guard let fd = longitudeCrossing(longitudes: longitudes, target: d.targetLongitude) else { continue }
             events.append(makeEvent(system: .gregorian, key: d.key, fixedDay: fd,
-                                    name: d.name, emoji: d.emoji, category: .seasonal, desc: d.desc))
+                                    name: d.name, emoji: d.emoji, category: .seasonal, desc: d.desc,
+                                    dataOrigin: AstronomyProvenanceCatalog.solsticesEquinoxes.dataOrigin,
+                                    provenance: AstronomyProvenanceCatalog.solsticesEquinoxes))
         }
         return events
     }
@@ -498,7 +507,9 @@ enum CalendarEvents {
 
     private static func makeEvent(system: CalendarSystemID, key: String, fixedDay: Int64,
                                   name: String, emoji: String, category: EventCategory,
-                                  desc: String) -> CalendarEvent {
+                                  desc: String,
+                                  dataOrigin: AstronomyDataOrigin? = nil,
+                                  provenance: AstronomyProvenance? = nil) -> CalendarEvent {
         CalendarEvent(
             id: "\(system.rawValue).\(key).\(fixedDay)",
             name: name,
@@ -506,7 +517,9 @@ enum CalendarEvents {
             category: category,
             calendarSystem: system,
             fixedDay: fixedDay,
-            description: desc
+            description: desc,
+            dataOrigin: dataOrigin,
+            provenance: provenance
         )
     }
 }

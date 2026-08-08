@@ -259,7 +259,7 @@ final class AstronomyCharacterizationTests: XCTestCase {
     }
 
     func testVersion_is_stable() {
-        XCTAssertEqual(AstronomyEngine.version, "1.0.0")
+        XCTAssertEqual(AstronomyEngine.version, "1.1.0")
     }
 
     func testSolarTerms_exist_for_all_24() {

@@ -81,7 +81,9 @@ enum AstroEvents {
                 category: .astronomical,
                 calendarSystem: .gregorian,
                 fixedDay: fd,
-                description: "Radiante: \(item.3) · Induk: \(item.4) · ZHR: \(item.5) · Belahan: \(item.6)"
+                description: "Radiante: \(item.3) · Induk: \(item.4) · ZHR: \(item.5) · Belahan: \(item.6)",
+                dataOrigin: AstronomyProvenanceCatalog.meteorShowers.dataOrigin,
+                provenance: AstronomyProvenanceCatalog.meteorShowers
             )
         }
     }
@@ -106,7 +108,9 @@ enum AstroEvents {
                 category: .astronomical,
                 calendarSystem: .gregorian,
                 fixedDay: fd,
-                description: item.3
+                description: item.3,
+                dataOrigin: AstronomyProvenanceCatalog.solsticesEquinoxes.dataOrigin,
+                provenance: AstronomyProvenanceCatalog.solsticesEquinoxes
             )
         }
     }
@@ -216,7 +220,9 @@ enum AstroEvents {
                 category: .astronomical,
                 calendarSystem: .gregorian,
                 fixedDay: fd,
-                description: "Tipe: \(e.4) · Terlihat: \(e.5)"
+                description: "Tipe: \(e.4) · Terlihat: \(e.5)",
+                dataOrigin: AstronomyProvenanceCatalog.tabulatedEclipses.dataOrigin,
+                provenance: AstronomyProvenanceCatalog.tabulatedEclipses
             )
         }
     }
@@ -274,7 +280,9 @@ enum AstroEvents {
                 category: .astronomical,
                 calendarSystem: .gregorian,
                 fixedDay: fd,
-                description: "\(item.5) · Peringatan ke-\(anniversaryYear) tahun (\(item.3))"
+                description: "\(item.5) · Peringatan ke-\(anniversaryYear) tahun (\(item.3))",
+                dataOrigin: AstronomyProvenanceCatalog.historicalAnniversaries.dataOrigin,
+                provenance: AstronomyProvenanceCatalog.historicalAnniversaries
             )
         }
     }
@@ -298,7 +306,9 @@ enum AstroEvents {
                 category: .astronomical,
                 calendarSystem: .gregorian,
                 fixedDay: fd,
-                description: c.desc
+                description: c.desc,
+                dataOrigin: AstronomyProvenanceCatalog.cometApparitions.dataOrigin,
+                provenance: AstronomyProvenanceCatalog.cometApparitions
             )
         }
     }
@@ -330,7 +340,9 @@ enum AstroEvents {
                 category: .astronomical,
                 calendarSystem: .gregorian,
                 fixedDay: fd,
-                description: "Bulan purnama terdekat dengan perigee — tampak lebih besar dan terang"
+                description: "Bulan purnama terdekat dengan perigee — tampak lebih besar dan terang",
+                dataOrigin: AstronomyProvenanceCatalog.supermoons.dataOrigin,
+                provenance: AstronomyProvenanceCatalog.supermoons
             )
         }
     }

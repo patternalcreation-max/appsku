@@ -13,7 +13,12 @@ import Foundation
 enum AstronomyEngine {
     
     static let providerID = "astronomy.embedded-standard-v1"
-    static let version = "1.0.0"
+    static let version = "1.1.0"
+
+    /// Stable capability marker for the integrated astronomy-provenance layer.
+    /// Surfaced to the production binary via the Settings/diagnostics display so
+    /// it survives optimization and is verifiable with `strings` on the final IPA.
+    static let astronomyCapabilityVersion = "metacalendar.astronomy-accuracy.v2"
     static let expectedErrorEnvelope = "±0.3° solar longitude, ±0.1 day lunar phase"
     
     // MARK: - Solar Longitude (simplified VSOP87)

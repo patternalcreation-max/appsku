@@ -13,7 +13,7 @@ import Foundation
 /// - `traditional`: Named, sourced cultural rule (e.g., reviewed auspice rule)
 /// - `symbolic`: Optional interpretation (e.g., reflection archetype)
 /// - `experimental`: Product-defined model (e.g., MetaSolar theme)
-enum EpistemicClass: String, Codable, Sendable, CaseIterable {
+enum EpistemicClass: String, Codable, Sendable, CaseIterable, Equatable, Hashable {
     case observed
     case calculated
     case traditional
@@ -27,7 +27,7 @@ enum EpistemicClass: String, Codable, Sendable, CaseIterable {
 /// - `approximate`: Simplified or low-precision result
 /// - `compatibility`: System calendar fallback (e.g., Foundation .islamic)
 /// - `unavailable`: No result can be produced for this input
-enum Availability: String, Codable, Sendable, CaseIterable {
+enum Availability: String, Codable, Sendable, CaseIterable, Equatable, Hashable {
     case available
     case approximate
     case compatibility

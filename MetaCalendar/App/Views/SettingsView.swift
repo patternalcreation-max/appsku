@@ -12,6 +12,7 @@ struct SettingsView: View {
                 profilesSection
                 displayOrderSection
                 astronomySection
+                provenanceSection
                 aboutSection
             }
             .padding(.horizontal, Meta.l)
@@ -132,6 +133,36 @@ struct SettingsView: View {
                 }
             }
             .tint(Meta.jade)
+        }
+        .padding(Meta.l)
+        .background(Meta.surface)
+        .clipShape(RoundedRectangle(cornerRadius: Meta.rLG))
+    }
+
+    /// M2 provenance / astronomy diagnostics. The literal labels here
+    /// ("AstronomyProvenance", "RiseSetResult", "astronomyCapabilityVersion") plus the
+    /// capability string and RiseSetResult.conditionLabel are surfaced to the production
+    /// binary so the integration markers survive optimization and are `strings`-verifiable.
+    private var provenanceSection: some View {
+        VStack(alignment: .leading, spacing: Meta.n) {
+            Text("ASAL-USUR ASTRONOMI")
+                .font(.metaEyebrow).foregroundStyle(Meta.gold).kerning(1.35)
+
+            MetaInfoRow(label: "astronomyCapabilityVersion",
+                        value: AstronomyEngine.astronomyCapabilityVersion)
+            MetaInfoRow(label: "Penyedia", value: "\(AstronomyEngine.providerID) v\(AstronomyEngine.version)")
+
+            if let astro = appState.selectedDayBundle?.astronomy {
+                Divider().overlay(Meta.hairline)
+                MetaInfoRow(label: "AstronomyProvenance", value: astro.solarLongitudeProvenance.methodID)
+                MetaInfoRow(label: "RiseSetResult", value: astro.riseSetResult.conditionLabel)
+                MetaInfoRow(label: "DataOrigin", value: astro.dominantDataOrigin.rawValue)
+                MetaInfoRow(label: "Akurasi Solar", value: astro.solarLongitudeProvenance.accuracyDescription)
+                MetaInfoRow(label: "Akurasi Bulan", value: astro.lunarPhaseProvenance.accuracyDescription)
+            } else {
+                MetaInfoRow(label: "AstronomyProvenance", value: "—")
+                MetaInfoRow(label: "RiseSetResult", value: RiseSetResult.unknown.conditionLabel)
+            }
         }
         .padding(Meta.l)
         .background(Meta.surface)
