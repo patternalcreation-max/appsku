@@ -378,37 +378,45 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Pure progressive blur: as content scrolls through the header zone it gradually
-/// softens — NO frost container / material band / glass sheet. Only the overlapping
-/// strip is affected; blur strength fades in toward the top of the zone.
+/// Pure progressive blur — no container.
+/// Blurs every part of the view whose viewport Y is above `zoneHeight`, including
+/// content that has scrolled under the status bar / notch (no hard “bias line”).
+/// Strength ramps softly: light near the zone edge → stronger toward the top.
 struct ProgressiveHeaderBlur: ViewModifier {
     var zoneHeight: CGFloat
     var radius: CGFloat
 
     func body(content: Content) -> some View {
+        let r = max(radius, 0)
+        return content
+            // Layered radii ≈ variable blur (avoids one hard rectangular haze)
+            .overlay { blurLayer(content: content, radius: r * 0.35, feather: 0.15) }
+            .overlay { blurLayer(content: content, radius: r * 0.70, feather: 0.40) }
+            .overlay { blurLayer(content: content, radius: r * 1.00, feather: 0.65) }
+    }
+
+    @ViewBuilder
+    private func blurLayer(content: Content, radius: CGFloat, feather: CGFloat) -> some View {
         content
-            .overlay {
-                content
-                    .blur(radius: max(radius, 0))
-                    .allowsHitTesting(false)
-                    .mask {
-                        GeometryReader { geo in
-                            let f = geo.frame(in: .named("viewport"))
-                            let localTop = max(CGFloat(0), -f.minY)
-                            let localBot = min(geo.size.height, zoneHeight - f.minY)
-                            let h = max(CGFloat(0), localBot - localTop)
-                            // Soft ramp: clear at bottom of zone → full blur toward top
-                            LinearGradient(stops: [
-                                .init(color: Color.black.opacity(0.95), location: 0),
-                                .init(color: Color.black.opacity(0.55), location: 0.45),
-                                .init(color: Color.black.opacity(0.12), location: 0.82),
-                                .init(color: Color.clear, location: 1)
-                            ], startPoint: .top, endPoint: .bottom)
-                            .frame(width: geo.size.width, height: h)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            .offset(y: localTop)
-                        }
-                    }
+            .blur(radius: radius)
+            .allowsHitTesting(false)
+            .mask {
+                GeometryReader { geo in
+                    let f = geo.frame(in: .named("viewport"))
+                    // IMPORTANT: localTop = 0 so content under the notch stays blurred
+                    // (old code skipped y < 0 → sharp “bias line” mid-header).
+                    let localBot = min(geo.size.height, zoneHeight - f.minY)
+                    let h = max(CGFloat(0), localBot)
+                    let fadeStart = min(max(feather, 0.05), 0.9)
+                    LinearGradient(stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black.opacity(0.75), location: fadeStart * 0.45),
+                        .init(color: .black.opacity(0.25), location: fadeStart),
+                        .init(color: .clear, location: 1)
+                    ], startPoint: .top, endPoint: .bottom)
+                    .frame(width: geo.size.width, height: h)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
             }
     }
 }
@@ -429,6 +437,7 @@ struct ContentView: View {
 
     @State private var rowProgress: [ChatElement.ID: BubbleEdges] = [:]
     @State private var viewportSize: CGSize = .zero
+    @State private var safeTop: CGFloat = 47
     /// Stable id so the profile / View profile block gets the same pass-under-header blur as bubbles.
     private let profilePassId = UUID(uuidString: "A11CE000-0000-4000-8000-000000000001")!
     @State private var showEditor = false
@@ -1023,15 +1032,17 @@ struct ContentView: View {
     }
 
 
-    /// Header blur band height in pt (matches FrostBand — kept high / near chrome).
+    /// Zone from top of screen (incl. under status bar / notch) down through header chrome.
     private var headerZonePt: CGFloat {
-        if headerBlurOnly { return 78 }
-        return max(viewportSize.height * CGFloat(bandPct / 100.0), 1)
+        if headerBlurOnly {
+            // safe area + header row — blur must reach the dead-end under the notch
+            return safeTop + 92
+        }
+        return max(viewportSize.height * CGFloat(bandPct / 100.0), safeTop + 40)
     }
 
-    /// Stronger gaussian for the masked strip under the header.
     private var headerBlurRadius: CGFloat {
-        CGFloat(max(frostBlur, 0)) * 0.85
+        CGFloat(max(frostBlur, 0)) * 0.95
     }
 
     // MARK: Chat area
@@ -1078,11 +1089,17 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .padding(EdgeInsets(top: 108, leading: 16, bottom: 4, trailing: 16))
+                    .padding(EdgeInsets(top: safeTop + 96, leading: 16, bottom: 4, trailing: 16))
                 }
                 .coordinateSpace(name: "viewport")
-                .onAppear { viewportSize = outer.size }
+                // Draw under status bar so blur can run all the way to the notch
+                .ignoresSafeArea(edges: .top)
+                .onAppear {
+                    viewportSize = outer.size
+                    safeTop = outer.safeAreaInsets.top
+                }
                 .onChange(of: outer.size, perform: { viewportSize = $0 })
+                .onChange(of: outer.safeAreaInsets.top, perform: { safeTop = $0 })
                 .onPreferenceChange(BubbleProgressKey.self) { dict in
                     rowProgress = dict
                 }
