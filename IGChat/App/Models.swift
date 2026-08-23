@@ -25,6 +25,8 @@ struct ChatElement: Identifiable, Hashable, Codable {
     var replyImageJPEG: Data? = nil
     /// JPEG for a photo message (text may be empty).
     var imageJPEG: Data? = nil
+    /// For `.date` rows: underlying instant used by smart IG formatting / presets.
+    var stampAt: Date? = nil
 
     var hasReply: Bool {
         let t = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -34,15 +36,16 @@ struct ChatElement: Identifiable, Hashable, Codable {
     var hasImage: Bool { imageJPEG != nil }
 
     enum CodingKeys: String, CodingKey {
-        case id, style, text, heartHint, replyText, replyFromMe, replyKind, replyImageJPEG, imageJPEG
+        case id, style, text, heartHint, replyText, replyFromMe, replyKind, replyImageJPEG, imageJPEG, stampAt
     }
 
     init(id: UUID = UUID(), style: Style, text: String, heartHint: Bool = false,
          replyText: String? = nil, replyFromMe: Bool = false, replyKind: ReplyKind = .chat,
-         replyImageJPEG: Data? = nil, imageJPEG: Data? = nil) {
+         replyImageJPEG: Data? = nil, imageJPEG: Data? = nil, stampAt: Date? = nil) {
         self.id = id; self.style = style; self.text = text; self.heartHint = heartHint
         self.replyText = replyText; self.replyFromMe = replyFromMe; self.replyKind = replyKind
         self.replyImageJPEG = replyImageJPEG; self.imageJPEG = imageJPEG
+        self.stampAt = stampAt
     }
 
     init(from decoder: Decoder) throws {
@@ -56,6 +59,7 @@ struct ChatElement: Identifiable, Hashable, Codable {
         replyKind = try c.decodeIfPresent(ReplyKind.self, forKey: .replyKind) ?? .chat
         replyImageJPEG = try c.decodeIfPresent(Data.self, forKey: .replyImageJPEG)
         imageJPEG = try c.decodeIfPresent(Data.self, forKey: .imageJPEG)
+        stampAt = try c.decodeIfPresent(Date.self, forKey: .stampAt)
     }
 }
 
@@ -89,6 +93,86 @@ enum IGSeed {
             ChatElement(style: .sent, text: "Hey"),
             ChatElement(style: .received, text: "Hi", heartHint: false)
         ]
+    }
+}
+
+
+// MARK: - Smart IG-style date stamps
+
+enum IGStamp {
+    /// Format like native IG separators: "2:34 PM" / "SAT 6:05PM" / "AUG 9 AT 2:34 PM"
+    static func label(for date: Date, now: Date = Date()) -> String {
+        var cal = Calendar.current
+        cal.timeZone = .current
+        let timeLoose: (Date) -> String = { d in
+            let f = DateFormatter(); f.dateFormat = "h:mm a"; return f.string(from: d).uppercased()
+        }
+        let timeTight: (Date) -> String = { d in
+            let f = DateFormatter(); f.dateFormat = "h:mma"; return f.string(from: d).uppercased()
+        }
+        if cal.isDate(date, inSameDayAs: now) {
+            return timeLoose(date)
+        }
+        let startNow = cal.startOfDay(for: now)
+        let startDate = cal.startOfDay(for: date)
+        let days = cal.dateComponents([.day], from: startDate, to: startNow).day ?? 0
+        if days >= 1 && days <= 6 {
+            let f = DateFormatter(); f.dateFormat = "EEE"
+            return f.string(from: date).uppercased() + " " + timeTight(date)
+        }
+        let mf = DateFormatter(); mf.dateFormat = "MMM d"
+        return mf.string(from: date).uppercased() + " AT " + timeLoose(date)
+    }
+
+    enum Preset: String, CaseIterable, Identifiable {
+        case justNow = "Just now"
+        case hours2 = "2h ago"
+        case hours6 = "6h ago"
+        case yesterdayMorning = "Yesterday morning"
+        case yesterdayEvening = "Yesterday evening"
+        case threeDays = "3 days ago"
+        case lastWeek = "Last week"
+        var id: String { rawValue }
+
+        func date(from now: Date = Date()) -> Date {
+            var cal = Calendar.current
+            cal.timeZone = .current
+            switch self {
+            case .justNow: return now
+            case .hours2: return cal.date(byAdding: .hour, value: -2, to: now) ?? now
+            case .hours6: return cal.date(byAdding: .hour, value: -6, to: now) ?? now
+            case .yesterdayMorning:
+                let y = cal.date(byAdding: .day, value: -1, to: now) ?? now
+                return cal.date(bySettingHour: 9, minute: 12, second: 0, of: y) ?? y
+            case .yesterdayEvening:
+                let y = cal.date(byAdding: .day, value: -1, to: now) ?? now
+                return cal.date(bySettingHour: 20, minute: 47, second: 0, of: y) ?? y
+            case .threeDays:
+                let d = cal.date(byAdding: .day, value: -3, to: now) ?? now
+                return cal.date(bySettingHour: 14, minute: 5, second: 0, of: d) ?? d
+            case .lastWeek:
+                let d = cal.date(byAdding: .day, value: -7, to: now) ?? now
+                return cal.date(bySettingHour: 16, minute: 30, second: 0, of: d) ?? d
+            }
+        }
+    }
+
+    static func makeSeparator(_ preset: Preset = .justNow, now: Date = Date()) -> ChatElement {
+        let d = preset.date(from: now)
+        return ChatElement(style: .date, text: label(for: d, now: now), stampAt: d)
+    }
+
+    static func apply(_ preset: Preset, to element: inout ChatElement, now: Date = Date()) {
+        let d = preset.date(from: now)
+        element.stampAt = d
+        element.text = label(for: d, now: now)
+    }
+
+    static func nudge(_ element: inout ChatElement, minutes: Int, now: Date = Date()) {
+        let base = element.stampAt ?? now
+        let d = Calendar.current.date(byAdding: .minute, value: minutes, to: base) ?? base
+        element.stampAt = d
+        element.text = label(for: d, now: now)
     }
 }
 
@@ -264,6 +348,8 @@ enum IGPersistence {
         var frostBlur: Double
         var gradTop: Double = 15
         var gradBottom: Double = 30
+        var subtitleFontSize: Double = 10
+        var headerBlurOnly: Bool = true
     }
     static func saveLook(_ l: Look) {
         if let data = try? JSONEncoder().encode(l) {

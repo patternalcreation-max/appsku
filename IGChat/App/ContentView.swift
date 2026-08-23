@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 // MARK: - Shapes (IGBubbleShape lives in BubbleKit.swift)
 
@@ -381,10 +382,15 @@ struct BubbleProgressKey: PreferenceKey {
 struct FrostBand: View {
     var bandPct: Double
     var frostBlur: Double
+    /// When true, blur only covers the floating header chrome (~88pt), not a big % of the screen.
+    var headerOnly: Bool = true
+    var headerHeight: CGFloat = 88
 
     var body: some View {
         GeometryReader { geo in
-            let bandH = max(geo.size.height * (bandPct / 100.0), 1)
+            let bandH = headerOnly
+                ? max(headerHeight, 1)
+                : max(geo.size.height * (bandPct / 100.0), 1)
             // Soft edge radius from the Look & feel slider (0…30 → ~0…6pt)
             let edgeBlur = CGFloat(max(frostBlur, 0)) * 0.2
             ZStack(alignment: .top) {
@@ -416,6 +422,34 @@ struct FrostBand: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
         }
+    }
+}
+
+
+/// Drag-reorder bubbles inside the mock chat scroll.
+struct ChatReorderDrop: DropDelegate {
+    let itemId: UUID
+    @Binding var elements: [ChatElement]
+    @Binding var draggingId: UUID?
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingId,
+              draggingId != itemId,
+              let from = elements.firstIndex(where: { $0.id == draggingId }),
+              let to = elements.firstIndex(where: { $0.id == itemId }),
+              from != to else { return }
+        withAnimation(.easeInOut(duration: 0.15)) {
+            elements.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingId = nil
+        return true
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
     }
 }
 
@@ -463,6 +497,9 @@ struct ContentView: View {
     @State private var frostBlur: Double = 14
     @State private var gradTop: Double = 15    // purple solid until this % from top of viewport
     @State private var gradBottom: Double = 30 // fully blue from this % downward
+    @State private var subtitleFontSize: Double = 10
+    @State private var headerBlurOnly: Bool = true
+    @State private var draggingId: UUID? = nil
 
     enum EditTarget: Hashable {
         case username
@@ -494,16 +531,28 @@ struct ContentView: View {
             // Progressive frost across the TOP 15% of the screen: content crossing it
             // gaussian-blurs and fades toward black as it approaches the very top,
             // behind the floating glass toolbar.
-            FrostBand(bandPct: bandPct, frostBlur: frostBlur)
+            FrostBand(bandPct: bandPct, frostBlur: frostBlur, headerOnly: headerBlurOnly)
                 .ignoresSafeArea(edges: .top)
                 .allowsHitTesting(false)
 
-            // Floating toolbar — no header container
+            // Floating toolbar — blur sits behind this chrome only when headerBlurOnly
             VStack {
                 liveHeader
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
                     .padding(.bottom, 10)
+                    .background {
+                        if headerBlurOnly {
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                        .fill(Theme.black.opacity(0.35))
+                                )
+                                .padding(.horizontal, 4)
+                                .allowsHitTesting(false)
+                        }
+                    }
                 Spacer(minLength: 0)
             }
         }
@@ -572,6 +621,8 @@ struct ContentView: View {
                 frostBlur = l.frostBlur
                 gradTop = l.gradTop
                 gradBottom = l.gradBottom
+                subtitleFontSize = l.subtitleFontSize
+                headerBlurOnly = l.headerBlurOnly
             }
         }
         .onChange(of: profile, perform: { IGPersistence.saveProfile($0) })
@@ -583,6 +634,8 @@ struct ContentView: View {
         .onChange(of: frostBlur, perform: { _ in saveLook() })
         .onChange(of: gradTop, perform: { _ in saveLook() })
         .onChange(of: gradBottom, perform: { _ in saveLook() })
+        .onChange(of: subtitleFontSize, perform: { _ in saveLook() })
+        .onChange(of: headerBlurOnly, perform: { _ in saveLook() })
     }
 
     @ViewBuilder
@@ -679,6 +732,7 @@ struct ContentView: View {
             strictMenu(element, isMe: true)
             Divider()
             replyAsMenu(element)
+            moveMenu(element)
             Divider()
             replyMenu(element)
             Divider()
@@ -700,6 +754,7 @@ struct ContentView: View {
             strictMenu(element, isMe: false)
             Divider()
             replyAsMenu(element)
+            moveMenu(element)
             Divider()
             replyMenu(element)
             Divider()
@@ -805,6 +860,23 @@ struct ContentView: View {
         beginEdit(.element(neu.id), text: neu.text)
     }
 
+
+    @ViewBuilder
+    private func moveMenu(_ element: ChatElement) -> some View {
+        if let idx = elements.firstIndex(where: { $0.id == element.id }) {
+            if idx > 0 {
+                Button {
+                    withAnimation { elements.swapAt(idx, idx - 1) }
+                } label: { Label("Move up", systemImage: "arrow.up") }
+            }
+            if idx < elements.count - 1 {
+                Button {
+                    withAnimation { elements.swapAt(idx, idx + 1) }
+                } label: { Label("Move down", systemImage: "arrow.down") }
+            }
+        }
+    }
+
     @ViewBuilder
     private func replyAsMenu(_ element: ChatElement) -> some View {
         // Only for real chat bubbles (not date separators)
@@ -834,6 +906,30 @@ struct ContentView: View {
     private func dateMenu(_ element: ChatElement) -> some View {
         let idx = elements.firstIndex(where: { $0.id == element.id }) ?? 0
         return Group {
+            Menu("Set time") {
+                ForEach(IGStamp.Preset.allCases) { preset in
+                    Button(preset.rawValue) {
+                        if let i = elements.firstIndex(where: { $0.id == element.id }) {
+                            IGStamp.apply(preset, to: &elements[i])
+                        }
+                    }
+                }
+                Divider()
+                Button("More… (buckets)") {
+                    pickerRef = element.id; pickerAbove = false
+                }
+            }
+            Button {
+                if let i = elements.firstIndex(where: { $0.id == element.id }) {
+                    IGStamp.nudge(&elements[i], minutes: -30)
+                }
+            } label: { Label("-30 min", systemImage: "minus.circle") }
+            Button {
+                if let i = elements.firstIndex(where: { $0.id == element.id }) {
+                    IGStamp.nudge(&elements[i], minutes: 30)
+                }
+            } label: { Label("+30 min", systemImage: "plus.circle") }
+            Divider()
             Button {
                 withAnimation { elements.insert(ChatElement(style: .sent, text: "New message"), at: idx) }
             } label: { Label("Add Me above", systemImage: "arrow.up") }
@@ -892,7 +988,7 @@ struct ContentView: View {
                     }
                 }
                 Text(profile.subtitle.isEmpty ? " " : profile.subtitle)
-                    .font(.system(size: 12))
+                    .font(.system(size: CGFloat(subtitleFontSize)))
                     .foregroundColor(Theme.secondaryText)
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.subtitle, text: profile.subtitle) }
@@ -981,6 +1077,16 @@ struct ContentView: View {
                         ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                             elementView(element, at: idx)
                                 .padding(.top, idx == 0 ? 8 : BubbleGrouping.spacing(before: idx, in: elements))
+                                .opacity(draggingId == element.id ? 0.55 : 1)
+                                .onDrag {
+                                    draggingId = element.id
+                                    return NSItemProvider(object: element.id.uuidString as NSString)
+                                }
+                                .onDrop(of: [.text], delegate: ChatReorderDrop(
+                                    itemId: element.id,
+                                    elements: $elements,
+                                    draggingId: $draggingId
+                                ))
                                 .background(
                                     // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
@@ -1315,7 +1421,12 @@ struct ContentView: View {
                 }
 
                 Button {
-                    let chat = chatStore.createChat()
+                    chatStore.snapshotCurrent(elements)
+                    var chat = chatStore.createChat()
+                    if let i = chatStore.chats.firstIndex(where: { $0.id == chat.id }) {
+                        chatStore.chats[i].title = profile.username.isEmpty ? chat.title : profile.username
+                        chat = chatStore.chats[i]
+                    }
                     elements = chat.elements
                     showChatList = false
                 } label: {
@@ -1349,7 +1460,9 @@ struct ContentView: View {
     private func saveLook() {
         IGPersistence.saveLook(.init(gradAHex: gradA.igHex, gradBHex: gradB.igHex,
                                      bandPct: bandPct, frostBlur: frostBlur,
-                                     gradTop: gradTop, gradBottom: gradBottom))
+                                     gradTop: gradTop, gradBottom: gradBottom,
+                                     subtitleFontSize: subtitleFontSize,
+                                     headerBlurOnly: headerBlurOnly))
     }
 
     private func lastMessage(in chat: ChatSession) -> String {
@@ -1526,8 +1639,13 @@ struct ContentView: View {
                         Text("Frost blur: \(Int(frostBlur))px")
                         Slider(value: $frostBlur, in: 0...30, step: 1)
                     }
+                    Toggle("Blur only behind header", isOn: $headerBlurOnly)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Subtitle size (Business chat): \(Int(subtitleFontSize))pt")
+                        Slider(value: $subtitleFontSize, in: 8...14, step: 0.5)
+                    }
                 }
-Section("Seen") {
+                Section("Seen") {
                     Toggle("\"Seen\" under last Me message", isOn: $seenEnabled)
                     if seenEnabled {
                         Stepper("Hours ago: \(seenHoursAgo == 0 ? "plain" : "\(seenHoursAgo)h")", value: $seenHoursAgo, in: 0...48)
@@ -1559,9 +1677,18 @@ Section("Seen") {
                         Label("Add Them photo…", systemImage: "photo")
                     }
                     Button {
-                        elements.append(ChatElement(style: .date, text: IGSeed.smartDate()))
+                        elements.append(IGStamp.makeSeparator(.justNow))
                     } label: {
-                        Label("Add date separator", systemImage: "clock")
+                        Label("Add date separator (now)", systemImage: "clock")
+                    }
+                    Menu {
+                        ForEach(IGStamp.Preset.allCases) { preset in
+                            Button(preset.rawValue) {
+                                elements.append(IGStamp.makeSeparator(preset))
+                            }
+                        }
+                    } label: {
+                        Label("Add stamp…", systemImage: "clock.badge.questionmark")
                     }
                     Button(role: .destructive) {
                         elements.removeAll()
