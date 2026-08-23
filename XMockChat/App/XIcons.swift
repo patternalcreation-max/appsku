@@ -55,7 +55,7 @@ struct SVGPathShape: Shape {
         }
 
         while i < tokens.count {
-            let c = tokens[i].0
+            guard let c = tokens[i].0 else { i += 1; continue }
             let args = Array(tokens[(i + 1)...].prefix(while: { $0.0 == nil }).map { $0.1 })
             let argCount = args.count
             i += 1 + argCount
