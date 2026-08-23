@@ -524,7 +524,25 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) { settingsSheet }
         .sheet(isPresented: Binding(get: { pickerRef != nil }, set: { if !$0 { pickerRef = nil } })) { dateBucketSheet }
         .sheet(isPresented: $showChatList) { chatListSheet }
-        .onAppear { chatStore.openDefault(elements: elements, title: profile.username) }
+        .onAppear {
+            chatStore.openDefault(elements: elements, title: profile.username)
+            if let saved = chatStore.current, !saved.elements.isEmpty, saved.elements != elements {
+                elements = saved.elements
+            }
+            if let p = IGPersistence.loadProfile() { profile = p }
+            if let l = IGPersistence.loadLook() {
+                gradA = Color(igHex: l.gradAHex)
+                gradB = Color(igHex: l.gradBHex)
+                bandPct = l.bandPct
+                frostBlur = l.frostBlur
+            }
+        }
+        .onChange(of: profile) { IGPersistence.saveProfile($0) }
+        .onChange(of: gradA) { saveLook() }
+        .onChange(of: gradB) { saveLook() }
+        .onChange(of: bandPct) { saveLook() }
+        .onChange(of: frostBlur) { saveLook() }
+        .onChange(of: elements) { chatStore.snapshotCurrent($0) }
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -1132,6 +1150,11 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func saveLook() {
+        IGPersistence.saveLook(.init(gradAHex: gradA.igHex, gradBHex: gradB.igHex,
+                                     bandPct: bandPct, frostBlur: frostBlur))
     }
 
     private func lastMessage(in chat: ChatSession) -> String {

@@ -1,7 +1,8 @@
 import Foundation
+import UIKit
 
-struct ChatElement: Identifiable, Hashable {
-    enum Style: Equatable {
+struct ChatElement: Identifiable, Hashable, Codable {
+    enum Style: Equatable, Codable {
         case date
         case sent
         case received
@@ -13,7 +14,7 @@ struct ChatElement: Identifiable, Hashable {
     var heartHint: Bool = false
 }
 
-struct IGProfile {
+struct IGProfile: Codable {
     var username: String = "gentlewomanstore"
     var isVerified: Bool = false
     var followers: String = "482K"
@@ -123,24 +124,55 @@ enum DateBuckets {
 
 
 // MARK: - Multi-chat store (v1.18)
-struct ChatSession: Identifiable, Equatable {
-    let id = UUID()
+struct ChatSession: Identifiable, Equatable, Codable {
+    var id = UUID()
     var title: String
     var elements: [ChatElement]
 }
 
 @MainActor
 final class ChatStore: ObservableObject {
-    @Published var chats: [ChatSession] = []
-    @Published var currentId: UUID?
+    @Published var chats: [ChatSession] = [] {
+        didSet { persist() }
+    }
+    @Published var currentId: UUID? {
+        didSet { persistCurrent() }
+    }
+
+    private let storage = UserDefaults.standard
+    private let key = "igchat.sessions.v1"
+    private let currentKey = "igchat.sessions.current"
+
+    init() { restore() }
 
     var current: ChatSession? {
         get { chats.first(where: { $0.id == currentId }) }
     }
 
+    // MARK: persistence — chats survive app restarts
+
+    private func persist() {
+        if let data = try? JSONEncoder().encode(chats) {
+            storage.set(data, forKey: key)
+        }
+    }
+    private func persistCurrent() {
+        storage.set(currentId?.uuidString, forKey: currentKey)
+    }
+    private func restore() {
+        if let data = storage.data(forKey: key),
+           let decoded = try? JSONDecoder().decode([ChatSession].self, from: data) {
+            chats = decoded
+        }
+        if let s = storage.string(forKey: currentKey), let id = UUID(uuidString: s),
+           chats.contains(where: { $0.id == id }) {
+            currentId = id
+        }
+    }
+
     func openDefault(elements: [ChatElement], title: String) {
         if let first = chats.first {
-            currentId = first.id
+            if currentId == nil { currentId = first.id }
         } else {
             let d = ChatSession(title: title, elements: elements)
             chats.append(d)
@@ -169,5 +201,56 @@ final class ChatStore: ObservableObject {
     func deleteChat(_ id: UUID) {
         chats.removeAll { $0.id == id }
         if currentId == id { currentId = chats.first?.id }
+    }
+}
+
+// MARK: - Profile + Look & feel persistence
+
+enum IGPersistence {
+    private static let profileKey = "igchat.profile.v1"
+    private static let lookKey = "igchat.look.v1"
+
+    static func saveProfile(_ p: IGProfile) {
+        if let data = try? JSONEncoder().encode(p) {
+            UserDefaults.standard.set(data, forKey: profileKey)
+        }
+    }
+    static func loadProfile() -> IGProfile? {
+        guard let data = UserDefaults.standard.data(forKey: profileKey) else { return nil }
+        return try? JSONDecoder().decode(IGProfile.self, from: data)
+    }
+
+    struct Look: Codable {
+        var gradAHex: String
+        var gradBHex: String
+        var bandPct: Double
+        var frostBlur: Double
+    }
+    static func saveLook(_ l: Look) {
+        if let data = try? JSONEncoder().encode(l) {
+            UserDefaults.standard.set(data, forKey: lookKey)
+        }
+    }
+    static func loadLook() -> Look? {
+        guard let data = UserDefaults.standard.data(forKey: lookKey) else { return nil }
+        return try? JSONDecoder().decode(Look.self, from: data)
+    }
+}
+
+extension Color {
+    var igHex: String {
+        let ui = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return String(format: "%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
+    }
+    init(igHex: String) {
+        var s = igHex
+        if s.hasPrefix("#") { s.removeFirst() }
+        var v: UInt64 = 0
+        Scanner(string: s).scanHexInt64(&v)
+        self.init(red: Double((v >> 16) & 0xFF) / 255,
+                  green: Double((v >> 8) & 0xFF) / 255,
+                  blue: Double(v & 0xFF) / 255)
     }
 }
