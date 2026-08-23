@@ -457,7 +457,6 @@ struct ContentView: View {
     @State private var gradBottom: Double = 30 // fully blue from this % downward
     @State private var subtitleFontSize: Double = 10
     @State private var headerBlurOnly: Bool = true
-    @State private var draggingId: UUID? = nil
 
     enum EditTarget: Hashable {
         case username
