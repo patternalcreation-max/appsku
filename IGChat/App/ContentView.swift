@@ -708,13 +708,13 @@ struct ContentView: View {
                                         )
                                     }
                                 )
-                        }
 
-                        // "Seen" under the last Me bubble (right-aligned, grayed)
-                        if seenEnabled,
-                           let lastMe = elements.lastIndex(where: { $0.style == .sent }),
-                           idx == lastMe {
-                            seenMarker
+                            // "Seen" under the last Me bubble (right-aligned, grayed)
+                            if seenEnabled,
+                               let lastMe = elements.lastIndex(where: { $0.style == .sent }),
+                               idx == lastMe {
+                                seenMarker
+                            }
                         }
                     }
                     .padding(EdgeInsets(top: 108, leading: 16, bottom: 4, trailing: 16))
