@@ -18,9 +18,17 @@ enum XIconPaths {
     static let mailPath = "M12.001 1.5c5.858 0 10.7 4.518 10.7 10.2-.001 5.683-4.842 10.2-10.7 10.2-1.785 0-2.96-.555-3.95-1.095-1.876.768-4.02 1.2-6.245-.075l-.885-.505.523-.875c.54-.904.77-1.581.849-2.118.077-.526.02-.98-.11-1.463-.066-.25-.15-.502-.247-.788-.095-.277-.204-.59-.301-.92-.2-.674-.36-1.449-.332-2.39C1.319 6.002 6.153 1.5 12 1.5z"
     static let mailViewBox = CGRect(x: 0.0, y: 0.0, width: 24.0, height: 24.0)
 
-    // Verified badge (starburst + check) from operator-provided Instagram SVG
-    static let verifiedPath = "M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Zm7.415 11.225 2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z"
-    static let verifiedViewBox = CGRect(x: 0, y: 0, width: 40, height: 40)
+    // Verified badge — operator svg-image-19 (x.com icon-verified, scalloped circle + check)
+    static let verifiedPath = "M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"
+    static let verifiedViewBox = CGRect(x: 0, y: 0, width: 22, height: 22)
+
+    // Audio call — operator svg-image-24 (x.com icon-phone-stroke)
+    static let phoneStrokePath = "M3 6.42383C3.00022 4.533 4.533 3.00022 6.42383 3H9.61816L12.2168 8.19727L10.6885 9.72461C11.4852 11.4181 12.5812 12.5137 14.2744 13.3105L15.8027 11.7832L21 14.3818V17.5762C20.9998 19.467 19.467 20.9998 17.5762 21C9.5262 21 3 14.4738 3 6.42383ZM5 6.42383C5 13.3692 10.6308 19 17.5762 19C18.3624 18.9998 18.9998 18.3624 19 17.5762V15.6182L16.1973 14.2168L15.207 15.207L14.7412 15.6738L14.1289 15.4287C11.3748 14.3271 9.67293 12.6252 8.57129 9.87109L8.32617 9.25879L8.79297 8.79297L9.7832 7.80273L8.38184 5H6.42383C5.63757 5.00022 5.00022 5.63757 5 6.42383Z"
+    static let phoneStrokeViewBox = CGRect(x: 0, y: 0, width: 24, height: 24)
+
+    // Video call — operator svg-image-25 (x.com icon-camera-video-stroke)
+    static let videoStrokePath = "M13.7314 4.00586C15.773 4.10929 17.4537 5.57379 17.8887 7.50977L22.5 5.46094V18.5391L17.8887 16.4893C17.4377 18.4984 15.6452 20 13.5 20H6C3.51472 20 1.5 17.9853 1.5 15.5V8.5C1.5 6.01472 3.51472 4 6 4H13.5L13.7314 4.00586ZM6 6C4.61929 6 3.5 7.11929 3.5 8.5V15.5C3.5 16.8807 4.61929 18 6 18H13.5C14.8807 18 16 16.8807 16 15.5V8.5C16 7.20566 15.0164 6.14082 13.7559 6.0127L13.5 6H6ZM18 9.64941V14.3496L20.5 15.4609V8.53906L18 9.64941Z"
+    static let videoStrokeViewBox = CGRect(x: 0, y: 0, width: 24, height: 24)
 
     // Back arrow with full stem (X-style), Material arrow_back geometry
     static let backArrowPath = "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
@@ -238,6 +246,28 @@ struct VerifiedBadge: View {
     var body: some View {
         SVGPathShape(d: XIconPaths.verifiedPath, viewBox: XIconPaths.verifiedViewBox)
             .fill(Theme.blue)
+            .frame(width: size, height: size)
+    }
+}
+
+// MARK: - Call icons (operator svg-image-24 / svg-image-25)
+
+struct PhoneCallIcon: View {
+    var size: CGFloat = 17
+
+    var body: some View {
+        SVGPathShape(d: XIconPaths.phoneStrokePath, viewBox: XIconPaths.phoneStrokeViewBox)
+            .fill(Theme.secondaryText)
+            .frame(width: size, height: size)
+    }
+}
+
+struct VideoCallIcon: View {
+    var size: CGFloat = 17
+
+    var body: some View {
+        SVGPathShape(d: XIconPaths.videoStrokePath, viewBox: XIconPaths.videoStrokeViewBox)
+            .fill(Theme.secondaryText)
             .frame(width: size, height: size)
     }
 }

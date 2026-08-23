@@ -170,12 +170,8 @@ Button(action: onBack) {
 
             Spacer()
 
-            Image(systemName: "phone")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(Theme.secondaryText)
-            Image(systemName: "video")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(Theme.secondaryText)
+            PhoneCallIcon(size: 17)
+            VideoCallIcon(size: 17)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -335,7 +331,7 @@ Menu {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "waveform")
                     .font(.system(size: 20))
-                    .foregroundColor(Theme.secondaryText)
+                    .foregroundColor(.white)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -521,12 +517,8 @@ struct PhoneCanvas: View {
                 }
             }
             Spacer()
-            Image(systemName: "phone")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(Theme.secondaryText)
-            Image(systemName: "video")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(Theme.secondaryText)
+            PhoneCallIcon(size: 17)
+            VideoCallIcon(size: 17)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -546,7 +538,7 @@ struct PhoneCanvas: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "waveform")
                     .font(.system(size: 20))
-                    .foregroundColor(Theme.secondaryText)
+                    .foregroundColor(.white)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
