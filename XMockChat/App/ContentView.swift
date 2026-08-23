@@ -162,19 +162,11 @@ struct ContentView: View {
             Spacer()
 
             Image(systemName: "phone")
-                .font(.system(size: 18))
-                .foregroundColor(Theme.primaryText)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundColor(Theme.secondaryText)
             Image(systemName: "video")
-                .font(.system(size: 18))
-                .foregroundColor(Theme.primaryText)
-            Button {
-                showExport = true
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 18))
-                    .foregroundColor(Theme.blue)
-            }
-            .buttonStyle(.plain)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundColor(Theme.secondaryText)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -204,6 +196,13 @@ struct ContentView: View {
                     }
                 }
                 .padding(16)
+            }
+            .contextMenu {
+                Button {
+                    showExport = true
+                } label: {
+                    Label("Export screenshot", systemImage: "square.and.arrow.down")
+                }
             }
             .onAppear {
                 if let last = elements.last {
@@ -457,11 +456,11 @@ struct PhoneCanvas: View {
             }
             Spacer()
             Image(systemName: "phone")
-                .font(.system(size: 18))
-                .foregroundColor(Theme.primaryText)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundColor(Theme.secondaryText)
             Image(systemName: "video")
-                .font(.system(size: 18))
-                .foregroundColor(Theme.primaryText)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundColor(Theme.secondaryText)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

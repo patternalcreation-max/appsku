@@ -224,14 +224,14 @@ struct XTabIcon: View {
             .overlay(alignment: .topTrailing) {
                 if let badge = icon.badge {
                     Text("\(badge)")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                        .padding(.horizontal, 4)
-                        .frame(minWidth: 16, minHeight: 16)
-                        .background(Circle().fill(Theme.blue))
+                        .padding(.horizontal, 3)
+                        .frame(minWidth: 12, minHeight: 12)
+                        .background(Circle().fill(Theme.blue.opacity(0.85)))
                         .fixedSize()
-                        .offset(x: -2, y: 2)
+                        .offset(x: 4, y: -3)
                 }
             }
     }
@@ -273,7 +273,6 @@ struct XTabBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Rectangle().fill(Theme.border).frame(height: 1)
             HStack(spacing: 0) {
                 ForEach(XTab.allCases) { tab in
                     Button {
