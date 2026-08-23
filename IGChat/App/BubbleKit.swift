@@ -180,14 +180,33 @@ struct PhotoMessageView: View {
     let isSent: Bool
     var position: BubbleGroupPos = .single
 
+    /// Fit landscape without cropping; portrait can be taller. Side buttons keep Me/Them clear.
+    private var fittedSize: CGSize {
+        let px = image.size
+        let aspect = max(px.width, 1) / max(px.height, 1)
+        let maxW: CGFloat = 280
+        // Landscape → shorter box; portrait → taller; square in between
+        let maxH: CGFloat = aspect >= 1.15 ? 176 : (aspect <= 0.85 ? 320 : 240)
+        var w = min(maxW, px.width)
+        var h = w / aspect
+        if h > maxH {
+            h = maxH
+            w = h * aspect
+        }
+        if w > maxW {
+            w = maxW
+            h = w / aspect
+        }
+        return CGSize(width: max(w, 1), height: max(h, 1))
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             if isSent { MediaSideButtons() }
             Image(uiImage: image)
                 .resizable()
-                .scaledToFill()
-                .frame(maxWidth: 240, maxHeight: 320)
-                .aspectRatio(contentMode: .fit)
+                .scaledToFit()
+                .frame(width: fittedSize.width, height: fittedSize.height)
                 .clipShape(IGBubbleShape(isSent: isSent, position: position))
             if !isSent { MediaSideButtons() }
         }

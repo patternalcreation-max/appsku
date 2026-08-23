@@ -376,33 +376,61 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Soft night fade under the header — same Theme.black (#0E1217), no grey material wash.
-/// Actual blur of profile/bubbles is applied per-view via passHeaderBlur (gaussian).
+/// Soft night fade under the header — same Theme.black (#0E1217).
+/// Gaussian blur is applied separately via PartialHeaderBlur (only the overlapping strip).
 struct FrostBand: View {
     var bandPct: Double
     var frostBlur: Double
-    /// When true, fade only covers the floating header chrome, not a big % of the screen.
     var headerOnly: Bool = true
-    var headerHeight: CGFloat = 110
+    /// Keep this tight / high under the chrome (was 110 — felt too low).
+    var headerHeight: CGFloat = 78
 
     var body: some View {
         GeometryReader { geo in
             let bandH = headerOnly
                 ? max(headerHeight, 1)
                 : max(geo.size.height * (bandPct / 100.0), 1)
-            let soft = CGFloat(max(frostBlur, 0)) * 0.55
+            let soft = CGFloat(max(frostBlur, 0)) * 0.35
             let totalH = bandH + soft
 
             LinearGradient(stops: [
                 .init(color: Theme.black.opacity(0.88), location: 0),
-                .init(color: Theme.black.opacity(0.55), location: 0.35),
-                .init(color: Theme.black.opacity(0.18), location: 0.7),
+                .init(color: Theme.black.opacity(0.5), location: 0.4),
+                .init(color: Theme.black.opacity(0.12), location: 0.75),
                 .init(color: Theme.black.opacity(0.0), location: 1)
             ], startPoint: .top, endPoint: .bottom)
             .frame(height: totalH)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
         }
+    }
+}
+
+/// Blur ONLY the slice of a view that intersects the header zone — not the whole bubble/photo.
+struct PartialHeaderBlur: ViewModifier {
+    var zoneHeight: CGFloat
+    var radius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                content
+                    .blur(radius: max(radius, 0))
+                    .allowsHitTesting(false)
+                    .mask {
+                        GeometryReader { geo in
+                            let f = geo.frame(in: .named("viewport"))
+                            // Local Y range that sits inside viewport [0 … zoneHeight]
+                            let localTop = max(CGFloat(0), -f.minY)
+                            let localBot = min(geo.size.height, zoneHeight - f.minY)
+                            let h = max(CGFloat(0), localBot - localTop)
+                            Rectangle()
+                                .frame(width: geo.size.width, height: h)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                .offset(y: localTop)
+                        }
+                    }
+            }
     }
 }
 
@@ -452,7 +480,7 @@ struct ContentView: View {
     @State private var gradA = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     @State private var bandPct: Double = 15
-    @State private var frostBlur: Double = 14
+    @State private var frostBlur: Double = 22
     @State private var gradTop: Double = 15    // purple solid until this % from top of viewport
     @State private var gradBottom: Double = 30 // fully blue from this % downward
     @State private var subtitleFontSize: Double = 10
@@ -1017,23 +1045,16 @@ struct ContentView: View {
     }
 
 
-    /// How far a row has entered the top header band (0 = below band, 1 = deep under header).
-    private func passHeaderDepth(for id: UUID, viewportH: CGFloat) -> CGFloat {
-        guard let e = rowProgress[id] else { return 0 }
-        let zone: Double = headerBlurOnly
-            ? Double(110 / max(viewportH, 1))
-            : bandPct / 100.0
-        if e.top >= zone { return 0 }
-        if e.bottom <= 0 { return 1 }
-        return CGFloat(max(0, min(1, (zone - e.top) / max(zone, 0.001))))
+    /// Header blur band height in pt (matches FrostBand — kept high / near chrome).
+    private var headerZonePt: CGFloat {
+        if headerBlurOnly { return 78 }
+        return max(viewportSize.height * CGFloat(bandPct / 100.0), 1)
     }
 
-    /// Gaussian blur on bubbles/text as they scroll under the header.
-    private func passHeaderBlur(for id: UUID, viewportH: CGFloat) -> CGFloat {
-        let depth = passHeaderDepth(for: id, viewportH: viewportH)
-        return depth * CGFloat(max(frostBlur, 0)) * 0.48
+    /// Stronger gaussian for the masked strip under the header.
+    private var headerBlurRadius: CGFloat {
+        CGFloat(max(frostBlur, 0)) * 0.85
     }
-
 
     // MARK: Chat area
 
@@ -1043,7 +1064,7 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         liveProfileContext
-                            .blur(radius: passHeaderBlur(for: profilePassId, viewportH: outer.size.height))
+                            .modifier(PartialHeaderBlur(zoneHeight: headerZonePt, radius: headerBlurRadius))
                             .background(
                                 GeometryReader { row in
                                     let f = row.frame(in: .named("viewport"))
@@ -1057,9 +1078,8 @@ struct ContentView: View {
                         ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                             elementView(element, at: idx)
                                 .padding(.top, idx == 0 ? 8 : BubbleGrouping.spacing(before: idx, in: elements))
-                                // Blur only under header — no opacity fade (opacity looked "greyed",
-                                // and onDrag long-press was also dimming bubbles to 0.55).
-                                .blur(radius: passHeaderBlur(for: element.id, viewportH: outer.size.height))
+                                // Only the strip overlapping the header zone blurs — not the whole photo/bubble.
+                                .modifier(PartialHeaderBlur(zoneHeight: headerZonePt, radius: headerBlurRadius))
                                 .background(
                                     // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
@@ -1641,7 +1661,7 @@ struct ContentView: View {
                     }
                     VStack(alignment: .leading) {
                         Text("Frost blur: \(Int(frostBlur))px")
-                        Slider(value: $frostBlur, in: 0...30, step: 1)
+                        Slider(value: $frostBlur, in: 0...40, step: 1)
                     }
                     Toggle("Blur only behind header", isOn: $headerBlurOnly)
                     VStack(alignment: .leading, spacing: 4) {
