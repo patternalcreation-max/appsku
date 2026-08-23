@@ -203,10 +203,20 @@ struct MessageTextView: View {
     let text: String
 
     var body: some View {
-        Text(verbatim: text)
+        Text(verbatim: normalized)
             .font(.system(size: 15))
-            .lineSpacing(15 * 0.4)
+            .lineSpacing(15 * 0.28)          // tight leading (IG ~1.32)
             .foregroundColor(.white)
+    }
+
+    /// Collapse blank lines between paragraphs to single tight breaks —
+    /// long chats read as one dense block, exactly like the HTML tool.
+    private var normalized: String {
+        text
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
     }
 }
 
