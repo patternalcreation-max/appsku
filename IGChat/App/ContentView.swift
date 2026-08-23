@@ -378,22 +378,12 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Backdrop material under the floating header (not a glass pill on the whole bar).
-struct HeaderBackdropBlur: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIVisualEffectView {
-        // Thin dark material — strong enough to read as real blur of chat underneath
-        let v = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
-        v.isUserInteractionEnabled = false
-        v.backgroundColor = .clear
-        return v
-    }
-    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
-}
-
+/// Soft night fade under the header — same Theme.black (#0E1217), no grey material wash.
+/// Actual blur of profile/bubbles is applied per-view via passHeaderBlur (gaussian).
 struct FrostBand: View {
     var bandPct: Double
     var frostBlur: Double
-    /// When true, blur only covers the floating header chrome, not a big % of the screen.
+    /// When true, fade only covers the floating header chrome, not a big % of the screen.
     var headerOnly: Bool = true
     var headerHeight: CGFloat = 110
 
@@ -405,29 +395,13 @@ struct FrostBand: View {
             let soft = CGFloat(max(frostBlur, 0)) * 0.55
             let totalH = bandH + soft
 
-            ZStack(alignment: .top) {
-                // UIKit backdrop blur of whatever scrolls underneath
-                HeaderBackdropBlur()
-                // SwiftUI material as a second pass (more reliable compositing in ZStack)
-                Rectangle().fill(.thinMaterial)
-                // Light night tint — keep low so blurred glyphs stay visible
-                LinearGradient(stops: [
-                    .init(color: Theme.black.opacity(0.28), location: 0),
-                    .init(color: Theme.black.opacity(0.10), location: 0.5),
-                    .init(color: Theme.black.opacity(0.0), location: 1)
-                ], startPoint: .top, endPoint: .bottom)
-            }
+            LinearGradient(stops: [
+                .init(color: Theme.black.opacity(0.88), location: 0),
+                .init(color: Theme.black.opacity(0.55), location: 0.35),
+                .init(color: Theme.black.opacity(0.18), location: 0.7),
+                .init(color: Theme.black.opacity(0.0), location: 1)
+            ], startPoint: .top, endPoint: .bottom)
             .frame(height: totalH)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .mask(alignment: .top) {
-                LinearGradient(stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black.opacity(0.92), location: 0.38),
-                    .init(color: .black.opacity(0.4), location: 0.72),
-                    .init(color: .clear, location: 1)
-                ], startPoint: .top, endPoint: .bottom)
-                .frame(height: totalH)
-            }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
         }
@@ -475,6 +449,8 @@ struct ContentView: View {
     @State private var replyPhotoTarget: UUID? = nil     // story/media quote image
 
     @State private var rowProgress: [ChatElement.ID: BubbleEdges] = [:]
+    /// Stable id so the profile / View profile block gets the same pass-under-header blur as bubbles.
+    private let profilePassId = UUID(uuidString: "A11CE000-0000-4000-8000-000000000001")!
     @State private var showEditor = false
     @State private var editorText: String = ""
     @State private var editorTarget: EditTarget?
@@ -1101,6 +1077,18 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         liveProfileContext
+                            .blur(radius: passHeaderBlur(for: profilePassId, viewportH: outer.size.height))
+                            .opacity(passHeaderOpacity(for: profilePassId, viewportH: outer.size.height, dragging: false))
+                            .background(
+                                GeometryReader { row in
+                                    let f = row.frame(in: .named("viewport"))
+                                    let h = max(outer.size.height, 1)
+                                    Color.clear.preference(
+                                        key: BubbleProgressKey.self,
+                                        value: [profilePassId: BubbleEdges(top: Double(f.minY / h), bottom: Double(f.maxY / h))]
+                                    )
+                                }
+                            )
                         ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                             elementView(element, at: idx)
                                 .padding(.top, idx == 0 ? 8 : BubbleGrouping.spacing(before: idx, in: elements))
