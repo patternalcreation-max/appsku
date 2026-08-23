@@ -179,8 +179,8 @@ struct PhotoMessageView: View {
     let image: UIImage
     let isSent: Bool
     var position: BubbleGroupPos = .single
-    /// 0 = full landscape visible (no crop); 1 = shortest window + fill (max crop). IG-like.
-    var landscapeCrop: Double = 0.25
+    var frame: PhotoFrame = .default
+    var maxWidth: CGFloat = 280
 
     private var aspect: CGFloat {
         max(image.size.width, 1) / max(image.size.height, 1)
@@ -188,18 +188,15 @@ struct PhotoMessageView: View {
 
     private var isLandscape: Bool { aspect >= 1.05 }
 
-    private var cropAmount: CGFloat {
-        CGFloat(min(max(landscapeCrop, 0), 1))
-    }
+    private var f: PhotoFrame { frame.clamped() }
 
     private var fittedSize: CGSize {
-        let maxW: CGFloat = 280
+        let maxW = max(maxWidth, 120)
         if isLandscape {
-            // 0% = full aspect height; 100% ≈ IG DM landscape window (~4:3 / short)
             let fullH = maxW / aspect
-            let igH = maxW * 0.75          // ~4:3 window (common IG landscape DM look)
-            let minH = max(min(igH, fullH * 0.42), 88)
-            let targetH = fullH + (minH - fullH) * cropAmount
+            let igH = maxW * 0.75
+            let minH = max(min(igH, fullH * 0.40), 88)
+            let targetH = fullH + (minH - fullH) * CGFloat(f.window)
             return CGSize(width: maxW, height: max(targetH, 1))
         }
         let maxH: CGFloat = aspect <= 0.85 ? 320 : 240
@@ -209,30 +206,55 @@ struct PhotoMessageView: View {
             h = maxH
             w = h * aspect
         }
+        // Portrait can still punch-in via zoom/focus; window shortens height slightly
+        if f.window > 0.02 {
+            let minH = max(h * 0.55, 120)
+            h = h + (minH - h) * CGFloat(f.window)
+        }
         return CGSize(width: max(w, 1), height: max(h, 1))
     }
 
     var body: some View {
+        let size = fittedSize
         HStack(alignment: .center, spacing: 8) {
             if isSent { MediaSideButtons() }
-            Group {
-                if isLandscape {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: fittedSize.width, height: fittedSize.height)
-                        .clipped()
-                } else {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: fittedSize.width, height: fittedSize.height)
-                }
-            }
-            .clipShape(IGBubbleShape(isSent: isSent, position: position))
-            .id("photo-\(fittedSize.width)x\(fittedSize.height)-\(cropAmount)")
+            Color.clear
+                .frame(width: size.width, height: size.height)
+                .overlay { framedImage(in: size) }
+                .clipShape(IGBubbleShape(isSent: isSent, position: position))
+                .id("pf-\(size.width)-\(size.height)-\(f.window)-\(f.focusX)-\(f.focusY)-\(f.zoom)")
             if !isSent { MediaSideButtons() }
         }
+    }
+
+    /// scaledToFill + pan (focus) + zoom inside the crop window.
+    @ViewBuilder
+    private func framedImage(in size: CGSize) -> some View {
+        let zoom = CGFloat(f.zoom)
+        let frameAspect = size.width / max(size.height, 1)
+        // Cover size before zoom
+        let coverW: CGFloat
+        let coverH: CGFloat
+        if aspect > frameAspect {
+            coverH = size.height
+            coverW = coverH * aspect
+        } else {
+            coverW = size.width
+            coverH = coverW / aspect
+        }
+        let drawW = coverW * zoom
+        let drawH = coverH * zoom
+        let excessX = max(drawW - size.width, 0)
+        let excessY = max(drawH - size.height, 0)
+        // focus 0 = top/left edge, 1 = bottom/right edge
+        let ox = (0.5 - CGFloat(f.focusX)) * excessX
+        let oy = (0.5 - CGFloat(f.focusY)) * excessY
+
+        Image(uiImage: image)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: drawW, height: drawH)
+            .offset(x: ox, y: oy)
     }
 }
 

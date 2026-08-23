@@ -6,6 +6,29 @@ enum ReplyKind: String, Codable, Equatable {
     case story
 }
 
+/// Framing for a photo bubble (IG-like crop window + pan + zoom).
+struct PhotoFrame: Codable, Equatable, Hashable {
+    /// 0 = full height · 1 = shortest IG-style window
+    var window: Double = 0.35
+    /// 0 = left · 0.5 = center · 1 = right
+    var focusX: Double = 0.5
+    /// 0 = top · 0.5 = center · 1 = bottom
+    var focusY: Double = 0.5
+    /// 1 = normal fill · up to 2.5 = punch-in
+    var zoom: Double = 1.0
+
+    static let `default` = PhotoFrame()
+
+    func clamped() -> PhotoFrame {
+        PhotoFrame(
+            window: min(max(window, 0), 1),
+            focusX: min(max(focusX, 0), 1),
+            focusY: min(max(focusY, 0), 1),
+            zoom: min(max(zoom, 1), 2.5)
+        )
+    }
+}
+
 struct ChatElement: Identifiable, Hashable, Codable {
     enum Style: Equatable, Codable {
         case date
@@ -25,8 +48,8 @@ struct ChatElement: Identifiable, Hashable, Codable {
     var replyImageJPEG: Data? = nil
     /// JPEG for a photo message (text may be empty).
     var imageJPEG: Data? = nil
-    /// Per-photo landscape crop override (0…1). nil = use Settings default.
-    var landscapeCrop: Double? = nil
+    /// Per-photo framing override. nil = use Settings defaults.
+    var photoFrame: PhotoFrame? = nil
     /// For `.date` rows: underlying instant used by smart IG formatting / presets.
     var stampAt: Date? = nil
 
@@ -38,17 +61,17 @@ struct ChatElement: Identifiable, Hashable, Codable {
     var hasImage: Bool { imageJPEG != nil }
 
     enum CodingKeys: String, CodingKey {
-        case id, style, text, heartHint, replyText, replyFromMe, replyKind, replyImageJPEG, imageJPEG, landscapeCrop, stampAt
+        case id, style, text, heartHint, replyText, replyFromMe, replyKind, replyImageJPEG, imageJPEG, photoFrame, stampAt
     }
 
     init(id: UUID = UUID(), style: Style, text: String, heartHint: Bool = false,
          replyText: String? = nil, replyFromMe: Bool = false, replyKind: ReplyKind = .chat,
-         replyImageJPEG: Data? = nil, imageJPEG: Data? = nil, landscapeCrop: Double? = nil,
+         replyImageJPEG: Data? = nil, imageJPEG: Data? = nil, photoFrame: PhotoFrame? = nil,
          stampAt: Date? = nil) {
         self.id = id; self.style = style; self.text = text; self.heartHint = heartHint
         self.replyText = replyText; self.replyFromMe = replyFromMe; self.replyKind = replyKind
         self.replyImageJPEG = replyImageJPEG; self.imageJPEG = imageJPEG
-        self.landscapeCrop = landscapeCrop
+        self.photoFrame = photoFrame
         self.stampAt = stampAt
     }
 
@@ -63,7 +86,18 @@ struct ChatElement: Identifiable, Hashable, Codable {
         replyKind = try c.decodeIfPresent(ReplyKind.self, forKey: .replyKind) ?? .chat
         replyImageJPEG = try c.decodeIfPresent(Data.self, forKey: .replyImageJPEG)
         imageJPEG = try c.decodeIfPresent(Data.self, forKey: .imageJPEG)
-        landscapeCrop = try c.decodeIfPresent(Double.self, forKey: .landscapeCrop)
+        if let frame = try c.decodeIfPresent(PhotoFrame.self, forKey: .photoFrame) {
+            photoFrame = frame
+        } else {
+            // migrate v1.27 landscapeCrop → photoFrame.window
+            enum Legacy: String, CodingKey { case landscapeCrop }
+            let legacy = try decoder.container(keyedBy: Legacy.self)
+            if let crop = try legacy.decodeIfPresent(Double.self, forKey: .landscapeCrop) {
+                photoFrame = PhotoFrame(window: crop)
+            } else {
+                photoFrame = nil
+            }
+        }
         stampAt = try c.decodeIfPresent(Date.self, forKey: .stampAt)
     }
 }
@@ -466,14 +500,20 @@ enum IGPersistence {
     struct Look: Codable {
         var gradAHex: String
         var gradBHex: String
-        var bandPct: Double
         var frostBlur: Double
         var gradTop: Double = 15
         var gradBottom: Double = 30
         var subtitleFontSize: Double = 10
+        /// Default photo framing (overridden per bubble when set)
+        var photoWindow: Double = 0.35
+        var photoFocusX: Double = 0.5
+        var photoFocusY: Double = 0.5
+        var photoZoom: Double = 1.0
+        var photoMaxWidth: Double = 280
+        // legacy (ignored in UI; still decoded if present)
+        var bandPct: Double = 15
         var headerBlurOnly: Bool = true
-        /// 0 = show full landscape (no crop); 1 = allow max crop (short window + fill)
-        var landscapeCrop: Double = 0.25
+        var landscapeCrop: Double = 0.35
     }
     static func saveLook(_ l: Look) {
         if let data = try? JSONEncoder().encode(l) {

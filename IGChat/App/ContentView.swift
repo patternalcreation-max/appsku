@@ -209,7 +209,8 @@ struct SentBubbleView: View {
     var replyImage: UIImage? = nil
     var photo: UIImage? = nil
     var position: BubbleGroupPos = .single
-    var landscapeCrop: Double = 0.25
+    var photoFrame: PhotoFrame = .default
+    var photoMaxWidth: CGFloat = 280
     /// Chat viewport size — gradient is locked to this, bubbles only mask it (IG Me style).
     var viewportSize: CGSize = .zero
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
@@ -275,7 +276,7 @@ struct SentBubbleView: View {
             if let photo {
                 HStack {
                     Spacer(minLength: 48)
-                    PhotoMessageView(image: photo, isSent: true, position: position, landscapeCrop: landscapeCrop)
+                    PhotoMessageView(image: photo, isSent: true, position: position, frame: photoFrame, maxWidth: photoMaxWidth)
                 }
             }
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -305,7 +306,8 @@ struct ReceivedRowView: View {
     var replyImage: UIImage? = nil
     var photo: UIImage? = nil
     var position: BubbleGroupPos = .single
-    var landscapeCrop: Double = 0.25
+    var photoFrame: PhotoFrame = .default
+    var photoMaxWidth: CGFloat = 280
 
     private var hasReply: Bool {
         let t = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -334,7 +336,7 @@ struct ReceivedRowView: View {
                     )
                 }
                 if let photo {
-                    PhotoMessageView(image: photo, isSent: false, position: position, landscapeCrop: landscapeCrop)
+                    PhotoMessageView(image: photo, isSent: false, position: position, frame: photoFrame, maxWidth: photoMaxWidth)
                 }
                 if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     MessageTextView(text: text)
@@ -392,23 +394,16 @@ struct BubbleProgressKey: PreferenceKey {
 /// UIKit materials always lighten dark backgrounds into a grey “aura”; we skip them
 /// so the band never shifts color. Content under the header dissolves into the canvas.
 struct HeaderBlurBand: View {
-    var bandPct: Double
-    var headerOnly: Bool
     var safeTop: CGFloat
     var frostBlur: Double = 22
     var chromeHeight: CGFloat = 92
 
-    private var bandH: CGFloat {
-        if headerOnly { return safeTop + chromeHeight }
-        // % of screen, but always at least cover status bar + chrome
-        return max(safeTop + chromeHeight, UIScreen.main.bounds.height * bandPct / 100)
-    }
+    private var bandH: CGFloat { safeTop + chromeHeight }
 
     var body: some View {
         GeometryReader { geo in
             let h = max(bandH, 1)
             let soft = 20 + CGFloat(max(frostBlur, 0)) * 0.6
-            // Pure Theme.black scrim (identical to chat BG) — no material tint / grey wash.
             LinearGradient(stops: [
                 .init(color: Theme.black.opacity(1.0), location: 0),
                 .init(color: Theme.black.opacity(0.97), location: 0.42),
@@ -442,8 +437,8 @@ struct ContentView: View {
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var messagePhotoPickerItem: PhotosPickerItem?
     @State private var messagePhotoTarget: UUID? = nil   // attach photo to this bubble
-    @State private var cropPhotoTarget: UUID? = nil      // edit landscape crop for this photo
-    @State private var cropDraft: Double = 0.25
+    @State private var cropPhotoTarget: UUID? = nil      // edit photo framing
+    @State private var cropDraft = PhotoFrame.default
     @State private var replyPhotoPickerItem: PhotosPickerItem?
     @State private var replyPhotoTarget: UUID? = nil     // story/media quote image
 
@@ -476,16 +471,18 @@ struct ContentView: View {
     @StateObject private var chatStore = ChatStore()
     @State private var showChatList = false
 
-    // Look & feel (gradient colors, band %, frost blur)
+    // Look & feel
     @State private var gradA = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
-    @State private var bandPct: Double = 15
     @State private var frostBlur: Double = 22
-    @State private var landscapeCrop: Double = 0.25
-    @State private var gradTop: Double = 15    // purple solid until this % from top of viewport
-    @State private var gradBottom: Double = 30 // fully blue from this % downward
+    @State private var gradTop: Double = 15
+    @State private var gradBottom: Double = 30
     @State private var subtitleFontSize: Double = 10
-    @State private var headerBlurOnly: Bool = true
+    @State private var photoWindow: Double = 0.35
+    @State private var photoFocusX: Double = 0.5
+    @State private var photoFocusY: Double = 0.5
+    @State private var photoZoom: Double = 1.0
+    @State private var photoMaxWidth: Double = 280
 
     enum EditTarget: Hashable {
         case username
@@ -498,6 +495,14 @@ struct ContentView: View {
         case seenHours
         case element(UUID)
         case reply(UUID)
+    }
+
+    private var defaultPhotoFrame: PhotoFrame {
+        PhotoFrame(window: photoWindow, focusX: photoFocusX, focusY: photoFocusY, zoom: photoZoom).clamped()
+    }
+
+    private func resolvedFrame(for element: ChatElement) -> PhotoFrame {
+        (element.photoFrame ?? defaultPhotoFrame).clamped()
     }
 
     private var avatarContent: AvatarContent {
@@ -516,7 +521,7 @@ struct ContentView: View {
             }
 
             // Soft canvas-colored frost under header (no material grey aura)
-            HeaderBlurBand(bandPct: bandPct, headerOnly: headerBlurOnly, safeTop: safeTop, frostBlur: frostBlur)
+            HeaderBlurBand(safeTop: safeTop, frostBlur: frostBlur)
 
             // Floating toolbar — transparent chrome
             VStack {
@@ -552,34 +557,59 @@ struct ContentView: View {
             .presentationDetents([.height(180)])
             .preferredColorScheme(.dark)
         }
-        .sheet(isPresented: Binding(
+                .sheet(isPresented: Binding(
             get: { cropPhotoTarget != nil },
             set: { if !$0 { cropPhotoTarget = nil } }
         )) {
             NavigationStack {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Match IG landscape window")
-                        .font(.headline)
-                    Text("0% = full photo · 100% = short IG-style crop")
-                        .font(.caption)
-                        .foregroundColor(Theme.secondaryText)
-                    if let id = cropPhotoTarget,
-                       let el = elements.first(where: { $0.id == id }),
-                       let img = ChatImageCodec.image(from: el.imageJPEG) {
-                        PhotoMessageView(
-                            image: img,
-                            isSent: el.style == .sent,
-                            position: .single,
-                            landscapeCrop: cropDraft
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("Frame like IG")
+                            .font(.headline)
+                        Text("Window shortens the bubble. Focus pans what’s visible. Zoom punches in.")
+                            .font(.caption)
+                            .foregroundColor(Theme.secondaryText)
+
+                        if let id = cropPhotoTarget,
+                           let el = elements.first(where: { $0.id == id }),
+                           let img = ChatImageCodec.image(from: el.imageJPEG) {
+                            PhotoMessageView(
+                                image: img,
+                                isSent: el.style == .sent,
+                                position: .single,
+                                frame: cropDraft,
+                                maxWidth: CGFloat(photoMaxWidth)
+                            )
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Window (height): \(Int(cropDraft.window * 100))%")
+                            Slider(value: $cropDraft.window, in: 0...1, step: 0.05)
+                            Text("0% full photo · 100% short IG window")
+                                .font(.caption2).foregroundColor(Theme.secondaryText)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Focus X — left → right: \(Int(cropDraft.focusX * 100))%")
+                            Slider(value: $cropDraft.focusX, in: 0...1, step: 0.05)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Focus Y — top → bottom: \(Int(cropDraft.focusY * 100))%")
+                            Slider(value: $cropDraft.focusY, in: 0...1, step: 0.05)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(String(format: "Zoom: %.2f×", cropDraft.zoom))
+                            Slider(value: $cropDraft.zoom, in: 1...2.5, step: 0.05)
+                        }
+
+                        Button("Reset to settings defaults") {
+                            cropDraft = defaultPhotoFrame
+                        }
+                        .font(.subheadline)
                     }
-                    Text("Crop: \(Int(cropDraft * 100))%")
-                    Slider(value: $cropDraft, in: 0...1, step: 0.05)
-                    Spacer()
+                    .padding()
                 }
-                .padding()
                 .navigationTitle("Crop photo")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -590,7 +620,7 @@ struct ContentView: View {
                         Button("Done") {
                             if let id = cropPhotoTarget,
                                let idx = elements.firstIndex(where: { $0.id == id }) {
-                                elements[idx].landscapeCrop = cropDraft
+                                elements[idx].photoFrame = cropDraft.clamped()
                             }
                             cropPhotoTarget = nil
                         }
@@ -600,6 +630,7 @@ struct ContentView: View {
             .presentationDetents([.medium, .large])
             .preferredColorScheme(.dark)
         }
+
         .sheet(isPresented: Binding(
             get: { replyPhotoTarget != nil },
             set: { if !$0 { replyPhotoTarget = nil } }
@@ -636,13 +667,15 @@ struct ContentView: View {
             if let l = IGPersistence.loadLook() {
                 gradA = Color(igHex: l.gradAHex)
                 gradB = Color(igHex: l.gradBHex)
-                bandPct = l.bandPct
                 frostBlur = l.frostBlur
                 gradTop = l.gradTop
                 gradBottom = l.gradBottom
                 subtitleFontSize = l.subtitleFontSize
-                headerBlurOnly = l.headerBlurOnly
-                landscapeCrop = l.landscapeCrop
+                photoWindow = l.photoWindow != 0 ? l.photoWindow : l.landscapeCrop
+                photoFocusX = l.photoFocusX
+                photoFocusY = l.photoFocusY
+                photoZoom = max(l.photoZoom, 1)
+                photoMaxWidth = l.photoMaxWidth > 0 ? l.photoMaxWidth : 280
             }
         }
         .onChange(of: profile, perform: { IGPersistence.saveProfile($0) })
@@ -650,13 +683,15 @@ struct ContentView: View {
         .onChange(of: showStatusAlways, perform: { UserDefaults.standard.set($0, forKey: "igchat.showStatusAlways") })
         .onChange(of: gradA, perform: { _ in saveLook() })
         .onChange(of: gradB, perform: { _ in saveLook() })
-        .onChange(of: bandPct, perform: { _ in saveLook() })
-        .onChange(of: frostBlur, perform: { _ in saveLook() })
+                .onChange(of: frostBlur, perform: { _ in saveLook() })
         .onChange(of: gradTop, perform: { _ in saveLook() })
         .onChange(of: gradBottom, perform: { _ in saveLook() })
         .onChange(of: subtitleFontSize, perform: { _ in saveLook() })
-        .onChange(of: headerBlurOnly, perform: { _ in saveLook() })
-        .onChange(of: landscapeCrop, perform: { _ in saveLook() })
+                .onChange(of: photoWindow, perform: { _ in saveLook() })
+        .onChange(of: photoFocusX, perform: { _ in saveLook() })
+        .onChange(of: photoFocusY, perform: { _ in saveLook() })
+        .onChange(of: photoZoom, perform: { _ in saveLook() })
+        .onChange(of: photoMaxWidth, perform: { _ in saveLook() })
     }
 
     @ViewBuilder
@@ -677,7 +712,8 @@ struct ContentView: View {
                               replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
                               photo: ChatImageCodec.image(from: element.imageJPEG),
                               position: BubbleGrouping.position(in: elements, at: idx),
-                              landscapeCrop: element.landscapeCrop ?? landscapeCrop,
+                              photoFrame: resolvedFrame(for: element),
+                              photoMaxWidth: CGFloat(photoMaxWidth),
                               viewportSize: viewportSize,
                               gradA: gradA, gradB: gradB,
                               gradTop: gradTop, gradBottom: gradBottom)
@@ -698,7 +734,8 @@ struct ContentView: View {
                     replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
                     photo: ChatImageCodec.image(from: element.imageJPEG),
                     position: BubbleGrouping.position(in: elements, at: idx),
-                    landscapeCrop: element.landscapeCrop ?? landscapeCrop
+                    photoFrame: resolvedFrame(for: element),
+                    photoMaxWidth: CGFloat(photoMaxWidth)
                 )
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
@@ -816,15 +853,15 @@ struct ContentView: View {
         }
         if element.hasImage {
             Button {
-                cropDraft = element.landscapeCrop ?? landscapeCrop
+                cropDraft = resolvedFrame(for: element)
                 cropPhotoTarget = element.id
             } label: {
-                Label("Crop landscape…", systemImage: "crop")
+                Label("Crop / frame photo…", systemImage: "crop")
             }
             Button(role: .destructive) {
                 if let idx = elements.firstIndex(where: { $0.id == element.id }) {
                     elements[idx].imageJPEG = nil
-                    elements[idx].landscapeCrop = nil
+                    elements[idx].photoFrame = nil
                 }
             } label: {
                 Label("Remove photo", systemImage: "photo.badge.minus")
@@ -1532,12 +1569,20 @@ struct ContentView: View {
     }
 
     private func saveLook() {
-        IGPersistence.saveLook(.init(gradAHex: gradA.igHex, gradBHex: gradB.igHex,
-                                     bandPct: bandPct, frostBlur: frostBlur,
-                                     gradTop: gradTop, gradBottom: gradBottom,
-                                     subtitleFontSize: subtitleFontSize,
-                                     headerBlurOnly: headerBlurOnly,
-                                     landscapeCrop: landscapeCrop))
+        IGPersistence.saveLook(.init(
+            gradAHex: gradA.igHex,
+            gradBHex: gradB.igHex,
+            frostBlur: frostBlur,
+            gradTop: gradTop,
+            gradBottom: gradBottom,
+            subtitleFontSize: subtitleFontSize,
+            photoWindow: photoWindow,
+            photoFocusX: photoFocusX,
+            photoFocusY: photoFocusY,
+            photoZoom: photoZoom,
+            photoMaxWidth: photoMaxWidth,
+            landscapeCrop: photoWindow
+        ))
     }
 
     private func lastMessage(in chat: ChatSession) -> String {
@@ -1650,86 +1695,56 @@ struct ContentView: View {
                     Toggle("Show \"Learn about business chats\"", isOn: $learnLinkEnabled)
                     Toggle("Show \"Double tap to ❤️\" hints", isOn: $heartHintsEnabled)
                 }
-                Section("Look & feel") {
+                                Section("Me bubble gradient") {
                     ColorPicker("Ungu (atas)", selection: Binding(
                         get: { gradA },
                         set: { gradA = $0.opacity(1) }), supportsOpacity: false)
                     ColorPicker("Biru (bawah)", selection: Binding(
                         get: { gradB },
                         set: { gradB = $0.opacity(1) }), supportsOpacity: false)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Zona gradient Me (nempel viewport)")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Atas layar = ungu solid. Lalu fade ke biru. Bawah = biru solid.")
-                            .font(.caption)
-                            .foregroundColor(Theme.secondaryText)
-
-                        // Mini legend
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Viewport lock — ungu solid → fade → biru solid")
+                            .font(.caption).foregroundColor(Theme.secondaryText)
                         RoundedRectangle(cornerRadius: 8)
                             .fill(LinearGradient(colors: [gradA, gradB], startPoint: .top, endPoint: .bottom))
-                            .frame(height: 56)
-                            .overlay(alignment: .topLeading) {
-                                Text("0%")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundColor(.white)
-                                    .padding(6)
-                            }
-                            .overlay(alignment: .bottomLeading) {
-                                Text("100%")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundColor(.white)
-                                    .padding(6)
-                            }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Ungu solid sampai: \(Int(gradTop))% dari atas")
-                            Slider(value: Binding(
-                                get: { gradTop },
-                                set: { v in
-                                    gradTop = min(v, gradBottom - 1)
-                                }
-                            ), in: 0...80, step: 1)
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Biru solid mulai: \(Int(gradBottom))% dari atas")
-                            Slider(value: Binding(
-                                get: { gradBottom },
-                                set: { v in
-                                    gradBottom = max(v, gradTop + 1)
-                                }
-                            ), in: 5...95, step: 1)
-                        }
-                        Text("Fade ungu→biru: \(Int(gradTop))% → \(Int(gradBottom))%")
-                            .font(.caption)
-                            .foregroundColor(Theme.secondaryText)
-                    }
-                    .padding(.vertical, 4)
-
-                    VStack(alignment: .leading) {
-                        Text("Blur zone height: \(Int(bandPct))%")
-                        Slider(value: $bandPct, in: 5...40, step: 1)
-                    }
-                    VStack(alignment: .leading) {
-                        Text("Blur edge soft: \(Int(frostBlur))")
-                        Slider(value: $frostBlur, in: 0...40, step: 1)
-                    }
-                    Toggle("Blur zone = header only", isOn: $headerBlurOnly)
-                    Text("Soft fade behind the header (same color as chat BG). No grey material aura.")
-                        .font(.caption)
-                        .foregroundColor(Theme.secondaryText)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Subtitle size (Business chat): \(Int(subtitleFontSize))pt")
-                        Slider(value: $subtitleFontSize, in: 8...14, step: 0.5)
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Default landscape crop: \(Int(landscapeCrop * 100))%")
-                        Text("0% = full · 100% = IG short window. Hold a photo → Crop landscape for one bubble.")
-                            .font(.caption)
-                            .foregroundColor(Theme.secondaryText)
-                        Slider(value: $landscapeCrop, in: 0...1, step: 0.05)
+                            .frame(height: 48)
+                        Text("Ungu solid until \(Int(gradTop))%")
+                        Slider(value: Binding(
+                            get: { gradTop },
+                            set: { gradTop = min($0, gradBottom - 1) }
+                        ), in: 0...80, step: 1)
+                        Text("Biru solid from \(Int(gradBottom))%")
+                        Slider(value: Binding(
+                            get: { gradBottom },
+                            set: { gradBottom = max($0, gradTop + 1) }
+                        ), in: 5...95, step: 1)
                     }
                 }
+                Section("Header fade") {
+                    Text("Soft canvas fade under the chrome (no grey aura).")
+                        .font(.caption).foregroundColor(Theme.secondaryText)
+                    Text("Edge soft: \(Int(frostBlur))")
+                    Slider(value: $frostBlur, in: 0...40, step: 1)
+                }
+                Section("Photo defaults") {
+                    Text("Hold any photo → Crop / frame for per-bubble overrides.")
+                        .font(.caption).foregroundColor(Theme.secondaryText)
+                    Text("Window: \(Int(photoWindow * 100))%")
+                    Slider(value: $photoWindow, in: 0...1, step: 0.05)
+                    Text("Focus X (left → right): \(Int(photoFocusX * 100))%")
+                    Slider(value: $photoFocusX, in: 0...1, step: 0.05)
+                    Text("Focus Y (top → bottom): \(Int(photoFocusY * 100))%")
+                    Slider(value: $photoFocusY, in: 0...1, step: 0.05)
+                    Text(String(format: "Zoom: %.2f×", photoZoom))
+                    Slider(value: $photoZoom, in: 1...2.5, step: 0.05)
+                    Text("Max width: \(Int(photoMaxWidth))pt")
+                    Slider(value: $photoMaxWidth, in: 180...320, step: 5)
+                }
+                Section("Type") {
+                    Text("Subtitle size: \(Int(subtitleFontSize))pt")
+                    Slider(value: $subtitleFontSize, in: 8...14, step: 0.5)
+                }
+
                 Section("Seen") {
                     Toggle("\"Seen\" under last Me message", isOn: $seenEnabled)
                     if seenEnabled {
