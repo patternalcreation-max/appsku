@@ -170,8 +170,9 @@ Button(action: onBack) {
 
             Spacer()
 
-            PhoneCallIcon(size: 17)
-            VideoCallIcon(size: 17)
+            PhoneCallIcon(size: 20)
+                .padding(.trailing, 16)
+            VideoCallIcon(size: 20)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -517,8 +518,9 @@ struct PhoneCanvas: View {
                 }
             }
             Spacer()
-            PhoneCallIcon(size: 17)
-            VideoCallIcon(size: 17)
+            PhoneCallIcon(size: 20)
+                .padding(.trailing, 16)
+            VideoCallIcon(size: 20)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
