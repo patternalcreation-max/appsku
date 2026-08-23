@@ -1,8 +1,33 @@
 import SwiftUI
 
-// MARK: - SVG path parser
-// Subset: M m L l H h V v C c S s Z z + compact number syntax (.828.672 = two numbers)
-// Tokenizer verified against regex reference: numbers match 1:1 for all built-in icons.
+// MARK: - X.com icon paths (extracted from x.com SVG assets, verified via IoU > 0.99)
+
+enum XIconPaths {
+    static let homePath = "M20 9.838c0-.502-.25-.97-.668-1.248l-6.5-4.333c-.504-.336-1.16-.336-1.664 0l-6.5 4.333C4.251 8.868 4 9.336 4 9.838V18.5c0 .828.672 1.5 1.5 1.5h3v-3.5c0-1.933 1.567-3.5 3.5-3.5s3.5 1.567 3.5 3.5V20h3c.828 0 1.5-.672 1.5-1.5V9.838zm2 8.662c0 1.933-1.567 3.5-3.5 3.5h-5v-5.5c0-.829-.672-1.5-1.5-1.5s-1.5.671-1.5 1.5V22h-5C3.567 22 2 20.433 2 18.5V9.838c0-1.17.585-2.263 1.559-2.912l6.5-4.333c1.175-.784 2.707-.784 3.882 0l6.5 4.333C21.415 7.575 22 8.668 22 9.838V18.5z"
+    static let homeViewBox = CGRect(x: 0.0, y: 0.0, width: 24.0, height: 24.0)
+
+    static let searchPath = "M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.795 0 3.419-.726 4.596-1.904 1.178-1.177 1.904-2.801 1.904-4.596 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.694 3.806-8.5 8.5-8.5s8.5 3.806 8.5 8.5c0 1.986-.682 3.815-1.824 5.262l4.781 4.781-1.414 1.414-4.781-4.781c-1.447 1.142-3.276 1.824-5.262 1.824-4.694 0-8.5-3.806-8.5-8.5z"
+    static let searchViewBox = CGRect(x: 0.0, y: 0.0, width: 24.0, height: 24.0)
+
+    static let grokPath = "M12.745 20.54l10.97-8.19c.539-.4 1.307-.244 1.564.38 1.349 3.288.746 7.241-1.938 9.955-2.683 2.714-6.417 3.31-9.83 1.954l-3.728 1.745c5.347 3.697 11.84 2.782 15.898-1.324 3.219-3.255 4.216-7.692 3.284-11.693l.008.009c-1.351-5.878.332-8.227 3.782-13.031L33 0l-4.54 4.59v-.014L12.743 20.544m-2.263 1.987c-3.837-3.707-3.175-9.446.1-12.755 2.42-2.449 6.388-3.448 9.852-1.979l3.72-1.737c-.67-.49-1.53-1.017-2.515-1.387-4.455-1.854-9.789-.931-13.41 2.728-3.483 3.523-4.579 8.94-2.697 13.561 1.405 3.454-.899 5.898-3.22 8.364C1.49 30.2.666 31.074 0 32l10.478-9.466"
+    static let grokViewBox = CGRect(x: 0.0, y: 0.0, width: 33.0, height: 32.0)
+
+    static let bellPath = "M19.993 9.042C19.48 5.017 16.054 2 11.996 2s-7.49 3.021-7.999 7.051L2.866 18H7.1c.463 2.282 2.481 4 4.9 4s4.437-1.718 4.9-4h4.236l-1.143-8.958zM12 20c-1.306 0-2.417-.835-2.829-2h5.658c-.412 1.165-1.523 2-2.829 2zm-6.866-4l.847-6.698C6.364 6.272 8.941 4 11.996 4s5.627 2.268 6.013 5.295L18.864 16H5.134z"
+    static let bellViewBox = CGRect(x: 0.0, y: 0.0, width: 24.0, height: 24.0)
+
+    static let mailPath = "M12.001 1.5c5.858 0 10.7 4.518 10.7 10.2-.001 5.683-4.842 10.2-10.7 10.2-1.785 0-2.96-.555-3.95-1.095-1.876.768-4.02 1.2-6.245-.075l-.885-.505.523-.875c.54-.904.77-1.581.849-2.118.077-.526.02-.98-.11-1.463-.066-.25-.15-.502-.247-.788-.095-.277-.204-.59-.301-.92-.2-.674-.36-1.449-.332-2.39C1.319 6.002 6.153 1.5 12 1.5z"
+    static let mailViewBox = CGRect(x: 0.0, y: 0.0, width: 24.0, height: 24.0)
+
+    // Verified badge (starburst + check) from operator-provided Instagram SVG
+    static let verifiedPath = "M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Zm7.415 11.225 2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z"
+    static let verifiedViewBox = CGRect(x: 0, y: 0, width: 40, height: 40)
+
+    // Back arrow with full stem (X-style), Material arrow_back geometry
+    static let backArrowPath = "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
+    static let backArrowViewBox = CGRect(x: 0, y: 0, width: 24, height: 24)
+}
+
+// MARK: - SVG path parser (subset: M m L l H h V v C c S s Z z — all commands used by the 5 X icons)
 
 struct SVGPathShape: Shape {
     let d: String
@@ -15,6 +40,7 @@ struct SVGPathShape: Shape {
         var lastCX: CGFloat? = nil
         var lastCY: CGFloat? = nil
 
+        // scale from viewBox space to rect space
         let scale = min(rect.width / max(viewBox.width, 0.001),
                         rect.height / max(viewBox.height, 0.001))
         let tx = rect.minX + (rect.width - viewBox.width * scale) / 2 - viewBox.minX * scale
@@ -148,6 +174,7 @@ struct SVGPathShape: Shape {
         var tokens: [(String?, CGFloat)] = []
         var number = ""
         var hasNumber = false
+        var prevCommand: String? = nil
 
         func pushNumber() {
             if hasNumber, let v = Double(number) {
@@ -161,14 +188,17 @@ struct SVGPathShape: Shape {
             if ch.isLetter {
                 pushNumber()
                 if ch == "e" || ch == "E" {
+                    // exponent — part of number
                     number.append(ch)
                     hasNumber = true
                 } else {
+                    prevCommand = String(ch)
                     tokens.append((String(ch), 0))
                 }
             } else if ch.isNumber || ch == "." {
                 if ch == "." && hasNumber && number.contains(".") && !number.lowercased().hasSuffix("e") {
-                    // Compact SVG: ".828.672" = two numbers
+                    // Compact SVG syntax: ".828.672" is TWO numbers (.828 and .672) —
+                    // a second '.' terminates the current number and starts a new one.
                     pushNumber()
                 }
                 number.append(ch)
@@ -188,57 +218,57 @@ struct SVGPathShape: Shape {
     }
 }
 
-// MARK: - Slot-rendered icon views (respect overrides)
+// MARK: - Back arrow (full stem)
 
-struct SlotIcon: View {
-    let preset: IconSlot?
-    let fallbackPath: String
-    let fallbackVB: CGRect
-    var size: CGFloat
-    var color: Color
-
-    var body: some View {
-        Group {
-            if let preset = preset {
-                SVGPathShape(d: preset.path, viewBox: CGRect(x: 0, y: 0, width: preset.viewBoxWidth, height: preset.viewBoxHeight))
-                    .fill(color)
-                    .frame(width: size, height: size * preset.viewBoxHeight / max(preset.viewBoxWidth, 0.001))
-            } else {
-                SVGPathShape(d: fallbackPath, viewBox: fallbackVB)
-                    .fill(color)
-                    .frame(width: size, height: size * fallbackVB.height / fallbackVB.width)
-            }
-        }
-    }
-}
-
-struct VerifiedBadge: View {
-    let icons: IconOverrides
-    var size: CGFloat = 14
-
-    var body: some View {
-        SlotIcon(preset: icons.verified,
-                 fallbackPath: XIconPaths.verifiedPath,
-                 fallbackVB: XIconPaths.verifiedViewBox,
-                 size: size,
-                 color: Theme.blue)
-    }
-}
-
-struct BackArrowIcon: View {
-    let icons: IconOverrides
+struct BackArrow: View {
     var size: CGFloat = 20
 
     var body: some View {
-        SlotIcon(preset: icons.backArrow,
-                 fallbackPath: XIconPaths.backArrowPath,
-                 fallbackVB: XIconPaths.backArrowViewBox,
-                 size: size,
-                 color: Theme.primaryText)
+        SVGPathShape(d: XIconPaths.backArrowPath, viewBox: XIconPaths.backArrowViewBox)
+            .fill(Theme.primaryText)
+            .frame(width: size, height: size)
     }
 }
 
-// MARK: - Tab bar
+// MARK: - Verified badge (operator SVG)
+
+struct VerifiedBadge: View {
+    var size: CGFloat = 14
+
+    var body: some View {
+        SVGPathShape(d: XIconPaths.verifiedPath, viewBox: XIconPaths.verifiedViewBox)
+            .fill(Theme.blue)
+            .frame(width: size, height: size)
+    }
+}
+
+// MARK: - Tab bar icons
+
+struct XTabIcon: View {
+    let icon: XTab
+    let size: CGFloat
+    var badge: Int? = nil
+
+    var body: some View {
+        let (pathData, viewBox) = icon.pathData
+        return SVGPathShape(d: pathData, viewBox: viewBox)
+            .fill(icon.color)
+            .frame(width: size, height: size * (viewBox.height / viewBox.width))
+            .overlay(alignment: .topTrailing) {
+                if let badge = badge, badge > 0 {
+                    Text("\(badge)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Circle().fill(Theme.blue))
+                        .fixedSize()
+                        .offset(x: 3, y: -2)
+                }
+            }
+    }
+}
 
 enum XTab: Int, CaseIterable, Identifiable {
     case home = 0
@@ -263,41 +293,33 @@ enum XTab: Int, CaseIterable, Identifiable {
 }
 
 struct XTabBar: View {
-    var badgeNotifications: Int
-    var badgeMessages: Int
+    var onSelect: ((XTab) -> Void)? = nil
+    var badgeNotifications: Int = 4
+    var badgeMessages: Int = 7
 
     var body: some View {
-        HStack(spacing: 0) {
-            tabButton(.home, badge: 0)
-            tabButton(.search, badge: 0)
-            tabButton(.grok, badge: 0)
-            tabButton(.notifications, badge: badgeNotifications)
-            tabButton(.messages, badge: badgeMessages)
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                ForEach(XTab.allCases) { tab in
+                    Button {
+                        onSelect?(tab)
+                    } label: {
+                        XTabIcon(icon: tab, size: 24, badge: badge(for: tab))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 49)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
+        .background(Theme.black)
     }
 
-    @ViewBuilder
-    private func tabButton(_ tab: XTab, badge: Int) -> some View {
-        let (pathData, viewBox) = tab.pathData
-        ZStack {
-            SVGPathShape(d: pathData, viewBox: viewBox)
-                .fill(tab.color)
-                .frame(width: 24, height: 24 * viewBox.height / viewBox.width)
-                .overlay(alignment: .topTrailing) {
-                    if badge > 0 {
-                        Text("\(badge)")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                            .padding(.horizontal, 4)
-                            .frame(minWidth: 16, minHeight: 16)
-                            .background(Circle().fill(Theme.blue))
-                            .fixedSize()
-                            .offset(x: 3, y: -2)
-                    }
-                }
+    private func badge(for tab: XTab) -> Int? {
+        switch tab {
+        case .notifications: return badgeNotifications
+        case .messages: return badgeMessages
+        default: return nil
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 49)
     }
 }

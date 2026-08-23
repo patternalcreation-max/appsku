@@ -1,36 +1,18 @@
 import Foundation
-import SwiftUI
 
-// MARK: - Domain models (Codable, persisted as JSON)
+// MARK: - v1.3.1 element model (unchanged)
 
-enum ChatStyle: String, Codable {
-    case timestamp
-    case notice
-    case sent
-    case received
-}
-
-struct ChatElement: Codable, Identifiable, Equatable {
-    var id: UUID = UUID()
-    var style: ChatStyle
-    var text: String
-}
-
-struct ChatSession: Codable, Identifiable, Equatable {
-    var id: UUID = UUID()
-    var createdAt: Date = Date()
-    var displayName: String = "lauren"
-    var isVerified: Bool = true
-    var avatarPNG: Data? = nil
-    var inputPlaceholder: String = "Message"
-    var badgeNotifications: Int = 4
-    var badgeMessages: Int = 7
-    var elements: [ChatElement] = ChatSeed.defaultElements()
-
-    var title: String {
-        let first = elements.first { !$0.text.isEmpty }?.text ?? ""
-        return first.isEmpty ? displayName : String(first.prefix(32))
+struct ChatElement: Identifiable, Equatable {
+    enum Style: Equatable {
+        case timestamp
+        case notice
+        case sent
+        case received
     }
+
+    var id: UUID = UUID()
+    var style: Style
+    var text: String
 }
 
 enum ChatSeed {
@@ -53,108 +35,97 @@ enum ChatSeed {
     }
 }
 
-// MARK: - Icon override slots
+// MARK: - Session wrapper (NEW in 2.x — enables chat list + persistence)
 
-struct IconSlot: Codable, Equatable {
-    var path: String
-    var viewBoxWidth: Double
-    var viewBoxHeight: Double
-}
+struct ChatSession: Identifiable, Equatable {
+    var id: UUID = UUID()
+    var createdAt: Date = Date()
+    var displayName: String = "lauren"
+    var isVerified: Bool = true
+    var avatarPNG: Data? = nil
+    var inputPlaceholder: String = "Message"
+    var badgeNotifications: Int = 4
+    var badgeMessages: Int = 7
+    var elements: [ChatElement] = ChatSeed.defaultElements()
 
-enum IconSlotKey: String, CaseIterable, Identifiable {
-    case verified
-    case voice
-    case audioCall
-    case videoCall
-    case backArrow
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .verified: return "Verified badge"
-        case .voice: return "Voice note (mic)"
-        case .audioCall: return "Audio call"
-        case .videoCall: return "Video call"
-        case .backArrow: return "Back arrow"
-        }
+    var title: String {
+        let first = elements.first { !$0.text.isEmpty }?.text ?? ""
+        return first.isEmpty ? displayName : String(first.prefix(32))
     }
 }
 
-struct IconOverrides: Codable, Equatable {
-    var verified: IconSlot? = nil
-    var voice: IconSlot? = nil
-    var audioCall: IconSlot? = nil
-    var videoCall: IconSlot? = nil
-    var backArrow: IconSlot? = nil
+// MARK: - Persistence (JSON in Documents)
 
-    subscript(key: IconSlotKey) -> IconSlot? {
-        get {
-            switch key {
-            case .verified: return verified
-            case .voice: return voice
-            case .audioCall: return audioCall
-            case .videoCall: return videoCall
-            case .backArrow: return backArrow
-            }
-        }
-        set {
-            switch key {
-            case .verified: verified = newValue
-            case .voice: voice = newValue
-            case .audioCall: audioCall = newValue
-            case .videoCall: videoCall = newValue
-            case .backArrow: backArrow = newValue
-            }
-        }
-    }
-}
-
-// MARK: - Store (persistence)
+import SwiftUI
 
 final class ChatStore: ObservableObject {
-    @Published var sessions: [ChatSession] {
-        didSet { persistSessions() }
-    }
-    @Published var icons: IconOverrides {
-        didSet { persistIcons() }
+    @Published var sessions: [ChatSession] = [] {
+        didSet { persist() }
     }
 
     init() {
-        sessions = Self.loadSessions()
-        icons = Self.loadIcons()
+        load()
         if sessions.isEmpty {
             sessions = [ChatSession()]
         }
     }
 
-    private static var docs: URL {
+    private static var fileURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    }
-    private static var sessionsURL: URL { docs.appendingPathComponent("chats.json") }
-    private static var iconsURL: URL { docs.appendingPathComponent("icons.json") }
-
-    private static func loadSessions() -> [ChatSession] {
-        guard let data = try? Data(contentsOf: sessionsURL),
-              let list = try? JSONDecoder().decode([ChatSession].self, from: data) else { return [] }
-        return list
+            .appendingPathComponent("xmockchat_sessions.json")
     }
 
-    private static func loadIcons() -> IconOverrides {
-        guard let data = try? Data(contentsOf: iconsURL),
-              let o = try? JSONDecoder().decode(IconOverrides.self, from: data) else { return IconOverrides() }
-        return o
+    private func load() {
+        guard let data = try? Data(contentsOf: Self.fileURL) else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let list = try? decoder.decode([ChatSession].self, from: data) else { return }
+        sessions = list
     }
 
-    private func persistSessions() {
-        if let data = try? JSONEncoder().encode(sessions) {
-            try? data.write(to: Self.sessionsURL, options: .atomic)
-        }
-    }
-
-    private func persistIcons() {
-        if let data = try? JSONEncoder().encode(icons) {
-            try? data.write(to: Self.iconsURL, options: .atomic)
+    private func persist() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(sessions) {
+            try? data.write(to: Self.fileURL, options: .atomic)
         }
     }
 }
+
+extension ChatSession {
+    /// Manual Codable implementation (kept out of the struct to preserve v1.3.1 memberwise init)
+    enum CodingKeys: String, CodingKey {
+        case id, createdAt, displayName, isVerified, avatarPNG, inputPlaceholder
+        case badgeNotifications, badgeMessages, elements
+    }
+}
+
+extension ChatSession: Codable {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        displayName = try c.decodeIfPresent(String.self, forKey: .displayName) ?? "lauren"
+        isVerified = try c.decodeIfPresent(Bool.self, forKey: .isVerified) ?? true
+        avatarPNG = try c.decodeIfPresent(Data.self, forKey: .avatarPNG)
+        inputPlaceholder = try c.decodeIfPresent(String.self, forKey: .inputPlaceholder) ?? "Message"
+        badgeNotifications = try c.decodeIfPresent(Int.self, forKey: .badgeNotifications) ?? 4
+        badgeMessages = try c.decodeIfPresent(Int.self, forKey: .badgeMessages) ?? 7
+        elements = try c.decodeIfPresent([ChatElement].self, forKey: .elements) ?? ChatSeed.defaultElements()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(displayName, forKey: .displayName)
+        try c.encode(isVerified, forKey: .isVerified)
+        try c.encodeIfPresent(avatarPNG, forKey: .avatarPNG)
+        try c.encode(inputPlaceholder, forKey: .inputPlaceholder)
+        try c.encode(badgeNotifications, forKey: .badgeNotifications)
+        try c.encode(badgeMessages, forKey: .badgeMessages)
+        try c.encode(elements, forKey: .elements)
+    }
+}
+
+extension ChatElement: Codable {}

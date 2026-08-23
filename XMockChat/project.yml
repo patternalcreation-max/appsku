@@ -16,8 +16,8 @@ targets:
       base:
         PRODUCT_NAME: XMockChat
         PRODUCT_BUNDLE_IDENTIFIER: com.patternalcreation.xmockchat
-        MARKETING_VERSION: "2.0.2"
-        CURRENT_PROJECT_VERSION: "10"
+        MARKETING_VERSION: "2.1.0"
+        CURRENT_PROJECT_VERSION: "11"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
