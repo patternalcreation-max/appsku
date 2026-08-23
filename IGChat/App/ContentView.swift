@@ -377,12 +377,12 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Top frost band — blurs + fades bubbles as they scroll under the header.
-/// Single material (real backdrop blur) + soft mask; avoids muddy stacked materials.
+/// Soft fade under the header — invisible band (no frost-glass material).
+/// Bubbles dissolve into the top chrome without a milky glass sheet.
 struct FrostBand: View {
     var bandPct: Double
     var frostBlur: Double
-    /// When true, blur only covers the floating header chrome (~88pt), not a big % of the screen.
+    /// When true, fade only covers the floating header chrome (~88pt), not a big % of the screen.
     var headerOnly: Bool = true
     var headerHeight: CGFloat = 88
 
@@ -391,34 +391,15 @@ struct FrostBand: View {
             let bandH = headerOnly
                 ? max(headerHeight, 1)
                 : max(geo.size.height * (bandPct / 100.0), 1)
-            // Soft edge radius from the Look & feel slider (0…30 → ~0…6pt)
-            let edgeBlur = CGFloat(max(frostBlur, 0)) * 0.2
-            ZStack(alignment: .top) {
-                // Real blur of scrolling chat underneath
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .overlay {
-                        // Gentle darken toward the very top (IG-like under toolbar)
-                        LinearGradient(stops: [
-                            .init(color: Theme.black.opacity(0.72), location: 0),
-                            .init(color: Theme.black.opacity(0.35), location: 0.4),
-                            .init(color: Theme.black.opacity(0.0), location: 1)
-                        ], startPoint: .top, endPoint: .bottom)
-                    }
-                    .frame(height: bandH)
-                    .blur(radius: edgeBlur)
-                    // Expand slightly so blur doesn’t hard-clip at band edge
-                    .padding(.bottom, edgeBlur * 2)
-                    .mask(alignment: .top) {
-                        LinearGradient(stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black.opacity(0.92), location: 0.42),
-                            .init(color: .black.opacity(0.35), location: 0.78),
-                            .init(color: .clear, location: 1)
-                        ], startPoint: .top, endPoint: .bottom)
-                        .frame(height: bandH + edgeBlur * 2)
-                    }
-            }
+            // Slider softens the fade edge (0…30 → a bit more bleed)
+            let soft = CGFloat(max(frostBlur, 0)) * 0.35
+            LinearGradient(stops: [
+                .init(color: Theme.black.opacity(0.92), location: 0),
+                .init(color: Theme.black.opacity(0.55), location: 0.35),
+                .init(color: Theme.black.opacity(0.18), location: 0.72),
+                .init(color: Theme.black.opacity(0.0), location: 1)
+            ], startPoint: .top, endPoint: .bottom)
+            .frame(height: bandH + soft)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
         }
@@ -535,24 +516,12 @@ struct ContentView: View {
                 .ignoresSafeArea(edges: .top)
                 .allowsHitTesting(false)
 
-            // Floating toolbar — blur sits behind this chrome only when headerBlurOnly
+            // Floating toolbar — transparent chrome (no frost pill)
             VStack {
                 liveHeader
                     .padding(.horizontal, 12)
                     .padding(.top, 6)
                     .padding(.bottom, 10)
-                    .background {
-                        if headerBlurOnly {
-                            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                        .fill(Theme.black.opacity(0.35))
-                                )
-                                .padding(.horizontal, 4)
-                                .allowsHitTesting(false)
-                        }
-                    }
                 Spacer(minLength: 0)
             }
         }
@@ -951,10 +920,16 @@ struct ContentView: View {
 
     private var liveHeader: some View {
         HStack(spacing: 12) {
-            GlassCircle(size: 46) {
-                BackButtonArt(height: 19)
+            Button {
+                chatStore.snapshotCurrent(elements)
+                showChatList = true
+            } label: {
+                GlassCircle(size: 46) {
+                    BackButtonArt(height: 19)
+                }
             }
-            .onTapGesture { chatStore.snapshotCurrent(elements); showChatList = true }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to chats")
 
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
                 AvatarView(content: avatarContent, size: 32)
@@ -1668,7 +1643,7 @@ struct ContentView: View {
                         Text("Frost blur: \(Int(frostBlur))px")
                         Slider(value: $frostBlur, in: 0...30, step: 1)
                     }
-                    Toggle("Blur only behind header", isOn: $headerBlurOnly)
+                    Toggle("Fade only behind header", isOn: $headerBlurOnly)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Subtitle size (Business chat): \(Int(subtitleFontSize))pt")
                         Slider(value: $subtitleFontSize, in: 8...14, step: 0.5)

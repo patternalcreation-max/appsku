@@ -129,7 +129,7 @@ struct BackButtonArt: View {
     }
 }
 
-/// One liquid-glass circular container per button (operator spec: separate containers).
+/// Invisible circular hit-target per header button (no frost-glass disk).
 struct GlassCircle<Content: View>: View {
     var size: CGFloat = 46
     @ViewBuilder var content: () -> Content
@@ -150,9 +150,10 @@ struct NativeGlassCircle<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
+        // Invisible hit container — no liquid-glass / frost disk
         content()
             .frame(width: size, height: size)
-            .glassEffect(.regular.tint(Color(red: 0.62, green: 0.72, blue: 1.0).opacity(0.06)), in: Circle())
+            .contentShape(Circle())
     }
 }
 
@@ -162,43 +163,10 @@ struct LegacyGlassCircle<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
+        // Invisible hit container — icon only, no frost / material disk
         content()
             .frame(width: size, height: size)
-            .background(
-                // subtle glass in the center; rims glassy with a slight cool color bias
-                Circle().fill(
-                    RadialGradient(
-                        stops: [
-                            .init(color: Color.white.opacity(0.015), location: 0),
-                            .init(color: Color.white.opacity(0.015), location: 0.45),
-                            .init(color: Color(red: 0.62, green: 0.72, blue: 1.0).opacity(0.055), location: 1)
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: size * 0.52
-                    )
-                )
-            )
-            .background(.ultraThinMaterial, in: Circle())
-            .overlay(
-                Circle().strokeBorder(
-                    LinearGradient(
-                        colors: [Color(red: 0.72, green: 0.80, blue: 1.0).opacity(0.17), Color.white.opacity(0.04)],
-                        startPoint: .top, endPoint: .bottom
-                    ),
-                    lineWidth: 0.8
-                )
-            )
-            .overlay(
-                Ellipse()
-                    .fill(LinearGradient(colors: [Color.white.opacity(0.05), .clear],
-                                         startPoint: .top, endPoint: .bottom))
-                    .frame(width: size * 0.6, height: size * 0.38)
-                    .offset(y: -size * 0.30)
-                    .clipShape(Circle())
-                    .allowsHitTesting(false)
-            )
-            .shadow(color: Color.black.opacity(0.15), radius: 4, y: 2)
+            .contentShape(Circle())
     }
 }
 
