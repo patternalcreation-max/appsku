@@ -225,6 +225,8 @@ enum IGPersistence {
         var gradBHex: String
         var bandPct: Double
         var frostBlur: Double
+        var gradTop: Double = 15
+        var gradBottom: Double = 30
     }
     static func saveLook(_ l: Look) {
         if let data = try? JSONEncoder().encode(l) {

@@ -229,6 +229,8 @@ struct SentBubbleView: View {
     /// v1.18: dynamic gradient endpoints (Look & feel controls)
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
+    var gradTop: Double = 15
+    var gradBottom: Double = 30
 
     private func rgb(_ c: Color) -> (Double, Double, Double) {
         let cg = c.cgColor ?? CGColor(red: 0, green: 0, blue: 0, alpha: 1)
@@ -236,12 +238,12 @@ struct SentBubbleView: View {
         return (Double(k[0]), Double(k[1]), Double(k[2]))
     }
 
-    /// v1.17.3 rule restored: gradient FIXED to the viewport — gradA fills the top 15% of the
-    /// screen, transitions to gradB by 30%, gradB below. The bubble samples its own top/bottom
-    /// edges so it reveals exactly what sits behind it in screen space (scrolling shifts colors).
+    /// v1.19: gradient zone now user-controllable — gradA fills above gradTop% of screen,
+    /// transitions to gradB by gradBottom%, gradB below. Bubble samples its screen-space edges.
     private func viewportColor(_ p: Double) -> Color {
         let t = min(max(p, 0), 1)
-        let k = min(max((0.30 - t) / 0.15, 0), 1)   // 1 = top (gradA), 0 = below 30% (gradB)
+        let top = gradTop / 100, bot = gradBottom / 100
+        let k = bot > top ? min(max((bot - t) / (bot - top), 0), 1) : (t <= bot ? 1 : 0)
         let (ar, ag, ab) = rgb(gradA)
         let (br, bg, bb) = rgb(gradB)
         return Color(red: br + (ar - br) * k,
@@ -393,7 +395,7 @@ struct PhoneCanvas: View {
         case .date:
             DateSeparatorView(text: element.text)
         case .sent:
-            SentBubbleView(text: element.text, screenTop: nil, screenBottom: nil, gradA: gradA, gradB: gradB)
+            SentBubbleView(text: element.text, screenTop: nil, screenBottom: nil, gradA: gradA, gradB: gradB, gradTop: gradTop, gradBottom: gradBottom)
         case .received:
             ReceivedRowView(
                 text: element.text,
@@ -445,6 +447,8 @@ struct ContentView: View {
     @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     @State private var bandPct: Double = 15
     @State private var frostBlur: Double = 14
+    @State private var gradTop: Double = 15    // top of transition zone (% of viewport)
+    @State private var gradBottom: Double = 30 // bottom of transition zone (% of viewport)
 
     enum EditTarget: Hashable {
         case username
@@ -535,6 +539,8 @@ struct ContentView: View {
                 gradB = Color(igHex: l.gradBHex)
                 bandPct = l.bandPct
                 frostBlur = l.frostBlur
+                gradTop = l.gradTop
+                gradBottom = l.gradBottom
             }
         }
         .onChange(of: profile) { IGPersistence.saveProfile($0) }
@@ -542,6 +548,8 @@ struct ContentView: View {
         .onChange(of: gradB) { saveLook() }
         .onChange(of: bandPct) { saveLook() }
         .onChange(of: frostBlur) { saveLook() }
+        .onChange(of: gradTop) { saveLook() }
+        .onChange(of: gradBottom) { saveLook() }
         .onChange(of: elements) { chatStore.snapshotCurrent($0) }
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
@@ -1154,7 +1162,8 @@ struct ContentView: View {
 
     private func saveLook() {
         IGPersistence.saveLook(.init(gradAHex: gradA.igHex, gradBHex: gradB.igHex,
-                                     bandPct: bandPct, frostBlur: frostBlur))
+                                     bandPct: bandPct, frostBlur: frostBlur,
+                                     gradTop: gradTop, gradBottom: gradBottom))
     }
 
     private func lastMessage(in chat: ChatSession) -> String {
@@ -1273,6 +1282,11 @@ struct ContentView: View {
                     ColorPicker("Gradient end", selection: Binding(
                         get: { gradB },
                         set: { gradB = $0.opacity(1) }), supportsOpacity: false)
+                    VStack(alignment: .leading) {
+                        Text("Gradient zone: \(Int(gradTop))% \u{2192} \(Int(gradBottom))% of screen")
+                        Slider(value: $gradTop, in: 0...60, step: 1)
+                        Slider(value: $gradBottom, in: 10...90, step: 1)
+                    }
                     VStack(alignment: .leading) {
                         Text("Frost band height: \(Int(bandPct))%")
                         Slider(value: $bandPct, in: 5...40, step: 1)
