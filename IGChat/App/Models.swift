@@ -1,6 +1,6 @@
 import Foundation
 
-struct ChatElement: Identifiable, Equatable {
+struct ChatElement: Identifiable, Hashable {
     enum Style: Equatable {
         case date
         case sent

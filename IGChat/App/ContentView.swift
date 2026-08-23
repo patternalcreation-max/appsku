@@ -331,7 +331,7 @@ struct PhoneCanvas: View {
         case .date:
             DateSeparatorView(text: element.text)
         case .sent:
-            SentBubbleView(text: element.text, screenProgress: rowProgress[element.id])
+            SentBubbleView(text: element.text, screenProgress: nil)
         case .received:
             ReceivedRowView(
                 text: element.text,
@@ -398,6 +398,22 @@ struct ContentView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Chat mockup exported to your photo library.")
+        }
+    }
+
+    @ViewBuilder
+    private func elementView(_ element: ChatElement) -> some View {
+        switch element.style {
+        case .date:
+            DateSeparatorView(text: element.text)
+        case .sent:
+            SentBubbleView(text: element.text, screenProgress: rowProgress[element.id])
+        case .received:
+            ReceivedRowView(
+                text: element.text,
+                heartHint: element.heartHint,
+                avatarContent: avatarContent
+            )
         }
     }
 
