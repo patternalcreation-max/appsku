@@ -148,7 +148,7 @@ struct ProfileContextView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { statTap?() }
 
-            if !following {
+            if showStatusAlways || !following {
                 Text(profile.statusLine)
                     .font(.system(size: 14))
                     .foregroundColor(Theme.secondaryText)
@@ -381,6 +381,7 @@ struct PhoneCanvas: View {
     var learnLinkEnabled: Bool = true
     var seenEnabled: Bool = false
     var seenText: String = "Seen"
+    var showStatusAlways: Bool = true
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     var gradTop: Double = 15
@@ -471,6 +472,7 @@ struct ContentView: View {
     @State private var seenHoursAgo = 0              // 0 = plain "Seen", 1-23 = "Seen Xh ago"
     @State private var learnLinkEnabled = true
     @State private var heartHintsEnabled = true
+    @State private var showStatusAlways = true   // keep "You don't follow..." even when Following
 
     // v1.17: date separator bucket picker
     @State private var pickerRef: UUID? = nil      // element to insert relative to
@@ -544,6 +546,9 @@ struct ContentView: View {
                 elements = saved.elements
             }
             if let p = IGPersistence.loadProfile() { profile = p }
+            if UserDefaults.standard.object(forKey: "igchat.showStatusAlways") != nil {
+                showStatusAlways = UserDefaults.standard.bool(forKey: "igchat.showStatusAlways")
+            }
             if let l = IGPersistence.loadLook() {
                 gradA = Color(igHex: l.gradAHex)
                 gradB = Color(igHex: l.gradBHex)
@@ -555,6 +560,7 @@ struct ContentView: View {
         }
         .onChange(of: profile, perform: { IGPersistence.saveProfile($0) })
         .onChange(of: elements, perform: { chatStore.snapshotCurrent($0) })
+        .onChange(of: showStatusAlways, perform: { UserDefaults.standard.set($0, forKey: "igchat.showStatusAlways") })
         .onChange(of: gradA, perform: { _ in saveLook() })
         .onChange(of: gradB, perform: { _ in saveLook() })
         .onChange(of: bandPct, perform: { _ in saveLook() })
@@ -900,7 +906,7 @@ struct ContentView: View {
                     }
                 }
 
-            if !following {
+            if showStatusAlways || !following {
                 Text(profile.statusLine)
                     .font(.system(size: 14))
                     .foregroundColor(Theme.secondaryText)
@@ -1282,6 +1288,7 @@ struct ContentView: View {
                 }
                 Section("Display") {
                     Toggle("Show Follow button", isOn: $showFollow)
+                    Toggle("Keep \"You don't follow each other\" when Following", isOn: $showStatusAlways)
                     Toggle("Show \"Learn about business chats\"", isOn: $learnLinkEnabled)
                     Toggle("Show \"Double tap to ❤️\" hints", isOn: $heartHintsEnabled)
                 }
@@ -1397,7 +1404,8 @@ struct ContentView: View {
             showFollow: showFollow,
             learnLinkEnabled: learnLinkEnabled,
             seenEnabled: seenEnabled,
-            seenText: seenText
+            seenText: seenText,
+            showStatusAlways: showStatusAlways
         )
         let renderer = ImageRenderer(content: canvas)
         renderer.scale = highRes ? 3.0 : 1.0
