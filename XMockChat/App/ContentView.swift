@@ -423,7 +423,8 @@ struct PhoneCanvas: View {
             Spacer(minLength: 0)
             inputBar
         }
-        .frame(width: 400, minHeight: 800, alignment: .top)
+        .frame(width: 400, alignment: .top)
+        .frame(minHeight: 800, alignment: .top)
         .background(Theme.black)
     }
 
