@@ -17,6 +17,10 @@ enum XIconPaths {
 
     static let mailPath = "M12.001 1.5c5.858 0 10.7 4.518 10.7 10.2-.001 5.683-4.842 10.2-10.7 10.2-1.785 0-2.96-.555-3.95-1.095-1.876.768-4.02 1.2-6.245-.075l-.885-.505.523-.875c.54-.904.77-1.581.849-2.118.077-.526.02-.98-.11-1.463-.066-.25-.15-.502-.247-.788-.095-.277-.204-.59-.301-.92-.2-.674-.36-1.449-.332-2.39C1.319 6.002 6.153 1.5 12 1.5z"
     static let mailViewBox = CGRect(x: 0.0, y: 0.0, width: 24.0, height: 24.0)
+
+    // Verified badge (starburst + check) from operator-provided Instagram SVG
+    static let verifiedPath = "M19.998 3.094 14.638 0l-2.972 5.15H5.432v6.354L0 14.64 3.094 20 0 25.359l5.432 3.137v5.905h5.975L14.638 40l5.36-3.094L25.358 40l3.232-5.6h6.162v-6.01L40 25.359 36.905 20 40 14.641l-5.248-3.03v-6.46h-6.419L25.358 0l-5.36 3.094Zm7.415 11.225 2.254 2.287-11.43 11.5-6.835-6.93 2.244-2.258 4.587 4.581 9.18-9.18Z"
+    static let verifiedViewBox = CGRect(x: 0, y: 0, width: 40, height: 40)
 }
 
 // MARK: - SVG path parser (subset: M m L l H h V v C c S s Z z — all commands used by the 5 X icons)
@@ -210,6 +214,18 @@ struct SVGPathShape: Shape {
     }
 }
 
+// MARK: - Verified badge (operator SVG)
+
+struct VerifiedBadge: View {
+    var size: CGFloat = 14
+
+    var body: some View {
+        SVGPathShape(d: XIconPaths.verifiedPath, viewBox: XIconPaths.verifiedViewBox)
+            .fill(Theme.blue)
+            .frame(width: size, height: size)
+    }
+}
+
 // MARK: - Tab bar icons
 
 struct XTabIcon: View {
@@ -224,14 +240,14 @@ struct XTabIcon: View {
             .overlay(alignment: .topTrailing) {
                 if let badge = icon.badge {
                     Text("\(badge)")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
-                        .padding(.horizontal, 3)
-                        .frame(minWidth: 12, minHeight: 12)
-                        .background(Circle().fill(Theme.blue.opacity(0.85)))
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Circle().fill(Theme.blue))
                         .fixedSize()
-                        .offset(x: 4, y: -3)
+                        .offset(x: 3, y: -2)
                 }
             }
     }

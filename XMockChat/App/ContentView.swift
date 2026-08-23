@@ -143,9 +143,7 @@ struct ContentView: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
                 if isVerified {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(Theme.blue)
+                    VerifiedBadge(size: 14)
                 }
             }
             .contentShape(Rectangle())
@@ -449,9 +447,7 @@ struct PhoneCanvas: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                 if isVerified {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(Theme.blue)
+                    VerifiedBadge(size: 14)
                 }
             }
             Spacer()
