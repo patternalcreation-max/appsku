@@ -553,14 +553,14 @@ struct ContentView: View {
                 gradBottom = l.gradBottom
             }
         }
-        .onChange(of: profile) { IGPersistence.saveProfile($0) }
-        .onChange(of: elements) { chatStore.snapshotCurrent($0) }
-        .onChange(of: gradA) { saveLook() }
-        .onChange(of: gradB) { saveLook() }
-        .onChange(of: bandPct) { saveLook() }
-        .onChange(of: frostBlur) { saveLook() }
-        .onChange(of: gradTop) { saveLook() }
-        .onChange(of: gradBottom) { saveLook() }
+        .onChange(of: profile, perform: { IGPersistence.saveProfile($0) })
+        .onChange(of: elements, perform: { chatStore.snapshotCurrent($0) })
+        .onChange(of: gradA, perform: { _ in saveLook() })
+        .onChange(of: gradB, perform: { _ in saveLook() })
+        .onChange(of: bandPct, perform: { _ in saveLook() })
+        .onChange(of: frostBlur, perform: { _ in saveLook() })
+        .onChange(of: gradTop, perform: { _ in saveLook() })
+        .onChange(of: gradBottom, perform: { _ in saveLook() })
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
         } message: {
