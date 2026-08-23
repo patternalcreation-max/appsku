@@ -227,26 +227,34 @@ struct SentBubbleView: View {
     var screenTop: Double?
     var screenBottom: Double?
     /// v1.18: dynamic gradient endpoints (Look & feel controls)
-    var gradA: Color = Color(red: 0x81/255, green: 0x34/255, blue: 0xAF/255)
+    var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
 
-    private func lerpColor(_ a: Color, _ b: Color, _ k: Double) -> Color {
-        let ka = min(max(k, 0), 1)
-        return Color(red: a.cgColor!.components![0] + (b.cgColor!.components![0] - a.cgColor!.components![0]) * ka,
-                     green: a.cgColor!.components![1] + (b.cgColor!.components![1] - a.cgColor!.components![1]) * ka,
-                     blue: a.cgColor!.components![2] + (b.cgColor!.components![2] - a.cgColor!.components![2]) * ka)
+    private func rgb(_ c: Color) -> (Double, Double, Double) {
+        let cg = c.cgColor ?? CGColor(red: 0, green: 0, blue: 0, alpha: 1)
+        let k = cg.components ?? [0, 0, 0, 1]
+        return (Double(k[0]), Double(k[1]), Double(k[2]))
     }
 
-    /// Fixed viewport gradient: dynamic color A fills the top band, B below,
-    /// smooth transition across the band. Sampled at the bubble's edges.
-    private func viewportColor(_ p: Double, band: Double = 0.15) -> Color {
+    /// v1.17.3 rule restored: gradient FIXED to the viewport — gradA fills the top 15% of the
+    /// screen, transitions to gradB by 30%, gradB below. The bubble samples its own top/bottom
+    /// edges so it reveals exactly what sits behind it in screen space (scrolling shifts colors).
+    private func viewportColor(_ p: Double) -> Color {
         let t = min(max(p, 0), 1)
-        let k = min(max((band + 0.15 - t) / 0.15, 0), 1)   // A at top -> B lower
-        return lerpColor(gradB, gradA, k)
+        let k = min(max((0.30 - t) / 0.15, 0), 1)   // 1 = top (gradA), 0 = below 30% (gradB)
+        let (ar, ag, ab) = rgb(gradA)
+        let (br, bg, bb) = rgb(gradB)
+        return Color(red: br + (ar - br) * k,
+                     green: bg + (ag - bg) * k,
+                     blue: bb + (ab - bb) * k)
     }
 
     private var fill: LinearGradient {
-        LinearGradient(colors: [gradA, gradB], startPoint: .topLeading, endPoint: .bottomTrailing)
+        guard let top = screenTop, let bottom = screenBottom else {
+            return LinearGradient(colors: [gradA, gradB], startPoint: .top, endPoint: .bottom)
+        }
+        return LinearGradient(colors: [viewportColor(top), viewportColor(max(bottom, top))],
+                              startPoint: .top, endPoint: .bottom)
     }
 
     var body: some View {
@@ -333,7 +341,7 @@ struct PhoneCanvas: View {
     var learnLinkEnabled: Bool = true
     var seenEnabled: Bool = false
     var seenText: String = "Seen"
-    var gradA: Color = Color(red: 0x81/255, green: 0x34/255, blue: 0xAF/255)
+    var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
 
     var body: some View {
@@ -433,7 +441,7 @@ struct ContentView: View {
     @State private var showChatList = false
 
     // Look & feel (gradient colors, band %, frost blur)
-    @State private var gradA = Color(red: 0x81/255, green: 0x34/255, blue: 0xAF/255)
+    @State private var gradA = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     @State private var bandPct: Double = 15
     @State private var frostBlur: Double = 14
