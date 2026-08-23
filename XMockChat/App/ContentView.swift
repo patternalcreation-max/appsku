@@ -102,6 +102,7 @@ struct ContentView: View {
                 Rectangle().fill(Theme.border).frame(height: 1)
                 chatArea
                 inputBar
+                XTabBar()
             }
         }
         .preferredColorScheme(.dark)
@@ -422,6 +423,7 @@ struct PhoneCanvas: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
             inputBar
+            XTabBar()
         }
         .frame(width: 400, alignment: .top)
         .frame(minHeight: 800, alignment: .top)
