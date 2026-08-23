@@ -14,7 +14,7 @@ struct ChatElement: Identifiable, Hashable, Codable {
     var heartHint: Bool = false
 }
 
-struct IGProfile: Codable {
+struct IGProfile: Codable, Equatable {
     var username: String = "gentlewomanstore"
     var isVerified: Bool = false
     var followers: String = "482K"
