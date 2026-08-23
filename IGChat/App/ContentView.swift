@@ -204,8 +204,8 @@ struct MessageTextView: View {
 
     var body: some View {
         Text(verbatim: normalized)
-            .font(.system(size: 15))
-            .lineSpacing(15 * 0.28)          // tight leading (IG ~1.32)
+            .font(.system(size: 13))
+            .lineSpacing(13 * 0.28)          // tight leading (IG ~1.32)
             .foregroundColor(.white)
     }
 
