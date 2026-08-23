@@ -94,6 +94,13 @@ jobs:
           zip -ry IGChat.ipa Payload
           ls -lah IGChat.ipa
 
+      - name: Zip generated Xcode project
+        working-directory: IGChat
+        run: |
+          test -d IGChat.xcodeproj
+          zip -ry IGChat-xcodeproj.zip IGChat.xcodeproj project.yml App
+          ls -lah IGChat-xcodeproj.zip
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -113,5 +120,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && success()
         uses: softprops/action-gh-release@v2
         with:
-          files: IGChat/build/IGChat.ipa
+          files: |
+            IGChat/build/IGChat.ipa
+            IGChat/IGChat-xcodeproj.zip
           generate_release_notes: true
