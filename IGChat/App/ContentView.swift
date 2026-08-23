@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
 
@@ -377,12 +378,23 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Soft fade under the header — invisible band (no frost-glass material).
-/// Bubbles dissolve into the top chrome without a milky glass sheet.
+/// Real backdrop blur of chat under the header — no milky glass pill / disk.
+/// Uses UIKit dark blur (blurs pixels behind) + soft mask so the band is invisible chrome.
+struct HeaderBackdropBlur: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        // Dark ultra-thin: blurs content underneath without a light frosted sheet
+        let v = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        v.isUserInteractionEnabled = false
+        v.backgroundColor = .clear
+        return v
+    }
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
+}
+
 struct FrostBand: View {
     var bandPct: Double
     var frostBlur: Double
-    /// When true, fade only covers the floating header chrome (~88pt), not a big % of the screen.
+    /// When true, blur only covers the floating header chrome (~88pt), not a big % of the screen.
     var headerOnly: Bool = true
     var headerHeight: CGFloat = 88
 
@@ -391,15 +403,31 @@ struct FrostBand: View {
             let bandH = headerOnly
                 ? max(headerHeight, 1)
                 : max(geo.size.height * (bandPct / 100.0), 1)
-            // Slider softens the fade edge (0…30 → a bit more bleed)
-            let soft = CGFloat(max(frostBlur, 0)) * 0.35
-            LinearGradient(stops: [
-                .init(color: Theme.black.opacity(0.92), location: 0),
-                .init(color: Theme.black.opacity(0.55), location: 0.35),
-                .init(color: Theme.black.opacity(0.18), location: 0.72),
-                .init(color: Theme.black.opacity(0.0), location: 1)
-            ], startPoint: .top, endPoint: .bottom)
-            .frame(height: bandH + soft)
+            // frostBlur slider → how soft the bottom edge bleeds (pt)
+            let soft = CGFloat(max(frostBlur, 0)) * 0.45
+            let totalH = bandH + soft
+
+            ZStack(alignment: .top) {
+                HeaderBackdropBlur()
+                    .overlay {
+                        // Slight darken so it reads IG-black, not milky grey
+                        LinearGradient(stops: [
+                            .init(color: Theme.black.opacity(0.55), location: 0),
+                            .init(color: Theme.black.opacity(0.22), location: 0.45),
+                            .init(color: Theme.black.opacity(0.0), location: 1)
+                        ], startPoint: .top, endPoint: .bottom)
+                    }
+                    .frame(height: totalH)
+                    .mask(alignment: .top) {
+                        LinearGradient(stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black.opacity(0.95), location: 0.4),
+                            .init(color: .black.opacity(0.45), location: 0.75),
+                            .init(color: .clear, location: 1)
+                        ], startPoint: .top, endPoint: .bottom)
+                        .frame(height: totalH)
+                    }
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
         }
@@ -1643,7 +1671,7 @@ struct ContentView: View {
                         Text("Frost blur: \(Int(frostBlur))px")
                         Slider(value: $frostBlur, in: 0...30, step: 1)
                     }
-                    Toggle("Fade only behind header", isOn: $headerBlurOnly)
+                    Toggle("Blur only behind header", isOn: $headerBlurOnly)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Subtitle size (Business chat): \(Int(subtitleFontSize))pt")
                         Slider(value: $subtitleFontSize, in: 8...14, step: 0.5)
