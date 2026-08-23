@@ -501,8 +501,8 @@ enum IGPersistence {
         var gradAHex: String
         var gradBHex: String
         var frostBlur: Double
-        var gradTop: Double = 15
-        var gradBottom: Double = 30
+        var gradTop: Double = 28
+        var gradBottom: Double = 55
         var subtitleFontSize: Double = 10
         /// Default photo framing (overridden per bubble when set)
         var photoWindow: Double = 0.35

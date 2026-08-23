@@ -215,10 +215,11 @@ struct SentBubbleView: View {
     var viewportSize: CGSize = .zero
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
-    var gradTop: Double = 15
-    var gradBottom: Double = 30
+    var gradTop: Double = 28
+    var gradBottom: Double = 55
 
     /// Full-viewport Me gradient: solid A until gradTop%, blend to B by gradBottom%, solid B below.
+    /// Matches IG DM: top bubbles purple, bottom bubbles blue — one continuous screen wash.
     private var viewportGradient: some View {
         let top = max(min(gradTop / 100.0, 0.98), 0)
         let bot = max(min(gradBottom / 100.0, 1), top + 0.002)
@@ -234,26 +235,24 @@ struct SentBubbleView: View {
         )
     }
 
-    /// Viewport-locked Me gradient with a solid fallback so the bubble never goes “cropped” / transparent.
+    /// Bubble is a window into the screen-locked gradient. Fallback = solid biru (never per-bubble ungu→biru).
     private func meBubbleBackground() -> some View {
-        // Base always fills the bubble (fixes holes when viewport offset misses).
-        Rectangle()
-            .fill(
-                LinearGradient(colors: [gradA, gradB], startPoint: .top, endPoint: .bottom)
-            )
-            .overlay {
-                if viewportSize.height > 20, viewportSize.width > 20 {
-                    GeometryReader { geo in
-                        let f = geo.frame(in: .named("viewport"))
-                        let vw = max(viewportSize.width, 1)
-                        let vh = max(viewportSize.height, 1)
-                        viewportGradient
-                            .frame(width: vw, height: vh)
-                            .offset(x: -f.minX, y: -f.minY)
-                    }
-                    .clipped()
+        GeometryReader { geo in
+            let f = geo.frame(in: .named("viewport"))
+            let vw = max(viewportSize.width, geo.size.width, 1)
+            let vh = max(viewportSize.height, 1)
+            ZStack(alignment: .topLeading) {
+                // Bottom of IG pattern = solid B. Holes never flash purple.
+                gradB
+                if viewportSize.height > 20 {
+                    viewportGradient
+                        .frame(width: vw, height: vh, alignment: .topLeading)
+                        .offset(x: -f.minX, y: -f.minY)
                 }
             }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+        }
     }
 
     private var hasReply: Bool {
@@ -475,8 +474,8 @@ struct ContentView: View {
     @State private var gradA = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     @State private var frostBlur: Double = 22
-    @State private var gradTop: Double = 15
-    @State private var gradBottom: Double = 30
+    @State private var gradTop: Double = 28
+    @State private var gradBottom: Double = 55
     @State private var subtitleFontSize: Double = 10
     @State private var photoWindow: Double = 0.35
     @State private var photoFocusX: Double = 0.5
@@ -1695,31 +1694,69 @@ struct ContentView: View {
                     Toggle("Show \"Learn about business chats\"", isOn: $learnLinkEnabled)
                     Toggle("Show \"Double tap to ❤️\" hints", isOn: $heartHintsEnabled)
                 }
-                                Section("Me bubble gradient") {
+                                                Section("Me gradient (screen-locked)") {
+                    Text("Like IG: satu wash di layar. Atas = ungu, bawah = biru solid. Bubble cuma ‘jendela’.")
+                        .font(.caption)
+                        .foregroundColor(Theme.secondaryText)
                     ColorPicker("Ungu (atas)", selection: Binding(
                         get: { gradA },
                         set: { gradA = $0.opacity(1) }), supportsOpacity: false)
                     ColorPicker("Biru (bawah)", selection: Binding(
                         get: { gradB },
                         set: { gradB = $0.opacity(1) }), supportsOpacity: false)
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Viewport lock — ungu solid → fade → biru solid")
-                            .font(.caption).foregroundColor(Theme.secondaryText)
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(LinearGradient(colors: [gradA, gradB], startPoint: .top, endPoint: .bottom))
-                            .frame(height: 48)
-                        Text("Ungu solid until \(Int(gradTop))%")
+
+                    // Tall preview = full screen pattern (not per-bubble)
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: gradA, location: 0),
+                                        .init(color: gradA, location: max(min(gradTop / 100.0, 0.98), 0)),
+                                        .init(color: gradB, location: max(min(gradBottom / 100.0, 1), gradTop / 100.0 + 0.002)),
+                                        .init(color: gradB, location: 1)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        VStack {
+                            Text("TOP")
+                                .font(.caption2.weight(.bold)).foregroundColor(.white.opacity(0.9))
+                                .padding(6)
+                            Spacer()
+                            Text("BOTTOM · solid biru")
+                                .font(.caption2.weight(.bold)).foregroundColor(.white.opacity(0.9))
+                                .padding(6)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: 120)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Ungu solid sampai \(Int(gradTop))% layar")
                         Slider(value: Binding(
                             get: { gradTop },
-                            set: { gradTop = min($0, gradBottom - 1) }
-                        ), in: 0...80, step: 1)
-                        Text("Biru solid from \(Int(gradBottom))%")
+                            set: { gradTop = min($0, gradBottom - 2) }
+                        ), in: 0...70, step: 1)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Biru solid mulai \(Int(gradBottom))% layar")
                         Slider(value: Binding(
                             get: { gradBottom },
-                            set: { gradBottom = max($0, gradTop + 1) }
-                        ), in: 5...95, step: 1)
+                            set: { gradBottom = max($0, gradTop + 2) }
+                        ), in: 10...95, step: 1)
+                    }
+                    Text("Fade: \(Int(gradTop))% → \(Int(gradBottom))%. Bubble paling bawah harus biru penuh.")
+                        .font(.caption2)
+                        .foregroundColor(Theme.secondaryText)
+
+                    Button("Reset ke pola IG (image 2)") {
+                        gradTop = 28
+                        gradBottom = 55
                     }
                 }
+
                 Section("Header fade") {
                     Text("Soft canvas fade under the chrome (no grey aura).")
                         .font(.caption).foregroundColor(Theme.secondaryText)
