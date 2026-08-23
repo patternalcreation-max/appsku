@@ -135,6 +135,33 @@ struct GlassCircle<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
+        if #available(iOS 26.0, *) {
+            NativeGlassCircle(size: size, content: content)
+        } else {
+            LegacyGlassCircle(size: size, content: content)
+        }
+    }
+}
+
+/// Apple's dedicated liquid glass (iOS 26): real refraction, specular highlights, luma adaptation.
+@available(iOS 26.0, *)
+struct NativeGlassCircle<Content: View>: View {
+    var size: CGFloat
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        content()
+            .frame(width: size, height: size)
+            .glassEffect(.regular.tint(Color(red: 0.62, green: 0.72, blue: 1.0).opacity(0.06)), in: Circle())
+    }
+}
+
+/// Fallback approximation for iOS 16–25.
+struct LegacyGlassCircle<Content: View>: View {
+    var size: CGFloat
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
         content()
             .frame(width: size, height: size)
             .background(

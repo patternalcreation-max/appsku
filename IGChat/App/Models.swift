@@ -32,13 +32,9 @@ struct IGProfile {
 enum IGSeed {
     static func defaultElements() -> [ChatElement] {
         [
-            ChatElement(style: .date, text: "JUL 16 AT 1:11 PM"),
-            ChatElement(style: .sent, text: "Tiktokshop link"),
-            ChatElement(
-                style: .received,
-                text: "สินค้า GENTLEWOMAN มีช่องทางการจัดจำหน่ายดังนี้\n\n1. ทางร้าน GENTLEWOMAN\n2. เว็บไซต์ www.gentlewomanonline.com เท่านั้นค่ะ\n3. TIK TOK shop\nhttps://vt.tiktok.com/ZMBLwP2Q6/?page=TikTokShop\n4. GENTLEWOMANSTORE บนลาซาด้า\nhttps://s.lazada.co.th/s.ZWa2tb\n\nทางแบรนด์ไม่มีร้านค้าใน Shopee นะค้า",
-                heartHint: true
-            )
+            ChatElement(style: .date, text: "TODAY AT 9:41 AM"),
+            ChatElement(style: .sent, text: "Hey"),
+            ChatElement(style: .received, text: "Hi", heartHint: false)
         ]
     }
 }

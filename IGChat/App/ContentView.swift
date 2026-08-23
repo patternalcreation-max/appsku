@@ -150,7 +150,6 @@ struct ProfileContextView: View {
 
             HStack(spacing: 8) {
                 profileButton("View profile")
-                profileButton("Delete")
             }
             .padding(.top, 12)
         }
@@ -564,6 +563,23 @@ struct ContentView: View {
 
     // MARK: Chat area
 
+    /// Row fully above 0.075 of viewport (half the 15% band) => fully frosted.
+    private func frostRadius(for element: ChatElement) -> CGFloat {
+        guard let top = rowProgress[element.id]?.top else { return 0 }
+        let band: Double = 0.15
+        let t = top / band            // 0 at viewport top, 1 at band bottom
+        let k = min(max(1 - t, 0), 1) // 1 fully inside band top area
+        return CGFloat(k * 14)        // up to 14pt gaussian
+    }
+
+    private func frostOpacity(for element: ChatElement) -> Double {
+        guard let top = rowProgress[element.id]?.top else { return 1 }
+        let band: Double = 0.15
+        let t = top / band
+        let k = min(max(1 - t, 0), 1)
+        return 1 - k * 0.95
+    }
+
     private var chatArea: some View {
         GeometryReader { outer in
             ScrollViewReader { proxy in
@@ -572,6 +588,9 @@ struct ContentView: View {
                         liveProfileContext
                         ForEach(elements) { element in
                             elementView(element)
+                                // progressive gaussian + fade as the row crosses the top 15% band
+                                .blur(radius: frostRadius(for: element))
+                                .opacity(frostOpacity(for: element))
                                 .background(
                                     // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
@@ -647,12 +666,6 @@ struct ContentView: View {
 
             HStack(spacing: 8) {
                 Text("View profile")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.profileButton))
-                Text("Delete")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
