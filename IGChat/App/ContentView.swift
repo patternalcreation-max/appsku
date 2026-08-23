@@ -378,12 +378,11 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Real backdrop blur of chat under the header — no milky glass pill / disk.
-/// Uses UIKit dark blur (blurs pixels behind) + soft mask so the band is invisible chrome.
+/// Backdrop material under the floating header (not a glass pill on the whole bar).
 struct HeaderBackdropBlur: UIViewRepresentable {
     func makeUIView(context: Context) -> UIVisualEffectView {
-        // Dark ultra-thin: blurs content underneath without a light frosted sheet
-        let v = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        // Thin dark material — strong enough to read as real blur of chat underneath
+        let v = UIVisualEffectView(effect: UIBlurEffect(style: .systemThinMaterialDark))
         v.isUserInteractionEnabled = false
         v.backgroundColor = .clear
         return v
@@ -394,39 +393,40 @@ struct HeaderBackdropBlur: UIViewRepresentable {
 struct FrostBand: View {
     var bandPct: Double
     var frostBlur: Double
-    /// When true, blur only covers the floating header chrome (~88pt), not a big % of the screen.
+    /// When true, blur only covers the floating header chrome, not a big % of the screen.
     var headerOnly: Bool = true
-    var headerHeight: CGFloat = 88
+    var headerHeight: CGFloat = 110
 
     var body: some View {
         GeometryReader { geo in
             let bandH = headerOnly
                 ? max(headerHeight, 1)
                 : max(geo.size.height * (bandPct / 100.0), 1)
-            // frostBlur slider → how soft the bottom edge bleeds (pt)
-            let soft = CGFloat(max(frostBlur, 0)) * 0.45
+            let soft = CGFloat(max(frostBlur, 0)) * 0.55
             let totalH = bandH + soft
 
             ZStack(alignment: .top) {
+                // UIKit backdrop blur of whatever scrolls underneath
                 HeaderBackdropBlur()
-                    .overlay {
-                        // Slight darken so it reads IG-black, not milky grey
-                        LinearGradient(stops: [
-                            .init(color: Theme.black.opacity(0.55), location: 0),
-                            .init(color: Theme.black.opacity(0.22), location: 0.45),
-                            .init(color: Theme.black.opacity(0.0), location: 1)
-                        ], startPoint: .top, endPoint: .bottom)
-                    }
-                    .frame(height: totalH)
-                    .mask(alignment: .top) {
-                        LinearGradient(stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black.opacity(0.95), location: 0.4),
-                            .init(color: .black.opacity(0.45), location: 0.75),
-                            .init(color: .clear, location: 1)
-                        ], startPoint: .top, endPoint: .bottom)
-                        .frame(height: totalH)
-                    }
+                // SwiftUI material as a second pass (more reliable compositing in ZStack)
+                Rectangle().fill(.thinMaterial)
+                // Light night tint — keep low so blurred glyphs stay visible
+                LinearGradient(stops: [
+                    .init(color: Theme.black.opacity(0.28), location: 0),
+                    .init(color: Theme.black.opacity(0.10), location: 0.5),
+                    .init(color: Theme.black.opacity(0.0), location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+            }
+            .frame(height: totalH)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .mask(alignment: .top) {
+                LinearGradient(stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black.opacity(0.92), location: 0.38),
+                    .init(color: .black.opacity(0.4), location: 0.72),
+                    .init(color: .clear, location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+                .frame(height: totalH)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .allowsHitTesting(false)
@@ -1080,7 +1080,9 @@ struct ContentView: View {
                         ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                             elementView(element, at: idx)
                                 .padding(.top, idx == 0 ? 8 : BubbleGrouping.spacing(before: idx, in: elements))
-                                .opacity(draggingId == element.id ? 0.55 : 1)
+                                .blur(radius: passHeaderBlur(for: element.id, viewportH: outer.size.height))
+                                .opacity(passHeaderOpacity(for: element.id, viewportH: outer.size.height,
+                                                           dragging: draggingId == element.id))
                                 .onDrag {
                                     draggingId = element.id
                                     return NSItemProvider(object: element.id.uuidString as NSString)
