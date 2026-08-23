@@ -1420,6 +1420,35 @@ struct ContentView: View {
                     }
                 }
 
+
+                Button {
+                    chatStore.snapshotCurrent(elements)
+                    let chat = chatStore.createChat(
+                        title: "patricia",
+                        elements: IGSeed.patriciaKimchiElements()
+                    )
+                    elements = chat.elements
+                    profile = IGSeed.patriciaProfile()
+                    showChatList = false
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "text.bubble.fill")
+                            .foregroundColor(Theme.barPurple)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("New: Patricia (Kimchi)")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text("Load script · Me / Them")
+                                .font(.system(size: 12))
+                                .foregroundColor(Theme.secondaryText)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(Color.black)
+
                 Button {
                     chatStore.snapshotCurrent(elements)
                     var chat = chatStore.createChat()

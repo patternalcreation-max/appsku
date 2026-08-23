@@ -94,6 +94,59 @@ enum IGSeed {
             ChatElement(style: .received, text: "Hi", heartHint: false)
         ]
     }
+    /// Patricia / Kimchi Pump.fun script (Us = Me, Patricia = Them)
+    static func patriciaKimchiElements() -> [ChatElement] {
+        var out: [ChatElement] = [IGStamp.makeSeparator(.hours2)]
+        func me(_ s: String) { out.append(ChatElement(style: .sent, text: s)) }
+        func them(_ s: String) { out.append(ChatElement(style: .received, text: s)) }
+
+        me("Hey Patricia,\nI saw the reel.\nThe mama of Kimchi one.")
+        me("You played it as a joke, but the timing is actually perfect. He’s all over the internet right now and barely says anything himself.")
+        me("You already have an angle that doesn’t look forced.")
+        me("If you want this set up properly, send me your Solana wallet and make a Pump.fun account.\n100% of the creator fees go to you. No split.")
+
+        them("Wait you actually watched that?? 😭\nI was being messy for content. I even said “his dad is Asian” like I was filing a birth certificate.")
+        them("I’m not gonna lie though… I’ve been in a Kimchi rabbit hole for days. I keep refreshing like a crazy person.")
+        them("If I do that, can I actually interact with him through this?\nIf yes I’ll make the account right now.")
+
+        me("Yes.")
+        me("And you’re not even the only one who saw that reel.\nOrangie already posted your video. The mama of Kimchi one.")
+        me("He’s been close with Kimchi since they were kids playing Fortnite.\nSo the people around him have already seen you claiming him as your son.")
+        me("Send the wallet when the account is ready.")
+
+        them("STOP.\nOrangie posted it?? The Fortnite friend??\nI need a second. I made that reel in my kitchen like it was nothing.")
+        them("Okay. I’ll do whatever I have to if it actually gets me in front of him.\nDo I just… make the account and that’s it? I’m not trying to look like I wandered into the wrong app.")
+
+        me("Yeah. Make the Pump.fun account, send the Solana wallet, that’s it.")
+        me("You don’t have to start talking like a trader. Keep being you. The reel already did the work.")
+        me("We’re not putting you in a situation where you look lost.")
+
+        them("Fine. I’m doing it.\n\nIf this gets me ignored I’m deleting the reel.")
+        them("Here :\nWallet\n\nJust made the Pump.fun account too.")
+        them("Please don’t make me look crazy.\nI already look crazy enough calling myself his mom.")
+
+        me("Got it.\nBefore we launch, look at this.\nThis is the banner and the token logo.\nWhat do you think?")
+
+        them("WAIT.\nThat’s actually funny. Like stupid funny.\nAnd it looks sexy. Hot. I look good in that, I’m not even gonna pretend I don’t.")
+        them("I like it. A lot.\nIf Kimchi sees this and still ignores me I’m going to take it personally.")
+
+        me("Then we’re using it.\nWe’ll launch it first, then post the screen record on X.\nYou’ll see it before it goes public.")
+        me("Thank you, Patricia.")
+        return out
+    }
+
+    static func patriciaProfile() -> IGProfile {
+        var p = IGProfile()
+        p.username = "patricia"
+        p.subtitle = "Business chat"
+        p.isVerified = false
+        p.followers = "128K"
+        p.posts = "642"
+        p.statusLine = "You don't follow each other on Instagram"
+        p.infoLines = []
+        return p
+    }
+
 }
 
 
@@ -307,12 +360,12 @@ final class ChatStore: ObservableObject {
         }
     }
 
-    func createChat() -> ChatSession {
+    func createChat(title: String? = nil, elements: [ChatElement]? = nil) -> ChatSession {
         let f = DateFormatter()
         f.dateFormat = "h:mm a"
         let chat = ChatSession(
-            title: "Chat \(chats.count + 1)",
-            elements: [ChatElement(style: .date, text: f.string(from: Date()).uppercased())]
+            title: title ?? "Chat \(chats.count + 1)",
+            elements: elements ?? [ChatElement(style: .date, text: f.string(from: Date()).uppercased())]
         )
         chats.append(chat)
         currentId = chat.id
