@@ -589,6 +589,8 @@ struct ContentView: View {
             Toggle(isOn: $seenEnabled) {
                 Text("Show \"Seen\" under my chats")
             }
+            Divider()
+            deleteButton(element)
         }
     }
     private func receivedMenu(_ element: ChatElement) -> some View {
@@ -598,6 +600,16 @@ struct ContentView: View {
             Toggle(isOn: $heartHintsEnabled) {
                 Text("Show \"Double tap to ❤️\"")
             }
+            Divider()
+            deleteButton(element)
+        }
+    }
+
+    private func deleteButton(_ element: ChatElement) -> some View {
+        Button(role: .destructive) {
+            withAnimation { elements.removeAll { $0.id == element.id } }
+        } label: {
+            Label("Delete this message", systemImage: "trash")
         }
     }
 
@@ -616,6 +628,8 @@ struct ContentView: View {
             Button {
                 withAnimation { elements.insert(ChatElement(style: .received, text: "New message"), at: idx + 1) }
             } label: { Label("Add Them below", systemImage: "arrow.down") }
+            Divider()
+            deleteButton(element)
         }
     }
 
