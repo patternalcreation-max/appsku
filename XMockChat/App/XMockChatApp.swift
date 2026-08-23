@@ -55,8 +55,8 @@ struct ChatListView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
-                        store.sessions.insert(ChatSession(elements: ChatSeed.blankElements(),
-                                                          createdAt: Date()), at: 0)
+                        store.sessions.insert(ChatSession(createdAt: Date(),
+                                                          elements: ChatSeed.blankElements()), at: 0)
                     } label: {
                         Image(systemName: "plus")
                     }
