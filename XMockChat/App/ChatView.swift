@@ -289,7 +289,7 @@ Menu {
                 }
                 Divider()
                 Button {
-                    session.session.isVerified.toggle()
+                    session.isVerified.toggle()
                 } label: {
                     Label(session.isVerified ? "Hide verified badge" : "Show verified badge",
                           systemImage: "checkmark.circle")
@@ -491,7 +491,7 @@ struct PhoneCanvas: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 0)
             inputBar
-            XTabBar(badgeNotifications: session.badgeNotifications, badgeMessages: session.badgeMessages)
+            XTabBar(badgeNotifications: badgeNotifications, badgeMessages: badgeMessages)
         }
         .frame(width: 400, alignment: .top)
         .frame(minHeight: 800, alignment: .top)

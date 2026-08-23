@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - v1.3.1 element model (unchanged)
 
-struct ChatElement: Identifiable, Equatable {
-    enum Style: Equatable {
+struct ChatElement: Identifiable, Equatable, Codable {
+    enum Style: String, Codable {
         case timestamp
         case notice
         case sent
@@ -128,4 +128,3 @@ extension ChatSession: Codable {
     }
 }
 
-extension ChatElement: Codable {}
