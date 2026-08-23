@@ -378,50 +378,55 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Pure progressive blur — no container.
-/// Blurs every part of the view whose viewport Y is above `zoneHeight`, including
-/// content that has scrolled under the status bar / notch (no hard “bias line”).
-/// Strength ramps softly: light near the zone edge → stronger toward the top.
-struct ProgressiveHeaderBlur: ViewModifier {
-    var zoneHeight: CGFloat
-    var radius: CGFloat
-
-    func body(content: Content) -> some View {
-        let r = max(radius, 0)
-        return content
-            // Layered radii ≈ variable blur (avoids one hard rectangular haze)
-            .overlay { blurLayer(content: content, radius: r * 0.35, feather: 0.15) }
-            .overlay { blurLayer(content: content, radius: r * 0.70, feather: 0.40) }
-            .overlay { blurLayer(content: content, radius: r * 1.00, feather: 0.65) }
+/// Real backdrop gaussian blur of whatever scrolls underneath (UIKit UIVisualEffectView).
+/// Not a haze overlay on each bubble — the band itself blurs content behind it.
+struct HeaderGaussianBlur: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        // True gaussian backdrop blur (dark). No extra tint views on top.
+        let v = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        v.isUserInteractionEnabled = false
+        v.backgroundColor = .clear
+        return v
     }
-
-    @ViewBuilder
-    private func blurLayer(content: Content, radius: CGFloat, feather: CGFloat) -> some View {
-        content
-            .blur(radius: radius)
-            .allowsHitTesting(false)
-            .mask {
-                GeometryReader { geo in
-                    let f = geo.frame(in: .named("viewport"))
-                    // IMPORTANT: localTop = 0 so content under the notch stays blurred
-                    // (old code skipped y < 0 → sharp “bias line” mid-header).
-                    let localBot = min(geo.size.height, zoneHeight - f.minY)
-                    let h = max(CGFloat(0), localBot)
-                    let fadeStart = min(max(feather, 0.05), 0.9)
-                    LinearGradient(stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black.opacity(0.75), location: fadeStart * 0.45),
-                        .init(color: .black.opacity(0.25), location: fadeStart),
-                        .init(color: .clear, location: 1)
-                    ], startPoint: .top, endPoint: .bottom)
-                    .frame(width: geo.size.width, height: h)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
-            }
-    }
+    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
 }
 
+/// Soft-edged blur strip from the notch down through the header chrome.
+struct HeaderBlurBand: View {
+    var bandPct: Double
+    var headerOnly: Bool
+    var safeTop: CGFloat
+    var frostBlur: Double = 22
+    var chromeHeight: CGFloat = 92
 
+    private var bandH: CGFloat {
+        if headerOnly { return safeTop + chromeHeight }
+        // % of screen, but always at least cover status bar + chrome
+        return max(safeTop + chromeHeight, UIScreen.main.bounds.height * bandPct / 100)
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let h = max(bandH, 1)
+            let soft = 20 + CGFloat(max(frostBlur, 0)) * 0.6
+            HeaderGaussianBlur()
+                .frame(width: geo.size.width, height: h + soft)
+                // Soft bottom only — no color haze, just alpha feather so no hard bias line
+                .mask(
+                    LinearGradient(stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.55),
+                        .init(color: .black.opacity(0.55), location: 0.78),
+                        .init(color: .clear, location: 1)
+                    ], startPoint: .top, endPoint: .bottom)
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .allowsHitTesting(false)
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
+    }
+}
 
 // MARK: - Main view
 
@@ -503,7 +508,10 @@ struct ContentView: View {
                 InputBarView(tap: { showSettings = true }, placeholder: $profile.barPlaceholder)
             }
 
-            // Floating toolbar — transparent chrome (no frost pill)
+            // Real gaussian blur of chat scrolling underneath (to the notch)
+            HeaderBlurBand(bandPct: bandPct, headerOnly: headerBlurOnly, safeTop: safeTop, frostBlur: frostBlur)
+
+            // Floating toolbar — transparent chrome
             VStack {
                 liveHeader
                     .padding(.horizontal, 12)
@@ -1032,18 +1040,6 @@ struct ContentView: View {
     }
 
 
-    /// Zone from top of screen (incl. under status bar / notch) down through header chrome.
-    private var headerZonePt: CGFloat {
-        if headerBlurOnly {
-            // safe area + header row — blur must reach the dead-end under the notch
-            return safeTop + 92
-        }
-        return max(viewportSize.height * CGFloat(bandPct / 100.0), safeTop + 40)
-    }
-
-    private var headerBlurRadius: CGFloat {
-        CGFloat(max(frostBlur, 0)) * 0.95
-    }
 
     // MARK: Chat area
 
@@ -1053,7 +1049,6 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         liveProfileContext
-                            .modifier(ProgressiveHeaderBlur(zoneHeight: headerZonePt, radius: headerBlurRadius))
                             .background(
                                 GeometryReader { row in
                                     let f = row.frame(in: .named("viewport"))
@@ -1067,8 +1062,6 @@ struct ContentView: View {
                         ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                             elementView(element, at: idx)
                                 .padding(.top, idx == 0 ? 8 : BubbleGrouping.spacing(before: idx, in: elements))
-                                // Only the strip overlapping the header zone blurs — not the whole photo/bubble.
-                                .modifier(ProgressiveHeaderBlur(zoneHeight: headerZonePt, radius: headerBlurRadius))
                                 .background(
                                     // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
@@ -1656,11 +1649,11 @@ struct ContentView: View {
                         Slider(value: $bandPct, in: 5...40, step: 1)
                     }
                     VStack(alignment: .leading) {
-                        Text("Blur strength: \(Int(frostBlur))")
+                        Text("Blur edge soft: \(Int(frostBlur))")
                         Slider(value: $frostBlur, in: 0...40, step: 1)
                     }
                     Toggle("Blur zone = header only", isOn: $headerBlurOnly)
-                    Text("No blur container — content softens as it scrolls under the header.")
+                    Text("Gaussian blur of chat behind the header (to the notch). Not a haze overlay.")
                         .font(.caption)
                         .foregroundColor(Theme.secondaryText)
                     VStack(alignment: .leading, spacing: 4) {
