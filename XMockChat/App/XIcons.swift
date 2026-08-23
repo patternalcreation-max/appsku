@@ -188,6 +188,11 @@ struct SVGPathShape: Shape {
                     tokens.append((String(ch), 0))
                 }
             } else if ch.isNumber || ch == "." {
+                if ch == "." && hasNumber && number.contains(".") && !number.lowercased().hasSuffix("e") {
+                    // Compact SVG syntax: ".828.672" is TWO numbers (.828 and .672) —
+                    // a second '.' terminates the current number and starts a new one.
+                    pushNumber()
+                }
                 number.append(ch)
                 hasNumber = true
             } else if ch == "-" || ch == "+" {
