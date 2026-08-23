@@ -60,53 +60,6 @@ struct AvatarView: View {
 
 // MARK: - Status bar
 
-struct StatusBarView: View {
-    var timeText: String = "2:08"
-
-    var body: some View {
-        HStack {
-            HStack(spacing: 4) {
-                Text(timeText)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                Image(systemName: "moonphase.waxing.crescent")
-                    .font(.system(size: 11))
-                    .foregroundColor(.white)
-            }
-            Spacer()
-            HStack(spacing: 6) {
-                Image(systemName: "wifi")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
-                Text("17")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                BatteryShape(level: 0.17)
-                    .fill(Color.white)
-                    .frame(width: 22, height: 12)
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-    }
-}
-
-struct BatteryShape: Shape {
-    let level: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let body = CGRect(x: rect.minX, y: rect.minY, width: rect.width - 3, height: rect.height)
-        p.addRoundedRect(in: body, cornerSize: CGSize(width: 3, height: 3))
-        let nub = CGRect(x: rect.maxX - 2.5, y: rect.midY - 2, width: 2.5, height: 4)
-        p.addRoundedRect(in: nub, cornerSize: CGSize(width: 1, height: 1))
-        // Cut the inner fill region by drawing level as subpath (fill uses even-odd? keep simple: hollow shell + separate fill)
-        let inner = CGRect(x: body.minX + 1.5, y: body.minY + 1.5, width: (body.width - 3) * level, height: body.height - 3)
-        p.addRoundedRect(in: inner, cornerSize: CGSize(width: 1.5, height: 1.5))
-        return p
-    }
-}
-
 // MARK: - Verified badge (defined in IGIcons.swift — real IG starburst SVG)
 
 // MARK: - Chat header
@@ -316,7 +269,6 @@ struct PhoneCanvas: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            StatusBarView()
             ChatHeaderView(
                 username: profile.username,
                 isVerified: profile.isVerified,
@@ -392,8 +344,7 @@ struct ContentView: View {
         ZStack {
             Theme.black.ignoresSafeArea()
             VStack(spacing: 0) {
-                StatusBarView()
-                liveHeader
+                    liveHeader
                 Rectangle().fill(Theme.headerBorder).frame(height: 1)
                 chatArea
                 InputBarView()
