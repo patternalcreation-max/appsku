@@ -333,6 +333,8 @@ struct PhoneCanvas: View {
     var learnLinkEnabled: Bool = true
     var seenEnabled: Bool = false
     var seenText: String = "Seen"
+    var gradA: Color = Color(red: 0x81/255, green: 0x34/255, blue: 0xAF/255)
+    var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
 
     var body: some View {
         VStack(spacing: 0) {
