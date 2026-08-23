@@ -193,23 +193,27 @@ struct MessageTextView: View {
 
 struct SentBubbleView: View {
     let text: String
-    /// 0 = near the very top of the screen, 1 = near the bottom. nil = static (export uses default gradient).
-    var screenProgress: Double?
+    /// Viewport position of the bubble's top & bottom edges (0 = top of viewport, 1 = bottom).
+    /// The bubble acts as a window into a gradient FIXED to the viewport.
+    var screenTop: Double?
+    var screenBottom: Double?
 
-    /// Viewport-stuck ramp: message high on screen (<=70%) = blue, 70-85% = smooth
-    /// transition zone, >=85% (low on screen) = purple full. Both gradient stops
-    /// interpolate so extremes read as solid blue / solid purple.
-    private var fill: LinearGradient {
-        let t = min(max(screenProgress ?? 1.0, 0), 1)
-        let k = min(max((t - 0.70) / 0.15, 0), 1)
+    /// Fixed viewport gradient: top 15% of the screen = purple full, 30% and below = blue,
+    /// smooth transition between. Sampled at the bubble's own top/bottom edges so the
+    /// bubble reveals exactly what sits behind it in screen space.
+    private static func viewportColor(_ p: Double) -> Color {
+        let t = min(max(p, 0), 1)
+        let k = min(max((0.30 - t) / 0.15, 0), 1)
         func lerp(_ a: Double, _ b: Double) -> Double { a + (b - a) * k }
-        let start = Color(red: lerp(0x51, 0x81) / 255.0,
-                          green: lerp(0x58, 0x34) / 255.0,
-                          blue: lerp(0xDF, 0xAF) / 255.0)
-        let end = Color(red: lerp(0x51, 0x6B) / 255.0,
-                        green: lerp(0x58, 0x3F) / 255.0,
-                        blue: lerp(0xDF, 0xC7) / 255.0)
-        return LinearGradient(colors: [start, end], startPoint: .top, endPoint: .bottom)
+        return Color(red: lerp(0x51, 0x6B) / 255.0,
+                     green: lerp(0x58, 0x3F) / 255.0,
+                     blue: lerp(0xDF, 0xC7) / 255.0)
+    }
+
+    private var fill: LinearGradient {
+        guard let top = screenTop, let bottom = screenBottom else { return Theme.bubbleGradient }
+        return LinearGradient(colors: [Self.viewportColor(top), Self.viewportColor(max(bottom, top))],
+                              startPoint: .top, endPoint: .bottom)
     }
 
     var body: some View {
@@ -273,8 +277,8 @@ struct InputBarView: View {
 // MARK: - Position gradient + top fade mask helpers
 
 struct BubbleProgressKey: PreferenceKey {
-    static var defaultValue: [ChatElement.ID: Double] = [:]
-    static func reduce(value: inout [ChatElement.ID: Double], nextValue: () -> [ChatElement.ID: Double]) {
+    static var defaultValue: [ChatElement.ID: (Double, Double)] = [:]
+    static func reduce(value: inout [ChatElement.ID: (Double, Double)], nextValue: () -> [ChatElement.ID: (Double, Double)]) {
         value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }
@@ -317,7 +321,7 @@ struct PhoneCanvas: View {
         case .date:
             DateSeparatorView(text: element.text)
         case .sent:
-            SentBubbleView(text: element.text, screenProgress: nil)
+            SentBubbleView(text: element.text, screenTop: nil, screenBottom: nil)
         case .received:
             ReceivedRowView(
                 text: element.text,
@@ -336,7 +340,7 @@ struct ContentView: View {
     @State private var avatarImage: UIImage?
     @State private var photoPickerItem: PhotosPickerItem?
 
-    @State private var rowProgress: [ChatElement.ID: Double] = [:]
+    @State private var rowProgress: [ChatElement.ID: (Double, Double)] = [:]
     @State private var showEditor = false
     @State private var editorText: String = ""
     @State private var editorTarget: EditTarget?
@@ -367,25 +371,29 @@ struct ContentView: View {
                 chatArea
                 InputBarView(tap: { showEditor = true })
             }
-            // Progressive frost: content scrolling under the toolbar slowly gaussian-blurs
-            // (material masked by a gradient) and sinks toward black — glass rims read as
-            // real glass refracting the blurred content behind them.
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .frame(height: 92)
-                .frame(maxHeight: .infinity, alignment: .top)
-                .mask(alignment: .top) {
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 92)
-                }
-                .overlay(alignment: .top) {
-                    LinearGradient(colors: [Theme.black.opacity(0.7), .clear],
-                                   startPoint: .top, endPoint: .bottom)
-                        .frame(height: 92)
-                        .allowsHitTesting(false)
-                }
-                .allowsHitTesting(false)
-                .ignoresSafeArea(edges: .top)
+            // Progressive frost across the TOP 15% of the screen: content crossing it
+            // gaussian-blurs and fades toward black as it approaches the very top,
+            // behind the floating glass toolbar.
+            GeometryReader { geo in
+                let bandH = geo.size.height * 0.15
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .frame(height: bandH)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .mask(alignment: .top) {
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: bandH)
+                    }
+                    .overlay(alignment: .top) {
+                        LinearGradient(colors: [Theme.black.opacity(0.7), .clear],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: bandH)
+                            .allowsHitTesting(false)
+                    }
+                    .allowsHitTesting(false)
+            }
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
 
             // Floating toolbar — no header container
             VStack {
@@ -412,7 +420,9 @@ struct ContentView: View {
         case .date:
             DateSeparatorView(text: element.text)
         case .sent:
-            SentBubbleView(text: element.text, screenProgress: rowProgress[element.id])
+            SentBubbleView(text: element.text,
+                              screenTop: rowProgress[element.id]?.0,
+                              screenBottom: rowProgress[element.id]?.1)
         case .received:
             ReceivedRowView(
                 text: element.text,
@@ -536,18 +546,21 @@ struct ContentView: View {
                         ForEach(elements) { element in
                             elementView(element)
                                 .background(
-                                    // per-row position tracking for the gradient strategy
+                                    // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
+                                        let f = row.frame(in: .named("viewport"))
+                                        let h = max(outer.size.height, 1)
                                         Color.clear.preference(
                                             key: BubbleProgressKey.self,
-                                            value: [element.id: Double(row.frame(in: .global).minY / max(outer.size.height, 1))]
+                                            value: [element.id: (Double(f.minY / h), Double(f.maxY / h))]
                                         )
                                     }
                                 )
                         }
                     }
-                    .padding(EdgeInsets(top: 76, leading: 16, bottom: 4, trailing: 16))
+                    .padding(EdgeInsets(top: 108, leading: 16, bottom: 4, trailing: 16))
                 }
+                .coordinateSpace(name: "viewport")
                 .onPreferenceChange(BubbleProgressKey.self) { dict in
                     rowProgress = dict
                 }
