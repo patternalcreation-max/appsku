@@ -274,7 +274,7 @@ Button(action: onBack) {
             Button {
                 session.showSeen.toggle()
             } label: {
-                Label(session.showSeen ? "Hide "Seen"" : "Show "Seen"",
+                Label(session.showSeen ? "Hide \"Seen\"" : "Show \"Seen\"",
                       systemImage: "eye")
             }
         }
