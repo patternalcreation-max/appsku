@@ -107,39 +107,29 @@ enum IGSeed {
         }
 
         struct Line { let me: Bool; let text: String }
+        // Short stranger→girl pitch. Patricia stays excited / hot-funny, not essay-length.
         let lines: [Line] = [
-            .init(me: true,  text: "Hey Patricia,\nI saw the reel.\nThe mama of Kimchi one."),
-            .init(me: true,  text: "You played it as a joke, but the timing is actually perfect. He’s all over the internet right now and barely says anything himself."),
-            .init(me: true,  text: "You already have an angle that doesn’t look forced."),
-            .init(me: true,  text: "If you want this set up properly, send me your Solana wallet and make a Pump.fun account.\n100% of the creator fees go to you. No split."),
+            .init(me: true,  text: "Hey Patricia — random but I saw your reel. The mama of Kimchi one."),
+            .init(me: true,  text: "Timing’s actually perfect. He’s everywhere rn and barely says anything. Your angle already works."),
+            .init(me: true,  text: "If you want it set up: Pump.fun account + Solana wallet.\n100% creator fees to you. No split."),
 
-            .init(me: false, text: "Wait you actually watched that?? 😭\nI was being messy for content. I even said “his dad is Asian” like I was filing a birth certificate."),
-            .init(me: false, text: "I’m not gonna lie though… I’ve been in a Kimchi rabbit hole for days. I keep refreshing like a crazy person."),
-            .init(me: false, text: "If I do that, can I actually interact with him through this?\nIf yes I’ll make the account right now."),
+            .init(me: false, text: "wait you actually watched that 😭 I was being so unserious"),
+            .init(me: false, text: "ok but like… can this actually get me near him or is this just crypto weirdness"),
 
-            .init(me: true,  text: "Yes."),
-            .init(me: true,  text: "And you’re not even the only one who saw that reel.\nOrangie already posted your video. The mama of Kimchi one."),
-            .init(me: true,  text: "He’s been close with Kimchi since they were kids playing Fortnite.\nSo the people around him have already seen you claiming him as your son."),
-            .init(me: true,  text: "Send the wallet when the account is ready."),
+            .init(me: true,  text: "Both. And Orangie already reshared your video btw."),
+            .init(me: true,  text: "Wallet + account when you’re ready."),
 
-            .init(me: false, text: "STOP.\nOrangie posted it?? The Fortnite friend??\nI need a second. I made that reel in my kitchen like it was nothing."),
-            .init(me: false, text: "Okay. I’ll do whatever I have to if it actually gets me in front of him.\nDo I just… make the account and that’s it? I’m not trying to look like I wandered into the wrong app."),
+            .init(me: false, text: "STOP orangie posted it?? 💀 I filmed that in my kitchen"),
+            .init(me: false, text: "fine i’m doing it. if I look crazy that’s already on brand as his mom"),
 
-            .init(me: true,  text: "Yeah. Make the Pump.fun account, send the Solana wallet, that’s it."),
-            .init(me: true,  text: "You don’t have to start talking like a trader. Keep being you. The reel already did the work."),
-            .init(me: true,  text: "We’re not putting you in a situation where you look lost."),
+            .init(me: false, text: "here\nWallet\nmade the pump account too"),
 
-            .init(me: false, text: "Fine. I’m doing it.\n\nIf this gets me ignored I’m deleting the reel."),
-            .init(me: false, text: "Here :\nWallet\n\nJust made the Pump.fun account too."),
-            .init(me: false, text: "Please don’t make me look crazy.\nI already look crazy enough calling myself his mom."),
+            .init(me: true,  text: "before we launch — banner + logo. what do you think?"),
 
-            .init(me: true,  text: "Got it.\nBefore we launch, look at this.\nThis is the banner and the token logo.\nWhat do you think?"),
+            .init(me: false, text: "wait that’s actually hot 😭 stupid funny but I look good I’m not even gonna lie"),
+            .init(me: false, text: "if he ignores this i’m taking it personal"),
 
-            .init(me: false, text: "WAIT.\nThat’s actually funny. Like stupid funny.\nAnd it looks sexy. Hot. I look good in that, I’m not even gonna pretend I don’t."),
-            .init(me: false, text: "I like it. A lot.\nIf Kimchi sees this and still ignores me I’m going to take it personally."),
-
-            .init(me: true,  text: "Then we’re using it.\nWe’ll launch it first, then post the screen record on X.\nYou’ll see it before it goes public."),
-            .init(me: true,  text: "Thank you, Patricia."),
+            .init(me: true,  text: "we’re using it. launch first, then X screen record. you’ll see it before it goes public."),
         ]
 
         // Raw gaps: short inside a burst, slow between speaker turns (not "fast respond").

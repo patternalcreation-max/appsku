@@ -1069,6 +1069,30 @@ struct ContentView: View {
         }
     }
 
+
+    /// How far a row has entered the top header band (0 = below band, 1 = deep under header).
+    private func passHeaderDepth(for id: UUID, viewportH: CGFloat) -> CGFloat {
+        guard let e = rowProgress[id] else { return 0 }
+        let zone: Double = headerBlurOnly
+            ? Double(110 / max(viewportH, 1))
+            : bandPct / 100.0
+        if e.top >= zone { return 0 }
+        if e.bottom <= 0 { return 1 }
+        return CGFloat(max(0, min(1, (zone - e.top) / max(zone, 0.001))))
+    }
+
+    /// Gaussian blur on bubbles/text as they scroll under the header.
+    private func passHeaderBlur(for id: UUID, viewportH: CGFloat) -> CGFloat {
+        let depth = passHeaderDepth(for: id, viewportH: viewportH)
+        return depth * CGFloat(max(frostBlur, 0)) * 0.48
+    }
+
+    private func passHeaderOpacity(for id: UUID, viewportH: CGFloat, dragging: Bool) -> Double {
+        if dragging { return 0.55 }
+        let depth = Double(passHeaderDepth(for: id, viewportH: viewportH))
+        return 1.0 - 0.22 * depth
+    }
+
     // MARK: Chat area
 
     private var chatArea: some View {
