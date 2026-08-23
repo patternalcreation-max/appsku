@@ -118,9 +118,7 @@ struct ContentView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "chevron.backward")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(Theme.primaryText)
+            BackArrow(size: 20)
 
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
                 Group {
@@ -160,10 +158,10 @@ struct ContentView: View {
             Spacer()
 
             Image(systemName: "phone")
-                .font(.system(size: 22, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(Theme.secondaryText)
             Image(systemName: "video")
-                .font(.system(size: 22, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(Theme.secondaryText)
         }
         .padding(.horizontal, 16)
@@ -428,9 +426,7 @@ struct PhoneCanvas: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "chevron.backward")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(Theme.primaryText)
+            BackArrow(size: 20)
             Group {
                 if let avatarImage {
                     Image(uiImage: avatarImage)
@@ -452,10 +448,10 @@ struct PhoneCanvas: View {
             }
             Spacer()
             Image(systemName: "phone")
-                .font(.system(size: 22, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(Theme.secondaryText)
             Image(systemName: "video")
-                .font(.system(size: 22, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(Theme.secondaryText)
         }
         .padding(.horizontal, 16)
