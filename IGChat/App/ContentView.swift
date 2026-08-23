@@ -71,6 +71,7 @@ struct ChatHeaderView: View {
     let avatarContent: AvatarContent
     var avatarTap: (() -> Void)?
     var nameTap: (() -> Void)?
+    var showStatusAlways: Bool = true
 
     var body: some View {
         HStack(spacing: 12) {
@@ -393,7 +394,8 @@ struct PhoneCanvas: View {
                 username: profile.username,
                 isVerified: profile.isVerified,
                 subtitle: profile.subtitle,
-                avatarContent: avatarContent
+                avatarContent: avatarContent,
+                showStatusAlways: showStatusAlways
             )
 
             VStack(spacing: 20) {
