@@ -107,15 +107,7 @@ struct BatteryShape: Shape {
     }
 }
 
-// MARK: - Verified badge
-
-struct VerifiedBadge: View {
-    var body: some View {
-        Image(systemName: "checkmark.seal.fill")
-            .font(.system(size: 12))
-            .foregroundColor(Theme.igBlue)
-    }
-}
+// MARK: - Verified badge (defined in IGIcons.swift — real IG starburst SVG)
 
 // MARK: - Chat header
 
@@ -154,12 +146,8 @@ struct ChatHeaderView: View {
 
             Spacer()
 
-            Image(systemName: "phone")
-                .font(.system(size: 20))
-                .foregroundColor(.white)
-            Image(systemName: "video")
-                .font(.system(size: 20))
-                .foregroundColor(.white)
+            PhoneIcon(size: 22)
+            VideoCallIcon(size: 22)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -296,13 +284,7 @@ struct ReceivedRowView: View {
 struct InputBarView: View {
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(Theme.igBlue)
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
-            }
-            .frame(width: 40, height: 40)
+            CameraRoundIcon(size: 40)
 
             HStack {
                 Text("Message...")
@@ -310,10 +292,9 @@ struct InputBarView: View {
                     .foregroundColor(Theme.secondaryText)
                 Spacer()
                 HStack(spacing: 12) {
-                    Image(systemName: "mic").font(.system(size: 18))
-                    Image(systemName: "photo").font(.system(size: 18))
-                    Image(systemName: "doc").font(.system(size: 18))
-                    Image(systemName: "plus.circle").font(.system(size: 18))
+                    VoiceClipIcon(size: 22)
+                    AddPhotoIcon(size: 22)
+                    GifStickerIcon(size: 22)
                 }
                 .foregroundColor(.white)
             }
@@ -448,7 +429,11 @@ struct ContentView: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                     if profile.isVerified {
-                        VerifiedBadge()
+                        VerifiedBadge(size: 13)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                profile.isVerified.toggle()
+                            }
                     }
                 }
                 .contentShape(Rectangle())
@@ -463,14 +448,20 @@ struct ContentView: View {
                         )
                     }
                 }
-                Text("Business chat")
-                    .font(.system(size: 12))
-                    .foregroundColor(Theme.secondaryText)
             }
 
             Spacer()
 
             Menu {
+                Button {
+                    profile.isVerified.toggle()
+                } label: {
+                    Label(
+                        profile.isVerified ? "Hide verified badge" : "Show verified badge",
+                        systemImage: profile.isVerified ? "checkmark.seal.fill" : "checkmark.seal"
+                    )
+                }
+                Divider()
                 Button {
                     elements.append(ChatElement(style: .sent, text: "New message"))
                 } label: {
