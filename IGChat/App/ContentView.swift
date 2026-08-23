@@ -196,18 +196,20 @@ struct SentBubbleView: View {
     /// 0 = near the very top of the screen, 1 = near the bottom. nil = static (export uses default gradient).
     var screenProgress: Double?
 
-    /// Vertical gradient: purple above, blue below. As the message rises on screen
-    /// (<70% region) the blue stop eases to purple; below 80% it stays blue.
+    /// Viewport-stuck ramp: message high on screen (<=70%) = blue, 70-85% = smooth
+    /// transition zone, >=85% (low on screen) = purple full. Both gradient stops
+    /// interpolate so extremes read as solid blue / solid purple.
     private var fill: LinearGradient {
         let t = min(max(screenProgress ?? 1.0, 0), 1)
-        // k = 1 high on screen (purple lean), k = 0 low on screen (blue). Ramp 0.70...0.80.
-        let k = min(max((0.80 - t) / 0.10, 0), 1)
+        let k = min(max((t - 0.70) / 0.15, 0), 1)
         func lerp(_ a: Double, _ b: Double) -> Double { a + (b - a) * k }
+        let start = Color(red: lerp(0x51, 0x81) / 255.0,
+                          green: lerp(0x58, 0x34) / 255.0,
+                          blue: lerp(0xDF, 0xAF) / 255.0)
         let end = Color(red: lerp(0x51, 0x6B) / 255.0,
                         green: lerp(0x58, 0x3F) / 255.0,
                         blue: lerp(0xDF, 0xC7) / 255.0)
-        return LinearGradient(colors: [Theme.gradientStart, end],
-                              startPoint: .top, endPoint: .bottom)
+        return LinearGradient(colors: [start, end], startPoint: .top, endPoint: .bottom)
     }
 
     var body: some View {
@@ -424,7 +426,7 @@ struct ContentView: View {
 
     private var liveHeader: some View {
         HStack(spacing: 12) {
-            GlassCircle(size: 32) {
+            GlassCircle(size: 46) {
                 BackButtonArt(height: 19)
             }
 
