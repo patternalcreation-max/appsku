@@ -334,6 +334,44 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
+/// Top frost band — isolated so the main body stays type-checkable.
+struct FrostBand: View {
+    var bandPct: Double
+    var frostBlur: Double
+
+    var body: some View {
+        GeometryReader { geo in
+            let bandH = geo.size.height * (bandPct / 100.0)
+            ZStack {
+                Rectangle().fill(.thickMaterial)
+                Rectangle().fill(.ultraThinMaterial)
+                Rectangle().fill(.regularMaterial)
+            }
+            .frame(height: bandH)
+            .blur(radius: CGFloat(max(frostBlur - 20, 0) / 2))
+            .frame(maxHeight: .infinity, alignment: .top)
+            .mask(alignment: .top) {
+                LinearGradient(stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.5),
+                    .init(color: .clear, location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+                .frame(height: bandH)
+            }
+            .overlay(alignment: .top) {
+                LinearGradient(stops: [
+                    .init(color: Theme.black.opacity(0.9), location: 0),
+                    .init(color: Theme.black.opacity(0.9), location: 0.5),
+                    .init(color: .clear, location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+                .frame(height: bandH)
+                .allowsHitTesting(false)
+            }
+            .allowsHitTesting(false)
+        }
+    }
+}
+
 struct PhoneCanvas: View {
     let elements: [ChatElement]
     let profile: IGProfile
@@ -481,39 +519,9 @@ struct ContentView: View {
             // Progressive frost across the TOP 15% of the screen: content crossing it
             // gaussian-blurs and fades toward black as it approaches the very top,
             // behind the floating glass toolbar.
-            GeometryReader { geo in
-                let bandH = geo.size.height * (bandPct / 100.0)
-                ZStack {
-                    Rectangle().fill(.thickMaterial)
-                    Rectangle().fill(.ultraThinMaterial)
-                    Rectangle().fill(.regularMaterial)
-                }
-                .frame(height: bandH)
-                .blur(radius: CGFloat(max(frostBlur - 20, 0) / 2))   // subtle scale with user blur var
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .mask(alignment: .top) {
-                        // invisible container: blur+fade starts when content enters the band,
-                        // fully vanished to black by 50% of the bar area height
-                        LinearGradient(stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black, location: 0.5),
-                            .init(color: .clear, location: 1)
-                        ], startPoint: .top, endPoint: .bottom)
-                        .frame(height: bandH)
-                    }
-                    .overlay(alignment: .top) {
-                        LinearGradient(stops: [
-                            .init(color: Theme.black.opacity(0.9), location: 0),
-                            .init(color: Theme.black.opacity(0.9), location: 0.5),
-                            .init(color: .clear, location: 1)
-                        ], startPoint: .top, endPoint: .bottom)
-                        .frame(height: bandH)
-                        .allowsHitTesting(false)
-                    }
-                    .allowsHitTesting(false)
-            }
-            .ignoresSafeArea(edges: .top)
-            .allowsHitTesting(false)
+            FrostBand(bandPct: bandPct, frostBlur: frostBlur)
+                .ignoresSafeArea(edges: .top)
+                .allowsHitTesting(false)
 
             // Floating toolbar — no header container
             VStack {
