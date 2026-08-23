@@ -226,9 +226,25 @@ Button(action: onBack) {
         switch element.style {
         case .timestamp: TimestampView(text: element.text)
         case .notice: NoticeView(text: element.text)
-        case .sent: MessageBubble(text: element.text, isSent: true)
+        case .sent:
+            if isLastSent(element) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    MessageBubble(text: element.text, isSent: true)
+                    if session.showSeen {
+                        Text("Seen")
+                            .font(.system(size: 12))
+                            .foregroundColor(Theme.secondaryText)
+                    }
+                }
+            } else {
+                MessageBubble(text: element.text, isSent: true)
+            }
         case .received: MessageBubble(text: element.text, isSent: false)
         }
+    }
+
+    private func isLastSent(_ element: ChatElement) -> Bool {
+        session.elements.last(where: { $0.style == .sent })?.id == element.id
     }
 
     private func elementMenu(for element: ChatElement) -> some View {
@@ -253,6 +269,13 @@ Button(action: onBack) {
                 insertAfter(element, style: .timestamp, text: "Today")
             } label: {
                 Label("Add timestamp below", systemImage: "clock")
+            }
+            Divider()
+            Button {
+                session.showSeen.toggle()
+            } label: {
+                Label(session.showSeen ? "Hide "Seen"" : "Show "Seen"",
+                      systemImage: "eye")
             }
         }
     }
@@ -454,7 +477,8 @@ Menu {
             isVerified: isVerified,
             avatarImage: avatarImage,
             badgeNotifications: session.badgeNotifications,
-            badgeMessages: session.badgeMessages
+            badgeMessages: session.badgeMessages,
+            showSeen: session.showSeen
         )
         let renderer = ImageRenderer(content: canvas)
         renderer.scale = highRes ? 3.0 : 1.0
@@ -473,6 +497,7 @@ struct PhoneCanvas: View {
     let avatarImage: UIImage?
     var badgeNotifications: Int = 4
     var badgeMessages: Int = 7
+    var showSeen: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -482,7 +507,17 @@ struct PhoneCanvas: View {
                     switch element.style {
                     case .timestamp: TimestampView(text: element.text)
                     case .notice: NoticeView(text: element.text)
-                    case .sent: MessageBubble(text: element.text, isSent: true)
+                    case .sent:
+                        if showSeen && elements.last(where: { $0.style == .sent })?.id == element.id {
+                            VStack(alignment: .trailing, spacing: 4) {
+                                MessageBubble(text: element.text, isSent: true)
+                                Text("Seen")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Theme.secondaryText)
+                            }
+                        } else {
+                            MessageBubble(text: element.text, isSent: true)
+                        }
                     case .received: MessageBubble(text: element.text, isSent: false)
                     }
                 }

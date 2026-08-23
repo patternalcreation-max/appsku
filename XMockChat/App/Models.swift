@@ -46,6 +46,7 @@ struct ChatSession: Identifiable, Equatable {
     var inputPlaceholder: String = "Message"
     var badgeNotifications: Int = 4
     var badgeMessages: Int = 7
+    var showSeen: Bool = false
     var elements: [ChatElement] = ChatSeed.defaultElements()
 
     var title: String {
@@ -96,7 +97,7 @@ extension ChatSession {
     /// Manual Codable implementation (kept out of the struct to preserve v1.3.1 memberwise init)
     enum CodingKeys: String, CodingKey {
         case id, createdAt, displayName, isVerified, avatarPNG, inputPlaceholder
-        case badgeNotifications, badgeMessages, elements
+        case badgeNotifications, badgeMessages, showSeen, elements
     }
 }
 
@@ -111,6 +112,7 @@ extension ChatSession: Codable {
         inputPlaceholder = try c.decodeIfPresent(String.self, forKey: .inputPlaceholder) ?? "Message"
         badgeNotifications = try c.decodeIfPresent(Int.self, forKey: .badgeNotifications) ?? 4
         badgeMessages = try c.decodeIfPresent(Int.self, forKey: .badgeMessages) ?? 7
+        showSeen = try c.decodeIfPresent(Bool.self, forKey: .showSeen) ?? false
         elements = try c.decodeIfPresent([ChatElement].self, forKey: .elements) ?? ChatSeed.defaultElements()
     }
 
@@ -124,6 +126,7 @@ extension ChatSession: Codable {
         try c.encode(inputPlaceholder, forKey: .inputPlaceholder)
         try c.encode(badgeNotifications, forKey: .badgeNotifications)
         try c.encode(badgeMessages, forKey: .badgeMessages)
+        try c.encode(showSeen, forKey: .showSeen)
         try c.encode(elements, forKey: .elements)
     }
 }
