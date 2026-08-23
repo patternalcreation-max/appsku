@@ -1,6 +1,11 @@
 import Foundation
 import SwiftUI
 
+enum ReplyKind: String, Codable, Equatable {
+    case chat
+    case story
+}
+
 struct ChatElement: Identifiable, Hashable, Codable {
     enum Style: Equatable, Codable {
         case date
@@ -12,6 +17,46 @@ struct ChatElement: Identifiable, Hashable, Codable {
     var style: Style
     var text: String
     var heartHint: Bool = false
+    /// Non-empty / story image = show IG-style reply chrome above this bubble.
+    var replyText: String? = nil
+    var replyFromMe: Bool = false
+    var replyKind: ReplyKind = .chat
+    /// JPEG for story / media being replied to.
+    var replyImageJPEG: Data? = nil
+    /// JPEG for a photo message (text may be empty).
+    var imageJPEG: Data? = nil
+
+    var hasReply: Bool {
+        let t = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return !t.isEmpty || replyImageJPEG != nil || replyKind == .story
+    }
+
+    var hasImage: Bool { imageJPEG != nil }
+
+    enum CodingKeys: String, CodingKey {
+        case id, style, text, heartHint, replyText, replyFromMe, replyKind, replyImageJPEG, imageJPEG
+    }
+
+    init(id: UUID = UUID(), style: Style, text: String, heartHint: Bool = false,
+         replyText: String? = nil, replyFromMe: Bool = false, replyKind: ReplyKind = .chat,
+         replyImageJPEG: Data? = nil, imageJPEG: Data? = nil) {
+        self.id = id; self.style = style; self.text = text; self.heartHint = heartHint
+        self.replyText = replyText; self.replyFromMe = replyFromMe; self.replyKind = replyKind
+        self.replyImageJPEG = replyImageJPEG; self.imageJPEG = imageJPEG
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        style = try c.decode(Style.self, forKey: .style)
+        text = try c.decode(String.self, forKey: .text)
+        heartHint = try c.decodeIfPresent(Bool.self, forKey: .heartHint) ?? false
+        replyText = try c.decodeIfPresent(String.self, forKey: .replyText)
+        replyFromMe = try c.decodeIfPresent(Bool.self, forKey: .replyFromMe) ?? false
+        replyKind = try c.decodeIfPresent(ReplyKind.self, forKey: .replyKind) ?? .chat
+        replyImageJPEG = try c.decodeIfPresent(Data.self, forKey: .replyImageJPEG)
+        imageJPEG = try c.decodeIfPresent(Data.self, forKey: .imageJPEG)
+    }
 }
 
 struct IGProfile: Codable, Equatable {
@@ -22,7 +67,6 @@ struct IGProfile: Codable, Equatable {
     var statusLine: String = "You don't follow each other on Instagram"
     var subtitle: String = "Business chat"
     var barPlaceholder: String = "Message…"
-    // extra info lines under username (fullname etc.) — rendered tight, same style as status
     var infoLines: [String] = []
 
     var initials: String {
@@ -49,8 +93,6 @@ enum IGSeed {
 }
 
 // MARK: - Date separator buckets (HTML tool parity)
-// Rules: today -> "2:34 PM" | yesterday..6d -> "SAT 6:05PM" | older -> "AUG 9 AT 2:34 PM"
-// All options constructed BACKWARD from now -> future impossible.
 
 struct DateOption: Identifiable {
     let id = UUID()
@@ -81,7 +123,6 @@ enum DateBuckets {
             return f.string(from: d).uppercased()
         }
 
-        // Today: 0,2,4,6,9h back; clipped to early-today if crossed midnight
         var today: [DateOption] = []
         for h in [0, 2, 4, 6, 9] {
             var d = now
@@ -92,7 +133,6 @@ enum DateBuckets {
             today.append(DateOption(label: fmtTime(d)))
         }
 
-        // yesterday..6 days: "SAT 6:05PM" — 4 plausible times/day
         let times: [(Int, Int)] = [(9, 12), (13, 29), (18, 5), (21, 47)]
         var dayOpts: [DateOption] = []
         for g in 1...6 {
@@ -103,7 +143,6 @@ enum DateBuckets {
             }
         }
 
-        // older: "AUG 9 AT 2:34 PM"
         var old: [DateOption] = []
         for g in [10, 14, 21, 30] {
             guard let day = cal.date(byAdding: .day, value: -g, to: now) else { continue }
@@ -148,8 +187,6 @@ final class ChatStore: ObservableObject {
     var current: ChatSession? {
         get { chats.first(where: { $0.id == currentId }) }
     }
-
-    // MARK: persistence — chats survive app restarts
 
     private func persist() {
         if let data = try? JSONEncoder().encode(chats) {

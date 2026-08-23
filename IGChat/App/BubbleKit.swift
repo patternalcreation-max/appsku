@@ -1,0 +1,220 @@
+import SwiftUI
+import PhotosUI
+
+// MARK: - Group position (consecutive same-sender bubbles)
+
+enum BubbleGroupPos: Equatable {
+    case single, first, middle, last
+}
+
+/// IG-like bubble corners: stack side tight (4), free corners large (22).
+struct IGBubbleShape: Shape {
+    let isSent: Bool
+    var position: BubbleGroupPos = .single
+
+    func path(in rect: CGRect) -> Path {
+        let big: CGFloat = 22
+        let small: CGFloat = 4
+        var tl = big, tr = big, bl = big, br = big
+        if isSent {
+            // right stack
+            switch position {
+            case .single: br = small
+            case .first:  br = small
+            case .middle: tr = small; br = small
+            case .last:   tr = small; br = small
+            }
+        } else {
+            // left stack
+            switch position {
+            case .single: bl = small
+            case .first:  bl = small
+            case .middle: tl = small; bl = small
+            case .last:   tl = small; bl = small
+            }
+        }
+        return UnevenRoundedRectangle(
+            cornerRadii: .init(topLeading: tl, bottomLeading: bl, bottomTrailing: br, topTrailing: tr),
+            style: .continuous
+        ).path(in: rect)
+    }
+}
+
+// MARK: - Reply chrome (line + label + quote)
+
+struct ReplyChrome: View {
+    let isSent: Bool
+    let kind: ReplyKind
+    let replyFromMe: Bool
+    let peerName: String
+    var replyText: String? = nil
+    var replyImage: UIImage? = nil
+    /// Optional mini text bubble fill when quoting a chat bubble.
+    var quoteBubbleFill: Color = Color(red: 0x3B/255, green: 0x2B/255, blue: 0x85/255)
+
+    private var label: String {
+        switch kind {
+        case .story:
+            return isSent ? "You replied to their story" : "Replied to your story"
+        case .chat:
+            if isSent {
+                return replyFromMe ? "You replied to yourself" : "You replied"
+            } else {
+                return replyFromMe ? "Replied to you" : "Replied to \(peerName)"
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: isSent ? .trailing : .leading, spacing: 6) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(Theme.secondaryText)
+
+            HStack(alignment: .center, spacing: 8) {
+                if !isSent { replyBar }
+                quoteBody
+                if isSent { replyBar }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isSent ? .trailing : .leading)
+    }
+
+    private var replyBar: some View {
+        Capsule()
+            .fill(Color(white: 0.35))
+            .frame(width: 3)
+            .frame(maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var quoteBody: some View {
+        if let img = replyImage {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFill()
+                .frame(width: kind == .story ? 120 : 100, height: kind == .story ? 190 : 100)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(alignment: .bottomLeading) {
+                    if kind == .story {
+                        Image(systemName: "play.rectangle.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
+                            .padding(8)
+                    }
+                }
+        } else if let text = replyText, !text.isEmpty {
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(quoteBubbleFill)
+                )
+                .frame(maxWidth: 260, alignment: .leading)
+        }
+    }
+}
+
+// MARK: - Photo message + side actions
+
+struct MediaSideButtons: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            sideCircle {
+                ScaledArtShape(base: MediaSideArt.sharePath, artSize: MediaSideArt.shareSize)
+                    .fill(Color.white, style: FillStyle(eoFill: true, antialiased: true))
+                    .frame(width: 18, height: 18)
+            }
+            sideCircle {
+                ScaledArtShape(base: MediaSideArt.scissorsPath, artSize: MediaSideArt.scissorsSize)
+                    .fill(Color.white, style: FillStyle(eoFill: true, antialiased: true))
+                    .frame(width: 18, height: 18)
+            }
+        }
+    }
+
+    private func sideCircle<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ZStack {
+            Circle().fill(Color(white: 0.18).opacity(0.92))
+            content()
+        }
+        .frame(width: 36, height: 36)
+    }
+}
+
+// Auto from operator SVG (share + scissors+sparkle), paths translated to 0,0.
+enum MediaSideArt {
+    static let shareSize = CGSize(width: 240, height: 220)
+    static let shareD = "M 38.722 4.750 C 45.859 4.124 60.008 4.536 67.557 4.548 L 121.898 4.642 L 167.670 4.603 C 182.083 4.522 200.003 2.641 212.628 10.072 C 221.145 15.125 227.290 23.369 229.697 32.974 C 231.089 38.516 231.477 47.571 229.286 52.817 C 223.145 67.524 212.464 83.690 204.218 97.530 L 158.843 173.697 C 149.545 189.989 142.746 206.749 122.239 210.687 C 112.623 212.597 102.643 210.576 94.529 205.075 C 89.274 201.393 85.027 196.453 82.175 190.705 C 78.420 183.296 75.531 169.428 73.428 160.860 L 65.478 129.041 C 64.687 125.840 63.000 115.297 61.218 113.404 C 50.366 101.877 37.300 90.464 26.034 79.255 C 20.468 73.717 14.963 69.167 10.825 63.049 C 7.873 58.695 5.868 53.771 4.939 48.594 C 0.860 25.857 16.949 8.435 38.722 4.750 Z M 74.430 95.004 C 97.384 80.049 124.148 66.629 147.978 52.718 C 159.219 46.155 170.723 63.155 160.094 71.160 C 135.980 85.999 109.675 100.055 85.285 114.355 L 97.332 163.250 C 99.142 170.966 100.621 182.869 108.126 187.301 C 113.557 190.508 122.671 188.709 126.557 183.828 C 130.545 178.040 134.184 171.509 137.798 165.386 L 158.260 130.680 L 189.444 78.176 C 194.896 69.008 200.366 59.916 205.723 50.651 C 210.593 43.046 208.059 33.137 199.843 29.146 C 198.128 28.313 195.927 28.067 194.026 28.040 C 178.641 27.822 163.238 28.142 147.850 28.027 C 112.754 27.552 77.655 27.445 42.557 27.706 C 37.423 28.188 33.707 29.014 30.300 33.155 C 19.749 45.976 36.210 57.272 44.134 65.339 C 54.135 75.522 64.798 84.772 74.430 95.004 Z"
+
+    static let scissorsSize = CGSize(width: 230, height: 245)
+    static let scissorsD = "M 112.920 60.625 C 119.572 50.369 126.142 40.061 132.631 29.702 C 136.258 23.983 139.666 18.109 143.932 12.829 C 150.851 3.960 164.547 13.548 160.036 23.138 C 156.771 30.079 151.904 36.801 147.729 43.268 L 124.728 79.076 C 129.868 88.252 137.099 98.945 142.845 107.876 L 174.337 156.608 C 176.916 156.293 179.443 155.955 182.031 155.716 C 214.245 152.742 234.740 188.738 216.294 215.280 C 210.650 223.510 201.922 229.110 192.090 230.810 C 163.022 235.810 139.436 206.520 150.596 179.148 C 152.485 174.514 154.613 171.610 157.548 167.654 C 154.731 162.673 150.329 156.282 147.140 151.359 L 112.710 97.998 C 99.421 120.269 82.273 145.618 68.044 167.679 C 68.799 168.647 69.533 169.631 70.244 170.631 C 99.768 212.410 39.033 255.760 9.267 215.300 C -3.461 197.996 1.856 172.494 19.746 161.239 C 29.429 155.148 40.219 154.531 51.289 156.983 C 66.046 132.577 85.176 103.066 101.054 79.400 C 89.410 60.128 75.180 41.593 64.951 21.592 C 61.881 15.589 68.964 10.365 74.577 9.396 C 82.824 10.199 87.173 21.123 91.537 27.639 C 98.813 38.504 105.251 49.986 112.920 60.625 Z M 43.114 210.850 C 49.411 209.723 54.615 205.297 56.737 199.264 C 58.859 193.230 57.571 186.522 53.365 181.703 C 49.159 176.884 42.686 174.700 36.420 175.986 C 26.901 177.939 20.721 187.180 22.553 196.722 C 24.385 206.264 33.549 212.560 43.114 210.850 Z M 189.048 210.700 C 198.460 208.780 204.624 199.707 202.940 190.252 C 201.256 180.797 192.338 174.410 182.843 175.858 C 176.487 176.827 171.156 181.165 168.917 187.192 C 166.678 193.218 167.883 199.985 172.065 204.868 C 176.247 209.751 182.749 211.980 189.048 210.700 Z"
+    static let sparkleD = "M 203.208 9.616 C 208.397 9.214 210.498 11.588 212.339 16.268 C 214.683 22.227 216.631 27.860 219.343 33.697 C 234.283 40.566 258.940 45.152 228.400 57.197 C 225.687 58.267 222.721 59.739 220.018 60.944 C 216.077 68.465 213.610 80.342 207.876 85.184 C 198.603 86.124 195.259 68.018 192.065 60.926 C 186.423 58.396 167.852 52.872 168.582 46.146 C 171.965 40.472 185.536 37.045 192.225 33.898 C 194.903 27.019 198.839 14.904 203.208 9.616 Z"
+
+    static var sharePath: Path { SVGPathParser.path(from: shareD) }
+    static var scissorsPath: Path {
+        var p = SVGPathParser.path(from: scissorsD)
+        p.addPath(SVGPathParser.path(from: sparkleD))
+        return p
+    }
+}
+
+
+struct PhotoMessageView: View {
+    let image: UIImage
+    let isSent: Bool
+    var position: BubbleGroupPos = .single
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            if isSent { MediaSideButtons() }
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: 240, maxHeight: 320)
+                .aspectRatio(contentMode: .fit)
+                .clipShape(IGBubbleShape(isSent: isSent, position: position))
+            if !isSent { MediaSideButtons() }
+        }
+    }
+}
+
+// MARK: - Helpers
+
+enum ChatImageCodec {
+    static func jpeg(_ image: UIImage, quality: CGFloat = 0.82) -> Data? {
+        image.jpegData(compressionQuality: quality)
+    }
+    static func image(from data: Data?) -> UIImage? {
+        guard let data else { return nil }
+        return UIImage(data: data)
+    }
+}
+
+enum BubbleGrouping {
+    static func position(in elements: [ChatElement], at idx: Int) -> BubbleGroupPos {
+        guard elements.indices.contains(idx) else { return .single }
+        let style = elements[idx].style
+        guard style == .sent || style == .received else { return .single }
+        let prevSame = idx > 0 && elements[idx - 1].style == style
+        let nextSame = idx + 1 < elements.count && elements[idx + 1].style == style
+        switch (prevSame, nextSame) {
+        case (false, false): return .single
+        case (false, true):  return .first
+        case (true, true):   return .middle
+        case (true, false):  return .last
+        }
+    }
+
+    /// Tighter gap inside a same-sender run.
+    static func spacing(before idx: Int, in elements: [ChatElement]) -> CGFloat {
+        guard idx > 0 else { return 0 }
+        let a = elements[idx - 1].style
+        let b = elements[idx].style
+        if (a == .sent || a == .received) && a == b { return 3 }
+        return 12
+    }
+}

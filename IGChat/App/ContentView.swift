@@ -1,30 +1,7 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - Shapes
-
-struct IGBubbleShape: Shape {
-    let isSent: Bool
-
-    func path(in rect: CGRect) -> Path {
-        let r: CGFloat = 20
-        let tailR: CGFloat = 4
-        let bottomRight: CGFloat = isSent ? tailR : r
-        let bottomLeft: CGFloat = isSent ? r : tailR
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX + r, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
-        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + r), control: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRight))
-        p.addQuadCurve(to: CGPoint(x: rect.maxX - bottomRight, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY))
-        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - bottomLeft), control: CGPoint(x: rect.minX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
-        p.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.minY), control: CGPoint(x: rect.minX, y: rect.minY))
-        p.closeSubpath()
-        return p
-    }
-}
+// MARK: - Shapes (IGBubbleShape lives in BubbleKit.swift)
 
 // MARK: - Avatar
 
@@ -224,11 +201,15 @@ struct MessageTextView: View {
 
 struct SentBubbleView: View {
     let text: String
-    /// Viewport position of the bubble's top & bottom edges (0 = top of viewport, 1 = bottom).
-    /// The bubble acts as a window into a gradient FIXED to the viewport.
+    var replyText: String? = nil
+    var replyFromMe: Bool = false
+    var replyName: String = "You"
+    var replyKind: ReplyKind = .chat
+    var replyImage: UIImage? = nil
+    var photo: UIImage? = nil
+    var position: BubbleGroupPos = .single
     var screenTop: Double?
     var screenBottom: Double?
-    /// v1.18: dynamic gradient endpoints (Look & feel controls)
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     var gradTop: Double = 15
@@ -240,12 +221,15 @@ struct SentBubbleView: View {
         return (Double(k[0]), Double(k[1]), Double(k[2]))
     }
 
-    /// v1.19: gradient zone now user-controllable — gradA fills above gradTop% of screen,
-    /// transitions to gradB by gradBottom%, gradB below. Bubble samples its screen-space edges.
+    /// Sample the viewport-locked Me gradient at normalized Y (0 = top of screen, 1 = bottom).
+    /// [0 … gradTop] = solid purple; (gradTop … gradBottom) = fade; [gradBottom … 1] = solid blue.
     private func viewportColor(_ p: Double) -> Color {
-        let t = min(max(p, 0), 1)
-        let top = gradTop / 100, bot = gradBottom / 100
-        let k = bot > top ? min(max((bot - t) / (bot - top), 0), 1) : (t <= bot ? 1 : 0)
+        let y = min(max(p, 0), 1)
+        let top = gradTop / 100, bot = max(gradBottom / 100, top + 0.001)
+        let k: Double
+        if y <= top { k = 1 }
+        else if y >= bot { k = 0 }
+        else { k = (bot - y) / (bot - top) } // 1 at purple edge → 0 at blue edge
         let (ar, ag, ab) = rgb(gradA)
         let (br, bg, bb) = rgb(gradB)
         return Color(red: br + (ar - br) * k,
@@ -261,14 +245,39 @@ struct SentBubbleView: View {
                               startPoint: .top, endPoint: .bottom)
     }
 
+    private var hasReply: Bool {
+        let t = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return !t.isEmpty || replyImage != nil || replyKind == .story
+    }
+
     var body: some View {
-        HStack {
-            Spacer(minLength: 64)
-            MessageTextView(text: text)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(IGBubbleShape(isSent: true).fill(fill))
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .trailing, spacing: 6) {
+            if hasReply {
+                ReplyChrome(
+                    isSent: true,
+                    kind: replyKind,
+                    replyFromMe: replyFromMe,
+                    peerName: replyName,
+                    replyText: replyText,
+                    replyImage: replyImage
+                )
+            }
+            if let photo {
+                HStack {
+                    Spacer(minLength: 48)
+                    PhotoMessageView(image: photo, isSent: true, position: position)
+                }
+            }
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                HStack {
+                    Spacer(minLength: 64)
+                    MessageTextView(text: text)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(IGBubbleShape(isSent: true, position: position).fill(fill))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 }
@@ -277,20 +286,51 @@ struct ReceivedRowView: View {
     let text: String
     let heartHint: Bool
     let avatarContent: AvatarContent
+    var showAvatar: Bool = true
+    var replyText: String? = nil
+    var replyFromMe: Bool = false
+    var replyName: String = "You"
+    var replyKind: ReplyKind = .chat
+    var replyImage: UIImage? = nil
+    var photo: UIImage? = nil
+    var position: BubbleGroupPos = .single
+
+    private var hasReply: Bool {
+        let t = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return !t.isEmpty || replyImage != nil || replyKind == .story
+    }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            AvatarView(content: avatarContent, size: 28)
-                // align avatar bottom with the BUBBLE bottom (not the hint below it)
-                .alignmentGuide(.bottom) { d in
-                    d[.bottom] + (heartHint ? 25 : 0)
-                }
+            if showAvatar {
+                AvatarView(content: avatarContent, size: 28)
+                    .alignmentGuide(.bottom) { d in
+                        d[.bottom] + (heartHint ? 25 : 0)
+                    }
+            } else {
+                Color.clear.frame(width: 28, height: 28)
+            }
             VStack(alignment: .leading, spacing: 6) {
-                MessageTextView(text: text)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(IGBubbleShape(isSent: false).fill(Theme.bubbleGray))
-                    .fixedSize(horizontal: false, vertical: true)
+                if hasReply {
+                    ReplyChrome(
+                        isSent: false,
+                        kind: replyKind,
+                        replyFromMe: replyFromMe,
+                        peerName: replyName,
+                        replyText: replyText,
+                        replyImage: replyImage
+                    )
+                }
+                if let photo {
+                    PhotoMessageView(image: photo, isSent: false, position: position)
+                }
+                if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    MessageTextView(text: text)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(IGBubbleShape(isSent: false, position: position).fill(Theme.bubbleGray))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if heartHint {
                     Text("Double tap to ❤️")
                         .font(.system(size: 11))
@@ -336,117 +376,45 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Top frost band — isolated so the main body stays type-checkable.
+/// Top frost band — blurs + fades bubbles as they scroll under the header.
+/// Single material (real backdrop blur) + soft mask; avoids muddy stacked materials.
 struct FrostBand: View {
     var bandPct: Double
     var frostBlur: Double
 
     var body: some View {
         GeometryReader { geo in
-            let bandH = geo.size.height * (bandPct / 100.0)
-            ZStack {
-                Rectangle().fill(.thickMaterial)
-                Rectangle().fill(.ultraThinMaterial)
-                Rectangle().fill(.regularMaterial)
-            }
-            .frame(height: bandH)
-            .blur(radius: CGFloat(max(frostBlur - 20, 0) / 2))
-            .frame(maxHeight: .infinity, alignment: .top)
-            .mask(alignment: .top) {
-                LinearGradient(stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black, location: 0.5),
-                    .init(color: .clear, location: 1)
-                ], startPoint: .top, endPoint: .bottom)
-                .frame(height: bandH)
-            }
-            .overlay(alignment: .top) {
-                LinearGradient(stops: [
-                    .init(color: Theme.black.opacity(0.9), location: 0),
-                    .init(color: Theme.black.opacity(0.9), location: 0.5),
-                    .init(color: .clear, location: 1)
-                ], startPoint: .top, endPoint: .bottom)
-                .frame(height: bandH)
-                .allowsHitTesting(false)
-            }
-            .allowsHitTesting(false)
-        }
-    }
-}
-
-struct PhoneCanvas: View {
-    let elements: [ChatElement]
-    let profile: IGProfile
-    let avatarContent: AvatarContent
-    var following: Bool = false
-    var showFollow: Bool = false
-    var learnLinkEnabled: Bool = true
-    var seenEnabled: Bool = false
-    var seenText: String = "Seen"
-    var showStatusAlways: Bool = true
-    var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
-    var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
-    var gradTop: Double = 15
-    var gradBottom: Double = 30
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ChatHeaderView(
-                username: profile.username,
-                isVerified: profile.isVerified,
-                subtitle: profile.subtitle,
-                avatarContent: avatarContent,
-                showStatusAlways: showStatusAlways
-            )
-
-            VStack(spacing: 20) {
-                ProfileContextView(
-                    profile: profile,
-                    avatarContent: avatarContent,
-                    following: following,
-                    showFollow: showFollow,
-                    learnLinkEnabled: learnLinkEnabled,
-                    seenEnabled: seenEnabled,
-                    seenText: seenText,
-                    showStatusAlways: showStatusAlways
-                )
-                ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
-                    elementView(element)
-                    if seenEnabled, idx == (elements.lastIndex(where: { $0.style == .sent }) ?? -1) {
-                        HStack {
-                            Spacer()
-                            Text(seenText)
-                                .font(.system(size: 11))
-                                .foregroundColor(Color(white: 0.56))
-                                .padding(.trailing, 4)
-                        }
-                        .frame(maxWidth: .infinity)
+            let bandH = max(geo.size.height * (bandPct / 100.0), 1)
+            // Soft edge radius from the Look & feel slider (0…30 → ~0…6pt)
+            let edgeBlur = CGFloat(max(frostBlur, 0)) * 0.2
+            ZStack(alignment: .top) {
+                // Real blur of scrolling chat underneath
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        // Gentle darken toward the very top (IG-like under toolbar)
+                        LinearGradient(stops: [
+                            .init(color: Theme.black.opacity(0.72), location: 0),
+                            .init(color: Theme.black.opacity(0.35), location: 0.4),
+                            .init(color: Theme.black.opacity(0.0), location: 1)
+                        ], startPoint: .top, endPoint: .bottom)
                     }
-                }
+                    .frame(height: bandH)
+                    .blur(radius: edgeBlur)
+                    // Expand slightly so blur doesn’t hard-clip at band edge
+                    .padding(.bottom, edgeBlur * 2)
+                    .mask(alignment: .top) {
+                        LinearGradient(stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black.opacity(0.92), location: 0.42),
+                            .init(color: .black.opacity(0.35), location: 0.78),
+                            .init(color: .clear, location: 1)
+                        ], startPoint: .top, endPoint: .bottom)
+                        .frame(height: bandH + edgeBlur * 2)
+                    }
             }
-            .padding(EdgeInsets(top: 16, leading: 16, bottom: 4, trailing: 16))
-
-            Spacer(minLength: 0)
-            InputBarView(placeholder: .constant(profile.barPlaceholder.isEmpty ? "Message…" : profile.barPlaceholder))
-        }
-        .frame(width: 400, alignment: .top)
-        .frame(minHeight: 800, alignment: .top)
-        .background(Theme.black)
-    }
-
-    @ViewBuilder
-    private func elementView(_ element: ChatElement) -> some View {
-        switch element.style {
-        case .date:
-            DateSeparatorView(text: element.text)
-        case .sent:
-            SentBubbleView(text: element.text, screenTop: nil, screenBottom: nil, gradA: gradA, gradB: gradB, gradTop: gradTop, gradBottom: gradBottom)
-        case .received:
-            ReceivedRowView(
-                text: element.text,
-                heartHint: element.heartHint,
-                avatarContent: avatarContent
-            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(false)
         }
     }
 }
@@ -458,15 +426,15 @@ struct ContentView: View {
     @State private var profile = IGProfile()
     @State private var avatarImage: UIImage?
     @State private var photoPickerItem: PhotosPickerItem?
+    @State private var messagePhotoPickerItem: PhotosPickerItem?
+    @State private var messagePhotoTarget: UUID? = nil   // attach photo to this bubble
+    @State private var replyPhotoPickerItem: PhotosPickerItem?
+    @State private var replyPhotoTarget: UUID? = nil     // story/media quote image
 
     @State private var rowProgress: [ChatElement.ID: BubbleEdges] = [:]
     @State private var showEditor = false
     @State private var editorText: String = ""
     @State private var editorTarget: EditTarget?
-
-    @State private var showExport = false
-    @State private var showSaved = false
-    @State private var highRes = true
 
     // v1.16: settings sheet + seen + follow + info lines + toggles
     @State private var showSettings = false
@@ -493,8 +461,8 @@ struct ContentView: View {
     @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     @State private var bandPct: Double = 15
     @State private var frostBlur: Double = 14
-    @State private var gradTop: Double = 15    // top of transition zone (% of viewport)
-    @State private var gradBottom: Double = 30 // bottom of transition zone (% of viewport)
+    @State private var gradTop: Double = 15    // purple solid until this % from top of viewport
+    @State private var gradBottom: Double = 30 // fully blue from this % downward
 
     enum EditTarget: Hashable {
         case username
@@ -506,6 +474,7 @@ struct ContentView: View {
         case infoLine(Int)
         case seenHours
         case element(UUID)
+        case reply(UUID)
     }
 
     private var avatarContent: AvatarContent {
@@ -540,8 +509,51 @@ struct ContentView: View {
         }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showEditor) { editorSheet }
-        .sheet(isPresented: $showExport) { exportSheet }
         .sheet(isPresented: $showSettings) { settingsSheet }
+        .sheet(isPresented: Binding(
+            get: { messagePhotoTarget != nil },
+            set: { if !$0 { messagePhotoTarget = nil } }
+        )) {
+            NavigationStack {
+                PhotosPicker(selection: $messagePhotoPickerItem, matching: .images) {
+                    Label("Choose photo", systemImage: "photo")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+                .navigationTitle("Attach photo")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { messagePhotoTarget = nil }
+                    }
+                }
+            }
+            .presentationDetents([.height(180)])
+            .preferredColorScheme(.dark)
+        }
+        .sheet(isPresented: Binding(
+            get: { replyPhotoTarget != nil },
+            set: { if !$0 { replyPhotoTarget = nil } }
+        )) {
+            NavigationStack {
+                PhotosPicker(selection: $replyPhotoPickerItem, matching: .images) {
+                    Label("Choose story / media", systemImage: "circle.dashed")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+                .navigationTitle("Reply to story")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { replyPhotoTarget = nil }
+                    }
+                }
+            }
+            .presentationDetents([.height(180)])
+            .preferredColorScheme(.dark)
+        }
         .sheet(isPresented: Binding(get: { pickerRef != nil }, set: { if !$0 { pickerRef = nil } })) { dateBucketSheet }
         .sheet(isPresented: $showChatList) { chatListSheet }
         .onAppear {
@@ -571,15 +583,10 @@ struct ContentView: View {
         .onChange(of: frostBlur, perform: { _ in saveLook() })
         .onChange(of: gradTop, perform: { _ in saveLook() })
         .onChange(of: gradBottom, perform: { _ in saveLook() })
-        .alert("Saved to Photos", isPresented: $showSaved) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Chat mockup exported to your photo library.")
-        }
     }
 
     @ViewBuilder
-    private func elementView(_ element: ChatElement) -> some View {
+    private func elementView(_ element: ChatElement, at idx: Int) -> some View {
         Group {
             switch element.style {
             case .date:
@@ -589,9 +596,17 @@ struct ContentView: View {
                     .contextMenu { dateMenu(element) }
             case .sent:
                 SentBubbleView(text: element.text,
+                              replyText: element.replyText,
+                              replyFromMe: element.replyFromMe,
+                              replyName: profile.username,
+                              replyKind: element.replyKind,
+                              replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
+                              photo: ChatImageCodec.image(from: element.imageJPEG),
+                              position: BubbleGrouping.position(in: elements, at: idx),
                               screenTop: rowProgress[element.id]?.top,
                               screenBottom: rowProgress[element.id]?.bottom,
-                              gradA: gradA, gradB: gradB)
+                              gradA: gradA, gradB: gradB,
+                              gradTop: gradTop, gradBottom: gradBottom)
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
                     .contextMenu { sentMenu(element) }
@@ -599,7 +614,16 @@ struct ContentView: View {
                 ReceivedRowView(
                     text: element.text,
                     heartHint: element.heartHint && heartHintsEnabled,
-                    avatarContent: avatarContent
+                    avatarContent: avatarContent,
+                    showAvatar: BubbleGrouping.position(in: elements, at: idx) == .single
+                        || BubbleGrouping.position(in: elements, at: idx) == .last,
+                    replyText: element.replyText,
+                    replyFromMe: element.replyFromMe,
+                    replyName: profile.username,
+                    replyKind: element.replyKind,
+                    replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
+                    photo: ChatImageCodec.image(from: element.imageJPEG),
+                    position: BubbleGrouping.position(in: elements, at: idx)
                 )
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
@@ -654,6 +678,10 @@ struct ContentView: View {
         Group {
             strictMenu(element, isMe: true)
             Divider()
+            replyAsMenu(element)
+            Divider()
+            replyMenu(element)
+            Divider()
             Button {
                 pickerRef = element.id; pickerAbove = true
             } label: { Label("Add date separator above", systemImage: "clock.arrow.circlepath") }
@@ -671,6 +699,10 @@ struct ContentView: View {
         Group {
             strictMenu(element, isMe: false)
             Divider()
+            replyAsMenu(element)
+            Divider()
+            replyMenu(element)
+            Divider()
             Toggle(isOn: $heartHintsEnabled) {
                 Text("Show \"Double tap to ❤️\"")
             }
@@ -678,6 +710,118 @@ struct ContentView: View {
             deleteButton(element)
         }
     }
+
+    @ViewBuilder
+    private func replyMenu(_ element: ChatElement) -> some View {
+        let has = element.hasReply
+        Button {
+            replyToMessageAbove(element)
+        } label: {
+            Label("Reply to message above", systemImage: "arrowshape.turn.up.left")
+        }
+        Button {
+            beginEdit(.reply(element.id), text: element.replyText ?? "")
+        } label: {
+            Label(has ? "Edit reply quote text" : "Add reply quote text…", systemImage: "text.quote")
+        }
+        Button {
+            if let idx = elements.firstIndex(where: { $0.id == element.id }) {
+                elements[idx].replyKind = .story
+            }
+            replyPhotoTarget = element.id
+        } label: {
+            Label("Reply to story (pick photo)…", systemImage: "circle.dashed")
+        }
+        Button {
+            messagePhotoTarget = element.id
+        } label: {
+            Label(element.hasImage ? "Replace photo…" : "Attach photo…", systemImage: "photo")
+        }
+        if element.hasImage {
+            Button(role: .destructive) {
+                if let idx = elements.firstIndex(where: { $0.id == element.id }) {
+                    elements[idx].imageJPEG = nil
+                }
+            } label: {
+                Label("Remove photo", systemImage: "photo.badge.minus")
+            }
+        }
+        if has {
+            Button(role: .destructive) {
+                clearReply(element.id)
+            } label: {
+                Label("Remove reply", systemImage: "xmark.circle")
+            }
+        }
+    }
+
+    private func replyToMessageAbove(_ element: ChatElement) {
+        guard let idx = elements.firstIndex(where: { $0.id == element.id }), idx > 0 else { return }
+        var i = idx - 1
+        while i >= 0 && elements[i].style == .date { i -= 1 }
+        guard i >= 0 else { return }
+        let src = elements[i]
+        elements[idx].replyText = src.text
+        elements[idx].replyFromMe = (src.style == .sent)
+        elements[idx].replyKind = .chat
+        elements[idx].replyImageJPEG = src.imageJPEG
+    }
+
+    private func clearReply(_ id: UUID) {
+        guard let idx = elements.firstIndex(where: { $0.id == id }) else { return }
+        elements[idx].replyText = nil
+        elements[idx].replyFromMe = false
+        elements[idx].replyKind = .chat
+        elements[idx].replyImageJPEG = nil
+    }
+
+    /// Long-press target message → insert a reply bubble quoting it.
+    private func replyAs(to target: ChatElement, asMe: Bool) {
+        guard let idx = elements.firstIndex(where: { $0.id == target.id }) else { return }
+        // Quote text: prefer message text; if photo-only, use a short label.
+        let trimmed = target.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let quoteText: String? = {
+            if !trimmed.isEmpty { return trimmed }
+            if target.hasImage { return nil }
+            return trimmed.isEmpty ? nil : trimmed
+        }()
+        var neu = ChatElement(
+            style: asMe ? .sent : .received,
+            text: "New message",
+            replyText: quoteText,
+            replyFromMe: (target.style == .sent),
+            replyKind: .chat,
+            replyImageJPEG: target.imageJPEG,
+            imageJPEG: nil
+        )
+        // If target was photo-only, still show quote via image
+        if neu.replyText == nil && neu.replyImageJPEG == nil {
+            neu.replyText = "Message"
+        }
+        withAnimation {
+            elements.insert(neu, at: idx + 1)
+        }
+        // Open editor so user can type the reply body
+        beginEdit(.element(neu.id), text: neu.text)
+    }
+
+    @ViewBuilder
+    private func replyAsMenu(_ element: ChatElement) -> some View {
+        // Only for real chat bubbles (not date separators)
+        if element.style == .sent || element.style == .received {
+            Button {
+                replyAs(to: element, asMe: true)
+            } label: {
+                Label("Reply as Me", systemImage: "arrowshape.turn.up.left.circle")
+            }
+            Button {
+                replyAs(to: element, asMe: false)
+            } label: {
+                Label("Reply as Them", systemImage: "arrowshape.turn.up.left.circle.fill")
+            }
+        }
+    }
+
 
     private func deleteButton(_ element: ChatElement) -> some View {
         Button(role: .destructive) {
@@ -773,12 +917,7 @@ struct ContentView: View {
                     }
                 }
                 GlassCircle(size: 46) {
-                    Button {
-                        showExport = true
-                    } label: {
-                        VcArt(height: 22)
-                    }
-                    .buttonStyle(.plain)
+                    VcArt(height: 22)
                 }
             }
         }
@@ -793,6 +932,42 @@ struct ContentView: View {
                 }
             }
         }
+        .onChange(of: messagePhotoPickerItem) { newItem in
+            guard let newItem, let target = messagePhotoTarget else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data),
+                   let jpeg = ChatImageCodec.jpeg(image) {
+                    await MainActor.run {
+                        if let idx = elements.firstIndex(where: { $0.id == target }) {
+                            elements[idx].imageJPEG = jpeg
+                        }
+                        messagePhotoTarget = nil
+                        messagePhotoPickerItem = nil
+                    }
+                }
+            }
+        }
+        .onChange(of: replyPhotoPickerItem) { newItem in
+            guard let newItem, let target = replyPhotoTarget else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data),
+                   let jpeg = ChatImageCodec.jpeg(image) {
+                    await MainActor.run {
+                        if let idx = elements.firstIndex(where: { $0.id == target }) {
+                            elements[idx].replyImageJPEG = jpeg
+                            elements[idx].replyKind = .story
+                            if (elements[idx].replyText ?? "").isEmpty {
+                                elements[idx].replyText = "Story"
+                            }
+                        }
+                        replyPhotoTarget = nil
+                        replyPhotoPickerItem = nil
+                    }
+                }
+            }
+        }
     }
 
     // MARK: Chat area
@@ -801,10 +976,11 @@ struct ContentView: View {
         GeometryReader { outer in
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: 0) {
                         liveProfileContext
                         ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
-                            elementView(element)
+                            elementView(element, at: idx)
+                                .padding(.top, idx == 0 ? 8 : BubbleGrouping.spacing(before: idx, in: elements))
                                 .background(
                                     // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
@@ -961,22 +1137,6 @@ struct ContentView: View {
         .padding(.bottom, 24)
     }
 
-    @ViewBuilder
-    private func liveElementView(_ element: ChatElement) -> some View {
-        switch element.style {
-        case .date:
-            DateSeparatorView(text: element.text)
-        case .sent:
-            SentBubbleView(text: element.text)
-        case .received:
-            ReceivedRowView(
-                text: element.text,
-                heartHint: element.heartHint,
-                avatarContent: avatarContent
-            )
-        }
-    }
-
     private func elementMenu(for element: ChatElement) -> some View {
         Group {
             Button(role: .destructive) {
@@ -1056,6 +1216,7 @@ struct ContentView: View {
         case .subtitle: return "Subtitle (Business chat)"
         case .infoLine: return "Text line"
         case .seenHours: return "Seen — hours ago (0 = plain, 24+ = plain)"
+        case .reply: return "Reply quote"
         case .element(let id):
             if let el = elements.first(where: { $0.id == id }) {
                 switch el.style {
@@ -1099,6 +1260,11 @@ struct ContentView: View {
         case .element(let id):
             if let idx = elements.firstIndex(where: { $0.id == id }) {
                 elements[idx].text = editorText
+            }
+        case .reply(let id):
+            if let idx = elements.firstIndex(where: { $0.id == id }) {
+                let trimmed = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
+                elements[idx].replyText = trimmed.isEmpty ? nil : trimmed
             }
         case nil:
             break
@@ -1297,17 +1463,61 @@ struct ContentView: View {
                     Toggle("Show \"Double tap to ❤️\" hints", isOn: $heartHintsEnabled)
                 }
                 Section("Look & feel") {
-                    ColorPicker("Gradient start", selection: Binding(
+                    ColorPicker("Ungu (atas)", selection: Binding(
                         get: { gradA },
                         set: { gradA = $0.opacity(1) }), supportsOpacity: false)
-                    ColorPicker("Gradient end", selection: Binding(
+                    ColorPicker("Biru (bawah)", selection: Binding(
                         get: { gradB },
                         set: { gradB = $0.opacity(1) }), supportsOpacity: false)
-                    VStack(alignment: .leading) {
-                        Text("Gradient zone: \(Int(gradTop))% \u{2192} \(Int(gradBottom))% of screen")
-                        Slider(value: $gradTop, in: 0...60, step: 1)
-                        Slider(value: $gradBottom, in: 10...90, step: 1)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Zona gradient Me (nempel viewport)")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Atas layar = ungu solid. Lalu fade ke biru. Bawah = biru solid.")
+                            .font(.caption)
+                            .foregroundColor(Theme.secondaryText)
+
+                        // Mini legend
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(LinearGradient(colors: [gradA, gradB], startPoint: .top, endPoint: .bottom))
+                            .frame(height: 56)
+                            .overlay(alignment: .topLeading) {
+                                Text("0%")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundColor(.white)
+                                    .padding(6)
+                            }
+                            .overlay(alignment: .bottomLeading) {
+                                Text("100%")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundColor(.white)
+                                    .padding(6)
+                            }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Ungu solid sampai: \(Int(gradTop))% dari atas")
+                            Slider(value: Binding(
+                                get: { gradTop },
+                                set: { v in
+                                    gradTop = min(v, gradBottom - 1)
+                                }
+                            ), in: 0...80, step: 1)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Biru solid mulai: \(Int(gradBottom))% dari atas")
+                            Slider(value: Binding(
+                                get: { gradBottom },
+                                set: { v in
+                                    gradBottom = max(v, gradTop + 1)
+                                }
+                            ), in: 5...95, step: 1)
+                        }
+                        Text("Fade ungu→biru: \(Int(gradTop))% → \(Int(gradBottom))%")
+                            .font(.caption)
+                            .foregroundColor(Theme.secondaryText)
                     }
+                    .padding(.vertical, 4)
+
                     VStack(alignment: .leading) {
                         Text("Frost band height: \(Int(bandPct))%")
                         Slider(value: $bandPct, in: 5...40, step: 1)
@@ -1317,7 +1527,7 @@ struct ContentView: View {
                         Slider(value: $frostBlur, in: 0...30, step: 1)
                     }
                 }
-                Section("Seen") {
+Section("Seen") {
                     Toggle("\"Seen\" under last Me message", isOn: $seenEnabled)
                     if seenEnabled {
                         Stepper("Hours ago: \(seenHoursAgo == 0 ? "plain" : "\(seenHoursAgo)h")", value: $seenHoursAgo, in: 0...48)
@@ -1333,6 +1543,20 @@ struct ContentView: View {
                         elements.append(ChatElement(style: .received, text: "New message"))
                     } label: {
                         Label("Add Them bubble", systemImage: "arrow.down.circle")
+                    }
+                    Button {
+                        let id = UUID()
+                        elements.append(ChatElement(id: id, style: .sent, text: ""))
+                        messagePhotoTarget = id
+                    } label: {
+                        Label("Add Me photo…", systemImage: "photo.on.rectangle")
+                    }
+                    Button {
+                        let id = UUID()
+                        elements.append(ChatElement(id: id, style: .received, text: ""))
+                        messagePhotoTarget = id
+                    } label: {
+                        Label("Add Them photo…", systemImage: "photo")
                     }
                     Button {
                         elements.append(ChatElement(style: .date, text: IGSeed.smartDate()))
@@ -1358,63 +1582,5 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
     }
 
-    // MARK: Export sheet
-
-    private var exportSheet: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                Toggle(isOn: $highRes) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("High resolution (3×)")
-                        Text("1200 × 2400 px PNG")
-                            .font(.footnote)
-                            .foregroundColor(Theme.secondaryText)
-                    }
-                }
-                .tint(Theme.igBlue)
-                .padding()
-                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.bubbleGray))
-                .padding(.horizontal)
-
-                Button {
-                    exportPNG()
-                } label: {
-                    Label("Save screenshot to Photos", systemImage: "square.and.arrow.down")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Capsule().fill(Theme.igBlue))
-                        .foregroundColor(.white)
-                }
-                .padding(.horizontal)
-
-                Spacer()
-            }
-            .padding(.top, 24)
-            .navigationTitle("Export")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .presentationDetents([.height(300)])
-        .preferredColorScheme(.dark)
-    }
-
-    private func exportPNG() {
-        showExport = false
-        let canvas = PhoneCanvas(
-            elements: elements,
-            profile: profile,
-            avatarContent: avatarContent,
-            following: following,
-            showFollow: showFollow,
-            learnLinkEnabled: learnLinkEnabled,
-            seenEnabled: seenEnabled,
-            seenText: seenText,
-            showStatusAlways: showStatusAlways
-        )
-        let renderer = ImageRenderer(content: canvas)
-        renderer.scale = highRes ? 3.0 : 1.0
-        guard let image = renderer.uiImage else { return }
-        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-        showSaved = true
-    }
 }
+
