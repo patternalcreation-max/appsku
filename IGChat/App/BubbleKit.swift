@@ -54,7 +54,8 @@ struct ReplyChrome: View {
 
     private var resolvedQuoteFill: Color {
         if let quoteBubbleFill { return quoteBubbleFill }
-        // Me bubble purple (solid sample of viewport gradA); Them = gray chat bubble
+        // Full-strength fills (never a washed/greyed overlay):
+        // Me → purple; Them → same gray as live received bubbles.
         return replyFromMe
             ? Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
             : Theme.bubbleGray
@@ -112,17 +113,17 @@ struct ReplyChrome: View {
                     }
                 }
         } else if let text = replyText, !text.isEmpty {
-            // Mini bubble matches who was quoted: Them = gray, Me = purple (not always purple)
-            Text(text)
-                .font(.system(size: 13))
-                .foregroundColor(.white)
+            // Same chrome as a real bubble — full color, NOT faded/greyed-out.
+            // Them = Theme.bubbleGray (normal received). Me = purple. Opacity always 1.
+            MessageTextView(text: text)
                 .lineLimit(4)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(
                     IGBubbleShape(isSent: replyFromMe, position: .single)
                         .fill(resolvedQuoteFill)
                 )
+                .opacity(1)
                 .frame(maxWidth: 260, alignment: replyFromMe ? .trailing : .leading)
         }
     }
