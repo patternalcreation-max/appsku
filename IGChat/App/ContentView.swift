@@ -406,6 +406,12 @@ struct ContentView: View {
     @State private var learnLinkEnabled = true
     @State private var heartHintsEnabled = true
 
+    // v1.17: date separator bucket picker
+    @State private var pickerRef: UUID? = nil      // element to insert relative to
+    @State private var pickerAbove = false
+    @State private var pickedBucket = 0
+    @State private var pickedIdx = 0
+
     enum EditTarget: Hashable {
         case username
         case followers
@@ -481,6 +487,7 @@ struct ContentView: View {
         .sheet(isPresented: $showEditor) { editorSheet }
         .sheet(isPresented: $showExport) { exportSheet }
         .sheet(isPresented: $showSettings) { settingsSheet }
+        .sheet(isPresented: Binding(get: { pickerRef != nil }, set: { if !$0 { pickerRef = nil } })) { dateBucketSheet }
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -559,8 +566,30 @@ struct ContentView: View {
         }
     }
 
-    private func sentMenu(_ element: ChatElement) -> some View { strictMenu(element, isMe: true) }
-    private func receivedMenu(_ element: ChatElement) -> some View { strictMenu(element, isMe: false) }
+    private func sentMenu(_ element: ChatElement) -> some View {
+        Group {
+            strictMenu(element, isMe: true)
+            Divider()
+            Button {
+                pickerRef = element.id; pickerAbove = true
+            } label: { Label("Add date separator above", systemImage: "clock.arrow.circlepath") }
+            Button {
+                pickerRef = element.id; pickerAbove = false
+            } label: { Label("Add date separator below", systemImage: "clock") }
+            Toggle(isOn: $seenEnabled) {
+                Text("Show \"Seen\" under my chats")
+            }
+        }
+    }
+    private func receivedMenu(_ element: ChatElement) -> some View {
+        Group {
+            strictMenu(element, isMe: false)
+            Divider()
+            Toggle(isOn: $heartHintsEnabled) {
+                Text("Show \"Double tap to ❤️\"")
+            }
+        }
+    }
 
     private func dateMenu(_ element: ChatElement) -> some View {
         let idx = elements.firstIndex(where: { $0.id == element.id }) ?? 0
