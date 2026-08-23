@@ -382,7 +382,7 @@ struct ContentView: View {
             GeometryReader { geo in
                 let bandH = geo.size.height * 0.15
                 Rectangle()
-                    .fill(.ultraThinMaterial)
+                    .fill(.thickMaterial)
                     .frame(height: bandH)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .mask(alignment: .top) {
