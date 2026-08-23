@@ -200,6 +200,66 @@ struct MessageTextView: View {
     }
 }
 
+/// Screen-locked Me wash (IG DM style). Pure math — no giant offset gradient.
+enum MeWash {
+    /// Color at viewport t (0 = top of chat, 1 = bottom).
+    static func color(at t: Double, a: Color, b: Color, purpleUntil: Double, blueFrom: Double) -> Color {
+        let top = min(max(purpleUntil, 0), 0.98)
+        let bot = max(min(blueFrom, 1), top + 0.01)
+        let x = min(max(t, 0), 1)
+        if x <= top { return a }
+        if x >= bot { return b }
+        let u = (x - top) / (bot - top)
+        return mix(a, b, u)
+    }
+
+    static func mix(_ a: Color, _ b: Color, _ t: Double) -> Color {
+        let u = min(max(t, 0), 1)
+        let ua = UIColor(a)
+        let ub = UIColor(b)
+        var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        ua.getRed(&ar, green: &ag, blue: &ab, alpha: &aa)
+        ub.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        return Color(
+            red: Double(ar + (br - ar) * u),
+            green: Double(ag + (bg - ag) * u),
+            blue: Double(ab + (bb - ab) * u),
+            opacity: Double(aa + (ba - aa) * u)
+        )
+    }
+
+    /// Local vertical gradient for a bubble spanning viewport t0…t1.
+    static func stops(t0: Double, t1: Double, a: Color, b: Color, purpleUntil: Double, blueFrom: Double) -> [Gradient.Stop] {
+        let lo = min(t0, t1)
+        let hi = max(t0, t1)
+        let span = max(hi - lo, 0.0001)
+        let top = min(max(purpleUntil, 0), 0.98)
+        let bot = max(min(blueFrom, 1), top + 0.01)
+
+        // Key viewport positions that affect this bubble
+        var keys: [Double] = [lo, hi]
+        if top > lo && top < hi { keys.append(top) }
+        if bot > lo && bot < hi { keys.append(bot) }
+        // a couple mid samples in the fade for smoothness
+        if bot > top {
+            for i in 1..<4 {
+                let k = top + (bot - top) * Double(i) / 4.0
+                if k > lo && k < hi { keys.append(k) }
+            }
+        }
+        let uniq = Array(Set(keys.map { (round($0 * 10000) / 10000) })).sorted()
+
+        return uniq.map { t in
+            let local = (t - lo) / span
+            return Gradient.Stop(
+                color: color(at: t, a: a, b: b, purpleUntil: purpleUntil, blueFrom: blueFrom),
+                location: min(max(local, 0), 1)
+            )
+        }
+    }
+}
+
 struct SentBubbleView: View {
     let text: String
     var replyText: String? = nil
@@ -215,43 +275,25 @@ struct SentBubbleView: View {
     var viewportSize: CGSize = .zero
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
-    var gradTop: Double = 28
+    var gradTop: Double = 30
     var gradBottom: Double = 55
 
-    /// Full-viewport Me gradient: solid A until gradTop%, blend to B by gradBottom%, solid B below.
-    /// Matches IG DM: top bubbles purple, bottom bubbles blue — one continuous screen wash.
-    private var viewportGradient: some View {
-        let top = max(min(gradTop / 100.0, 0.98), 0)
-        let bot = max(min(gradBottom / 100.0, 1), top + 0.002)
-        return LinearGradient(
-            stops: [
-                .init(color: gradA, location: 0),
-                .init(color: gradA, location: top),
-                .init(color: gradB, location: bot),
-                .init(color: gradB, location: 1)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
-
-    /// Bubble is a window into the screen-locked gradient. Fallback = solid biru (never per-bubble ungu→biru).
+/// Screen-locked fill: sample the IG wash across this bubble’s Y span (stable, no offset tricks).
     private func meBubbleBackground() -> some View {
         GeometryReader { geo in
             let f = geo.frame(in: .named("viewport"))
-            let vw = max(viewportSize.width, geo.size.width, 1)
             let vh = max(viewportSize.height, 1)
-            ZStack(alignment: .topLeading) {
-                // Bottom of IG pattern = solid B. Holes never flash purple.
-                gradB
-                if viewportSize.height > 20 {
-                    viewportGradient
-                        .frame(width: vw, height: vh, alignment: .topLeading)
-                        .offset(x: -f.minX, y: -f.minY)
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
+            let t0 = Double(f.minY / vh)
+            let t1 = Double(f.maxY / vh)
+            let purpleUntil = gradTop / 100.0
+            let blueFrom = gradBottom / 100.0
+            let stops = MeWash.stops(
+                t0: t0, t1: t1,
+                a: gradA, b: gradB,
+                purpleUntil: purpleUntil, blueFrom: blueFrom
+            )
+            LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+                .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
@@ -474,7 +516,7 @@ struct ContentView: View {
     @State private var gradA = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     @State private var frostBlur: Double = 22
-    @State private var gradTop: Double = 28
+    @State private var gradTop: Double = 30
     @State private var gradBottom: Double = 55
     @State private var subtitleFontSize: Double = 10
     @State private var photoWindow: Double = 0.35
@@ -494,6 +536,10 @@ struct ContentView: View {
         case seenHours
         case element(UUID)
         case reply(UUID)
+    }
+
+    private var meWashId: String {
+        "\(gradA.igHex)-\(gradB.igHex)-\(Int(gradTop))-\(Int(gradBottom))"
     }
 
     private var defaultPhotoFrame: PhotoFrame {
@@ -716,6 +762,7 @@ struct ContentView: View {
                               viewportSize: viewportSize,
                               gradA: gradA, gradB: gradB,
                               gradTop: gradTop, gradBottom: gradBottom)
+                    .id("\(element.id)-\(meWashId)")
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
                     .contextMenu { sentMenu(element) }
@@ -1694,66 +1741,66 @@ struct ContentView: View {
                     Toggle("Show \"Learn about business chats\"", isOn: $learnLinkEnabled)
                     Toggle("Show \"Double tap to ❤️\" hints", isOn: $heartHintsEnabled)
                 }
-                                                Section("Me gradient (screen-locked)") {
-                    Text("Like IG: satu wash di layar. Atas = ungu, bawah = biru solid. Bubble cuma ‘jendela’.")
+                                                Section("Me gradient") {
+                    Text("Pola IG: ungu di atas layar → fade → biru solid di bawah. Tiap bubble ambil warna sesuai posisi Y-nya.")
                         .font(.caption)
                         .foregroundColor(Theme.secondaryText)
-                    ColorPicker("Ungu (atas)", selection: Binding(
+
+                    ColorPicker("Ungu", selection: Binding(
                         get: { gradA },
                         set: { gradA = $0.opacity(1) }), supportsOpacity: false)
-                    ColorPicker("Biru (bawah)", selection: Binding(
+                    ColorPicker("Biru", selection: Binding(
                         get: { gradB },
                         set: { gradB = $0.opacity(1) }), supportsOpacity: false)
 
-                    // Tall preview = full screen pattern (not per-bubble)
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: gradA, location: 0),
-                                        .init(color: gradA, location: max(min(gradTop / 100.0, 0.98), 0)),
-                                        .init(color: gradB, location: max(min(gradBottom / 100.0, 1), gradTop / 100.0 + 0.002)),
-                                        .init(color: gradB, location: 1)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
+                    // Preview = same MeWash math as live bubbles (full screen 0…1)
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                stops: MeWash.stops(
+                                    t0: 0, t1: 1,
+                                    a: gradA, b: gradB,
+                                    purpleUntil: gradTop / 100.0,
+                                    blueFrom: gradBottom / 100.0
+                                ),
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
-                        VStack {
-                            Text("TOP")
-                                .font(.caption2.weight(.bold)).foregroundColor(.white.opacity(0.9))
-                                .padding(6)
-                            Spacer()
-                            Text("BOTTOM · solid biru")
-                                .font(.caption2.weight(.bold)).foregroundColor(.white.opacity(0.9))
-                                .padding(6)
+                        )
+                        .frame(height: 140)
+                        .overlay(alignment: .topLeading) {
+                            Text("ATAS").font(.caption2.bold()).foregroundColor(.white).padding(8)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(height: 120)
+                        .overlay(alignment: .bottomLeading) {
+                            Text("BAWAH").font(.caption2.bold()).foregroundColor(.white).padding(8)
+                        }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Ungu solid sampai \(Int(gradTop))% layar")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Zona ungu: \(Int(gradTop))% dari atas")
                         Slider(value: Binding(
                             get: { gradTop },
-                            set: { gradTop = min($0, gradBottom - 2) }
+                            set: { v in
+                                gradTop = v
+                                if gradBottom < v + 5 { gradBottom = min(v + 5, 95) }
+                            }
                         ), in: 0...70, step: 1)
                     }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Biru solid mulai \(Int(gradBottom))% layar")
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Fade length: \(Int(max(gradBottom - gradTop, 0)))%")
                         Slider(value: Binding(
-                            get: { gradBottom },
-                            set: { gradBottom = max($0, gradTop + 2) }
-                        ), in: 10...95, step: 1)
+                            get: { max(gradBottom - gradTop, 5) },
+                            set: { gradBottom = min(gradTop + max($0, 5), 95) }
+                        ), in: 5...50, step: 1)
                     }
-                    Text("Fade: \(Int(gradTop))% → \(Int(gradBottom))%. Bubble paling bawah harus biru penuh.")
+                    Text("Biru solid mulai di \(Int(gradBottom))% layar")
                         .font(.caption2)
                         .foregroundColor(Theme.secondaryText)
 
-                    Button("Reset ke pola IG (image 2)") {
-                        gradTop = 28
+                    Button("Reset pola IG") {
+                        gradTop = 30
                         gradBottom = 55
+                        gradA = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
+                        gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
                     }
                 }
 
