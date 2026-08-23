@@ -115,7 +115,7 @@ struct ChatBarView: View {
 }
 
 struct BackButtonArt: View {
-    var height: CGFloat = 24
+    var height: CGFloat = 21
 
     var body: some View {
         ScaledArtShape(base: SVGPathParser.path(from: IGChatArt.backD), artSize: IGChatArt.backSize)
@@ -123,6 +123,40 @@ struct BackButtonArt: View {
                     style: StrokeStyle(lineWidth: IGChatArt.backStroke * height / IGChatArt.backSize.height,
                                        lineCap: .round, lineJoin: .round))
             .frame(width: height * IGChatArt.backSize.width / IGChatArt.backSize.height, height: height)
+            .offset(x: -3)   // optical centering: stroke weight sits heavy right
+    }
+}
+
+/// One liquid-glass circular container per button (operator spec: separate containers).
+struct GlassCircle<Content: View>: View {
+    var size: CGFloat = 40
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        content()
+            .frame(width: size, height: size)
+            .background(Circle().fill(Color.white.opacity(0.06)))
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay(
+                Circle().strokeBorder(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.42), Color.white.opacity(0.08)],
+                        startPoint: .top, endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+            )
+            .overlay(
+                // top sheen highlight
+                Ellipse()
+                    .fill(LinearGradient(colors: [Color.white.opacity(0.16), .clear],
+                                         startPoint: .top, endPoint: .bottom))
+                    .frame(width: size * 0.6, height: size * 0.38)
+                    .offset(y: -size * 0.30)
+                    .clipShape(Circle())
+                    .allowsHitTesting(false)
+            )
+            .shadow(color: Color.black.opacity(0.28), radius: 6, y: 3)
     }
 }
 
@@ -184,13 +218,13 @@ struct GlassCapsule<Content: View>: View {
     }
 }
 
-/// Static (non-interactive) header glass cluster for the export canvas.
+/// Static (non-interactive) header glass buttons for the export canvas.
 struct HeaderGlassStatic: View {
     var body: some View {
-        GlassCapsule {
-            LiveduoArt(height: 24)
-            PhonecallArt(height: 22)
-            VcArt(height: 22)
+        HStack(spacing: 10) {
+            GlassCircle(size: 40) { LiveduoArt(height: 24) }
+            GlassCircle(size: 40) { PhonecallArt(height: 22) }
+            GlassCircle(size: 40) { VcArt(height: 22) }
         }
         .colorScheme(.dark)
     }

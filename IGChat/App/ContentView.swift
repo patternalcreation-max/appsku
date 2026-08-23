@@ -116,10 +116,15 @@ struct ProfileContextView: View {
         VStack(spacing: 0) {
             AvatarView(content: avatarContent, size: 96)
 
-            Text(profile.username.isEmpty ? " " : profile.username)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.top, 12)
+            HStack(spacing: 5) {
+                Text(profile.username.isEmpty ? " " : profile.username)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+                if profile.isVerified {
+                    VerifiedBadge(size: 15)
+                }
+            }
+            .padding(.top, 12)
 
             (Text("\(profile.followers) followers")
                 + Text(" · ")
@@ -343,7 +348,9 @@ struct ContentView: View {
 
     private var liveHeader: some View {
         HStack(spacing: 12) {
-            BackButtonArt(height: 22)
+            GlassCircle(size: 34) {
+                BackButtonArt(height: 21)
+            }
 
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
                 AvatarView(content: avatarContent, size: 32)
@@ -380,53 +387,59 @@ struct ContentView: View {
 
             Spacer()
 
-            GlassCapsule {
-                Button {
-                    elements.append(ChatElement(style: .sent, text: "New message"))
-                } label: {
-                    LiveduoArt(height: 24)
-                }
-                .buttonStyle(.plain)
-                Menu {
-                    Button {
-                        profile.isVerified.toggle()
-                    } label: {
-                        Label(
-                            profile.isVerified ? "Hide verified badge" : "Show verified badge",
-                            systemImage: profile.isVerified ? "checkmark.seal.fill" : "checkmark.seal"
-                        )
-                    }
-                    Divider()
+            HStack(spacing: 10) {
+                GlassCircle(size: 40) {
                     Button {
                         elements.append(ChatElement(style: .sent, text: "New message"))
                     } label: {
-                        Label("Purple bubble (Me)", systemImage: "arrow.up.circle")
+                        LiveduoArt(height: 24)
                     }
-                    Button {
-                        elements.append(ChatElement(style: .received, text: "New message"))
-                    } label: {
-                        Label("Gray bubble (Target)", systemImage: "arrow.down.circle")
-                    }
-                    Button {
-                        elements.append(ChatElement(style: .date, text: "JUL 16 AT 1:11 PM"))
-                    } label: {
-                        Label("Date separator", systemImage: "clock")
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        elements.removeAll()
-                    } label: {
-                        Label("Clear all messages", systemImage: "trash")
-                    }
-                } label: {
-                    PhonecallArt(height: 22)
+                    .buttonStyle(.plain)
                 }
-                Button {
-                    showExport = true
-                } label: {
-                    VcArt(height: 22)
+                GlassCircle(size: 40) {
+                    Menu {
+                        Button {
+                            profile.isVerified.toggle()
+                        } label: {
+                            Label(
+                                profile.isVerified ? "Hide verified badge" : "Show verified badge",
+                                systemImage: profile.isVerified ? "checkmark.seal.fill" : "checkmark.seal"
+                            )
+                        }
+                        Divider()
+                        Button {
+                            elements.append(ChatElement(style: .sent, text: "New message"))
+                        } label: {
+                            Label("Purple bubble (Me)", systemImage: "arrow.up.circle")
+                        }
+                        Button {
+                            elements.append(ChatElement(style: .received, text: "New message"))
+                        } label: {
+                            Label("Gray bubble (Target)", systemImage: "arrow.down.circle")
+                        }
+                        Button {
+                            elements.append(ChatElement(style: .date, text: "JUL 16 AT 1:11 PM"))
+                        } label: {
+                            Label("Date separator", systemImage: "clock")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            elements.removeAll()
+                        } label: {
+                            Label("Clear all messages", systemImage: "trash")
+                        }
+                    } label: {
+                        PhonecallArt(height: 22)
+                    }
                 }
-                .buttonStyle(.plain)
+                GlassCircle(size: 40) {
+                    Button {
+                        showExport = true
+                    } label: {
+                        VcArt(height: 22)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -481,10 +494,15 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
 
-            Text(profile.username.isEmpty ? " " : profile.username)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.top, 12)
+            HStack(spacing: 5) {
+                Text(profile.username.isEmpty ? " " : profile.username)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+                if profile.isVerified {
+                    VerifiedBadge(size: 15)
+                }
+            }
+            .padding(.top, 12)
 
             (Text("\(profile.followers) followers")
                 + Text(" · ")
