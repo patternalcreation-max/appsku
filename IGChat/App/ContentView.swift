@@ -428,6 +428,7 @@ struct ContentView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .onChange(of: photoPickerItem) { newItem in
