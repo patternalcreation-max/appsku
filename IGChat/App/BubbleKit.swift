@@ -179,23 +179,31 @@ struct PhotoMessageView: View {
     let image: UIImage
     let isSent: Bool
     var position: BubbleGroupPos = .single
+    /// 0 = full landscape visible (no crop); 1 = shortest window + fill (max crop). From Settings.
+    var landscapeCrop: Double = 0.25
 
-    /// Fit landscape without cropping; portrait can be taller. Side buttons keep Me/Them clear.
+    private var aspect: CGFloat {
+        max(image.size.width, 1) / max(image.size.height, 1)
+    }
+
+    private var isLandscape: Bool { aspect >= 1.15 }
+
     private var fittedSize: CGSize {
-        let px = image.size
-        let aspect = max(px.width, 1) / max(px.height, 1)
         let maxW: CGFloat = 280
-        // Landscape → shorter box; portrait → taller; square in between
-        let maxH: CGFloat = aspect >= 1.15 ? 176 : (aspect <= 0.85 ? 320 : 240)
-        var w = min(maxW, px.width)
+        if isLandscape {
+            let crop = min(max(landscapeCrop, 0), 1)
+            // Full height if uncropped; at crop=1 use a short window (~38% of full)
+            let fullH = maxW / aspect
+            let minH = max(fullH * 0.38, 96)
+            let targetH = fullH + (minH - fullH) * crop
+            return CGSize(width: maxW, height: targetH)
+        }
+        let maxH: CGFloat = aspect <= 0.85 ? 320 : 240
+        var w = maxW
         var h = w / aspect
         if h > maxH {
             h = maxH
             w = h * aspect
-        }
-        if w > maxW {
-            w = maxW
-            h = w / aspect
         }
         return CGSize(width: max(w, 1), height: max(h, 1))
     }
@@ -203,11 +211,21 @@ struct PhotoMessageView: View {
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             if isSent { MediaSideButtons() }
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: fittedSize.width, height: fittedSize.height)
-                .clipShape(IGBubbleShape(isSent: isSent, position: position))
+            Group {
+                if isLandscape && landscapeCrop > 0.02 {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: fittedSize.width, height: fittedSize.height)
+                        .clipped()
+                } else {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: fittedSize.width, height: fittedSize.height)
+                }
+            }
+            .clipShape(IGBubbleShape(isSent: isSent, position: position))
             if !isSent { MediaSideButtons() }
         }
     }

@@ -467,6 +467,8 @@ enum IGPersistence {
         var gradBottom: Double = 30
         var subtitleFontSize: Double = 10
         var headerBlurOnly: Bool = true
+        /// 0 = show full landscape (no crop); 1 = allow max crop (short window + fill)
+        var landscapeCrop: Double = 0.25
     }
     static func saveLook(_ l: Look) {
         if let data = try? JSONEncoder().encode(l) {

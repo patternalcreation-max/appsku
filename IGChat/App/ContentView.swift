@@ -265,7 +265,7 @@ struct SentBubbleView: View {
             if let photo {
                 HStack {
                     Spacer(minLength: 48)
-                    PhotoMessageView(image: photo, isSent: true, position: position)
+                    PhotoMessageView(image: photo, isSent: true, position: position, landscapeCrop: landscapeCrop)
                 }
             }
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -322,7 +322,7 @@ struct ReceivedRowView: View {
                     )
                 }
                 if let photo {
-                    PhotoMessageView(image: photo, isSent: false, position: position)
+                    PhotoMessageView(image: photo, isSent: false, position: position, landscapeCrop: landscapeCrop)
                 }
                 if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     MessageTextView(text: text)
@@ -376,38 +376,10 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Soft night fade under the header — same Theme.black (#0E1217).
-/// Gaussian blur is applied separately via PartialHeaderBlur (only the overlapping strip).
-struct FrostBand: View {
-    var bandPct: Double
-    var frostBlur: Double
-    var headerOnly: Bool = true
-    /// Keep this tight / high under the chrome (was 110 — felt too low).
-    var headerHeight: CGFloat = 78
-
-    var body: some View {
-        GeometryReader { geo in
-            let bandH = headerOnly
-                ? max(headerHeight, 1)
-                : max(geo.size.height * (bandPct / 100.0), 1)
-            let soft = CGFloat(max(frostBlur, 0)) * 0.35
-            let totalH = bandH + soft
-
-            LinearGradient(stops: [
-                .init(color: Theme.black.opacity(0.88), location: 0),
-                .init(color: Theme.black.opacity(0.5), location: 0.4),
-                .init(color: Theme.black.opacity(0.12), location: 0.75),
-                .init(color: Theme.black.opacity(0.0), location: 1)
-            ], startPoint: .top, endPoint: .bottom)
-            .frame(height: totalH)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .allowsHitTesting(false)
-        }
-    }
-}
-
-/// Blur ONLY the slice of a view that intersects the header zone — not the whole bubble/photo.
-struct PartialHeaderBlur: ViewModifier {
+/// Pure progressive blur: as content scrolls through the header zone it gradually
+/// softens — NO frost container / material band / glass sheet. Only the overlapping
+/// strip is affected; blur strength fades in toward the top of the zone.
+struct ProgressiveHeaderBlur: ViewModifier {
     var zoneHeight: CGFloat
     var radius: CGFloat
 
@@ -420,14 +392,19 @@ struct PartialHeaderBlur: ViewModifier {
                     .mask {
                         GeometryReader { geo in
                             let f = geo.frame(in: .named("viewport"))
-                            // Local Y range that sits inside viewport [0 … zoneHeight]
                             let localTop = max(CGFloat(0), -f.minY)
                             let localBot = min(geo.size.height, zoneHeight - f.minY)
                             let h = max(CGFloat(0), localBot - localTop)
-                            Rectangle()
-                                .frame(width: geo.size.width, height: h)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                .offset(y: localTop)
+                            // Soft ramp: clear at bottom of zone → full blur toward top
+                            LinearGradient(stops: [
+                                .init(color: Color.black.opacity(0.95), location: 0),
+                                .init(color: Color.black.opacity(0.55), location: 0.45),
+                                .init(color: Color.black.opacity(0.12), location: 0.82),
+                                .init(color: Color.clear, location: 1)
+                            ], startPoint: .top, endPoint: .bottom)
+                            .frame(width: geo.size.width, height: h)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .offset(y: localTop)
                         }
                     }
             }
@@ -481,6 +458,7 @@ struct ContentView: View {
     @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     @State private var bandPct: Double = 15
     @State private var frostBlur: Double = 22
+    @State private var landscapeCrop: Double = 0.25
     @State private var gradTop: Double = 15    // purple solid until this % from top of viewport
     @State private var gradBottom: Double = 30 // fully blue from this % downward
     @State private var subtitleFontSize: Double = 10
@@ -513,12 +491,6 @@ struct ContentView: View {
                 chatArea
                 InputBarView(tap: { showSettings = true }, placeholder: $profile.barPlaceholder)
             }
-            // Progressive frost across the TOP 15% of the screen: content crossing it
-            // gaussian-blurs and fades toward black as it approaches the very top,
-            // behind the floating glass toolbar.
-            FrostBand(bandPct: bandPct, frostBlur: frostBlur, headerOnly: headerBlurOnly)
-                .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
 
             // Floating toolbar — transparent chrome (no frost pill)
             VStack {
@@ -596,6 +568,7 @@ struct ContentView: View {
                 gradBottom = l.gradBottom
                 subtitleFontSize = l.subtitleFontSize
                 headerBlurOnly = l.headerBlurOnly
+                landscapeCrop = l.landscapeCrop
             }
         }
         .onChange(of: profile, perform: { IGPersistence.saveProfile($0) })
@@ -609,6 +582,7 @@ struct ContentView: View {
         .onChange(of: gradBottom, perform: { _ in saveLook() })
         .onChange(of: subtitleFontSize, perform: { _ in saveLook() })
         .onChange(of: headerBlurOnly, perform: { _ in saveLook() })
+        .onChange(of: landscapeCrop, perform: { _ in saveLook() })
     }
 
     @ViewBuilder
@@ -1064,7 +1038,7 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         liveProfileContext
-                            .modifier(PartialHeaderBlur(zoneHeight: headerZonePt, radius: headerBlurRadius))
+                            .modifier(ProgressiveHeaderBlur(zoneHeight: headerZonePt, radius: headerBlurRadius))
                             .background(
                                 GeometryReader { row in
                                     let f = row.frame(in: .named("viewport"))
@@ -1079,7 +1053,7 @@ struct ContentView: View {
                             elementView(element, at: idx)
                                 .padding(.top, idx == 0 ? 8 : BubbleGrouping.spacing(before: idx, in: elements))
                                 // Only the strip overlapping the header zone blurs — not the whole photo/bubble.
-                                .modifier(PartialHeaderBlur(zoneHeight: headerZonePt, radius: headerBlurRadius))
+                                .modifier(ProgressiveHeaderBlur(zoneHeight: headerZonePt, radius: headerBlurRadius))
                                 .background(
                                     // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
@@ -1486,7 +1460,8 @@ struct ContentView: View {
                                      bandPct: bandPct, frostBlur: frostBlur,
                                      gradTop: gradTop, gradBottom: gradBottom,
                                      subtitleFontSize: subtitleFontSize,
-                                     headerBlurOnly: headerBlurOnly))
+                                     headerBlurOnly: headerBlurOnly,
+                                     landscapeCrop: landscapeCrop))
     }
 
     private func lastMessage(in chat: ChatSession) -> String {
@@ -1656,17 +1631,27 @@ struct ContentView: View {
                     .padding(.vertical, 4)
 
                     VStack(alignment: .leading) {
-                        Text("Frost band height: \(Int(bandPct))%")
+                        Text("Blur zone height: \(Int(bandPct))%")
                         Slider(value: $bandPct, in: 5...40, step: 1)
                     }
                     VStack(alignment: .leading) {
-                        Text("Frost blur: \(Int(frostBlur))px")
+                        Text("Blur strength: \(Int(frostBlur))")
                         Slider(value: $frostBlur, in: 0...40, step: 1)
                     }
-                    Toggle("Blur only behind header", isOn: $headerBlurOnly)
+                    Toggle("Blur zone = header only", isOn: $headerBlurOnly)
+                    Text("No blur container — content softens as it scrolls under the header.")
+                        .font(.caption)
+                        .foregroundColor(Theme.secondaryText)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Subtitle size (Business chat): \(Int(subtitleFontSize))pt")
                         Slider(value: $subtitleFontSize, in: 8...14, step: 0.5)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Landscape crop: \(Int(landscapeCrop * 100))%")
+                        Text("0% = full photo · 100% = max crop (shorter window)")
+                            .font(.caption)
+                            .foregroundColor(Theme.secondaryText)
+                        Slider(value: $landscapeCrop, in: 0...1, step: 0.05)
                     }
                 }
                 Section("Seen") {
