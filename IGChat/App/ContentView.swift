@@ -226,23 +226,27 @@ struct SentBubbleView: View {
     /// The bubble acts as a window into a gradient FIXED to the viewport.
     var screenTop: Double?
     var screenBottom: Double?
+    /// v1.18: dynamic gradient endpoints (Look & feel controls)
+    var gradA: Color = Color(red: 0x81/255, green: 0x34/255, blue: 0xAF/255)
+    var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
 
-    /// Fixed viewport gradient: top 15% of the screen = purple full, 30% and below = blue,
-    /// smooth transition between. Sampled at the bubble's own top/bottom edges so the
-    /// bubble reveals exactly what sits behind it in screen space.
-    private static func viewportColor(_ p: Double) -> Color {
+    private func lerpColor(_ a: Color, _ b: Color, _ k: Double) -> Color {
+        let ka = min(max(k, 0), 1)
+        return Color(red: a.cgColor!.components![0] + (b.cgColor!.components![0] - a.cgColor!.components![0]) * ka,
+                     green: a.cgColor!.components![1] + (b.cgColor!.components![1] - a.cgColor!.components![1]) * ka,
+                     blue: a.cgColor!.components![2] + (b.cgColor!.components![2] - a.cgColor!.components![2]) * ka)
+    }
+
+    /// Fixed viewport gradient: dynamic color A fills the top band, B below,
+    /// smooth transition across the band. Sampled at the bubble's edges.
+    private func viewportColor(_ p: Double, band: Double = 0.15) -> Color {
         let t = min(max(p, 0), 1)
-        let k = min(max((0.30 - t) / 0.15, 0), 1)
-        func lerp(_ a: Double, _ b: Double) -> Double { a + (b - a) * k }
-        return Color(red: lerp(0x51, 0x6B) / 255.0,
-                     green: lerp(0x58, 0x3F) / 255.0,
-                     blue: lerp(0xDF, 0xC7) / 255.0)
+        let k = min(max((band + 0.15 - t) / 0.15, 0), 1)   // A at top -> B lower
+        return lerpColor(gradB, gradA, k)
     }
 
     private var fill: LinearGradient {
-        guard let top = screenTop, let bottom = screenBottom else { return Theme.bubbleGradient }
-        return LinearGradient(colors: [Self.viewportColor(top), Self.viewportColor(max(bottom, top))],
-                              startPoint: .top, endPoint: .bottom)
+        LinearGradient(colors: [gradA, gradB], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     var body: some View {
@@ -379,7 +383,7 @@ struct PhoneCanvas: View {
         case .date:
             DateSeparatorView(text: element.text)
         case .sent:
-            SentBubbleView(text: element.text, screenTop: nil, screenBottom: nil)
+            SentBubbleView(text: element.text, screenTop: nil, screenBottom: nil, gradA: gradA, gradB: gradB)
         case .received:
             ReceivedRowView(
                 text: element.text,
@@ -422,6 +426,16 @@ struct ContentView: View {
     @State private var pickedBucket = 0
     @State private var pickedIdx = 0
 
+    // v1.18: multi-chat + look & feel
+    @StateObject private var chatStore = ChatStore()
+    @State private var showChatList = false
+
+    // Look & feel (gradient colors, band %, frost blur)
+    @State private var gradA = Color(red: 0x81/255, green: 0x34/255, blue: 0xAF/255)
+    @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
+    @State private var bandPct: Double = 15
+    @State private var frostBlur: Double = 14
+
     enum EditTarget: Hashable {
         case username
         case followers
@@ -452,13 +466,14 @@ struct ContentView: View {
             // gaussian-blurs and fades toward black as it approaches the very top,
             // behind the floating glass toolbar.
             GeometryReader { geo in
-                let bandH = geo.size.height * 0.15
+                let bandH = geo.size.height * (bandPct / 100.0)
                 ZStack {
                     Rectangle().fill(.thickMaterial)
                     Rectangle().fill(.ultraThinMaterial)
                     Rectangle().fill(.regularMaterial)
                 }
                 .frame(height: bandH)
+                .blur(radius: CGFloat(max(frostBlur - 20, 0) / 2))   // subtle scale with user blur var
                     .frame(maxHeight: .infinity, alignment: .top)
                     .mask(alignment: .top) {
                         // invisible container: blur+fade starts when content enters the band,
@@ -498,6 +513,8 @@ struct ContentView: View {
         .sheet(isPresented: $showExport) { exportSheet }
         .sheet(isPresented: $showSettings) { settingsSheet }
         .sheet(isPresented: Binding(get: { pickerRef != nil }, set: { if !$0 { pickerRef = nil } })) { dateBucketSheet }
+        .sheet(isPresented: $showChatList) { chatListSheet }
+        .onAppear { chatStore.openDefault(elements: elements, title: profile.username) }
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -517,7 +534,8 @@ struct ContentView: View {
             case .sent:
                 SentBubbleView(text: element.text,
                               screenTop: rowProgress[element.id]?.top,
-                              screenBottom: rowProgress[element.id]?.bottom)
+                              screenBottom: rowProgress[element.id]?.bottom,
+                              gradA: gradA, gradB: gradB)
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
                     .contextMenu { sentMenu(element) }
@@ -640,6 +658,7 @@ struct ContentView: View {
             GlassCircle(size: 46) {
                 BackButtonArt(height: 19)
             }
+            .onTapGesture { chatStore.snapshotCurrent(elements); showChatList = true }
 
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
                 AvatarView(content: avatarContent, size: 32)
@@ -1031,6 +1050,84 @@ struct ContentView: View {
         showEditor = false
     }
 
+    // MARK: Chat list (v1.18) — back button opens this
+
+    private var chatListSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(chatStore.chats) { chat in
+                    Button {
+                        chatStore.snapshotCurrent(elements)
+                        chatStore.currentId = chat.id
+                        elements = chat.elements
+                        showChatList = false
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(LinearGradient(colors: [gradA, gradB], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                Text(String(chat.title.prefix(1)).uppercased())
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                            .frame(width: 56, height: 56)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(chat.title)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Text(lastMessage(in: chat))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Theme.secondaryText)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            chatStore.deleteChat(chat.id)
+                        } label: { Label("Delete", systemImage: "trash") }
+                    }
+                }
+
+                Button {
+                    let chat = chatStore.createChat()
+                    elements = chat.elements
+                    showChatList = false
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(Theme.barPurple)
+                        Text("New chat")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(Color.black)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Theme.black.ignoresSafeArea())
+            .navigationTitle("Chats")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showChatList = false }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func lastMessage(in chat: ChatSession) -> String {
+        chat.elements.last(where: { $0.style != .date })?.text ?? "No messages"
+    }
+
     // MARK: Date separator bucket picker (4 cards, tap = select, tap again = shuffle, Add = insert)
 
     private var dateBucketSheet: some View {
@@ -1135,6 +1232,22 @@ struct ContentView: View {
                     Toggle("Show Follow button", isOn: $showFollow)
                     Toggle("Show \"Learn about business chats\"", isOn: $learnLinkEnabled)
                     Toggle("Show \"Double tap to ❤️\" hints", isOn: $heartHintsEnabled)
+                }
+                Section("Look & feel") {
+                    ColorPicker("Gradient start", selection: Binding(
+                        get: { gradA },
+                        set: { gradA = $0.opacity(1) }), supportsOpacity: false)
+                    ColorPicker("Gradient end", selection: Binding(
+                        get: { gradB },
+                        set: { gradB = $0.opacity(1) }), supportsOpacity: false)
+                    VStack(alignment: .leading) {
+                        Text("Frost band height: \(Int(bandPct))%")
+                        Slider(value: $bandPct, in: 5...40, step: 1)
+                    }
+                    VStack(alignment: .leading) {
+                        Text("Frost blur: \(Int(frostBlur))px")
+                        Slider(value: $frostBlur, in: 0...30, step: 1)
+                    }
                 }
                 Section("Seen") {
                     Toggle("\"Seen\" under last Me message", isOn: $seenEnabled)

@@ -120,3 +120,54 @@ enum DateBuckets {
         ]
     }
 }
+
+
+// MARK: - Multi-chat store (v1.18)
+struct ChatSession: Identifiable, Equatable {
+    let id = UUID()
+    var title: String
+    var elements: [ChatElement]
+}
+
+@MainActor
+final class ChatStore: ObservableObject {
+    @Published var chats: [ChatSession] = []
+    @Published var currentId: UUID?
+
+    var current: ChatSession? {
+        get { chats.first(where: { $0.id == currentId }) }
+    }
+
+    func openDefault(elements: [ChatElement], title: String) {
+        if let first = chats.first {
+            currentId = first.id
+        } else {
+            let d = ChatSession(title: title, elements: elements)
+            chats.append(d)
+            currentId = d.id
+        }
+    }
+
+    func snapshotCurrent(_ elements: [ChatElement]) {
+        if let idx = chats.firstIndex(where: { $0.id == currentId }) {
+            chats[idx].elements = elements
+        }
+    }
+
+    func createChat() -> ChatSession {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        let chat = ChatSession(
+            title: "Chat \(chats.count + 1)",
+            elements: [ChatElement(style: .date, text: f.string(from: Date()).uppercased())]
+        )
+        chats.append(chat)
+        currentId = chat.id
+        return chat
+    }
+
+    func deleteChat(_ id: UUID) {
+        chats.removeAll { $0.id == id }
+        if currentId == id { currentId = chats.first?.id }
+    }
+}
