@@ -210,41 +210,40 @@ struct SentBubbleView: View {
     var replyImage: UIImage? = nil
     var photo: UIImage? = nil
     var position: BubbleGroupPos = .single
-    var screenTop: Double?
-    var screenBottom: Double?
+    /// Chat viewport size — gradient is locked to this, bubbles only mask it (IG Me style).
+    var viewportSize: CGSize = .zero
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
     var gradTop: Double = 15
     var gradBottom: Double = 30
 
-    private func rgb(_ c: Color) -> (Double, Double, Double) {
-        let cg = c.cgColor ?? CGColor(red: 0, green: 0, blue: 0, alpha: 1)
-        let k = cg.components ?? [0, 0, 0, 1]
-        return (Double(k[0]), Double(k[1]), Double(k[2]))
+    /// Full-viewport Me gradient: solid A until gradTop%, blend to B by gradBottom%, solid B below.
+    private var viewportGradient: some View {
+        let top = max(min(gradTop / 100.0, 0.98), 0)
+        let bot = max(min(gradBottom / 100.0, 1), top + 0.002)
+        return LinearGradient(
+            stops: [
+                .init(color: gradA, location: 0),
+                .init(color: gradA, location: top),
+                .init(color: gradB, location: bot),
+                .init(color: gradB, location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
-    /// Sample the viewport-locked Me gradient at normalized Y (0 = top of screen, 1 = bottom).
-    /// [0 … gradTop] = solid purple; (gradTop … gradBottom) = fade; [gradBottom … 1] = solid blue.
-    private func viewportColor(_ p: Double) -> Color {
-        let y = min(max(p, 0), 1)
-        let top = gradTop / 100, bot = max(gradBottom / 100, top + 0.001)
-        let k: Double
-        if y <= top { k = 1 }
-        else if y >= bot { k = 0 }
-        else { k = (bot - y) / (bot - top) } // 1 at purple edge → 0 at blue edge
-        let (ar, ag, ab) = rgb(gradA)
-        let (br, bg, bb) = rgb(gradB)
-        return Color(red: br + (ar - br) * k,
-                     green: bg + (ag - bg) * k,
-                     blue: bb + (ab - bb) * k)
-    }
-
-    private var fill: LinearGradient {
-        guard let top = screenTop, let bottom = screenBottom else {
-            return LinearGradient(colors: [gradA, gradB], startPoint: .top, endPoint: .bottom)
+    /// Bubble shape masks a window into the viewport-fixed gradient (not a per-bubble gradient).
+    private func meBubbleBackground() -> some View {
+        GeometryReader { geo in
+            let f = geo.frame(in: .named("viewport"))
+            let vw = max(viewportSize.width, 1)
+            let vh = max(viewportSize.height, 1)
+            viewportGradient
+                .frame(width: vw, height: vh)
+                .offset(x: -f.minX, y: -f.minY)
         }
-        return LinearGradient(colors: [viewportColor(top), viewportColor(max(bottom, top))],
-                              startPoint: .top, endPoint: .bottom)
+        .mask(IGBubbleShape(isSent: true, position: position))
     }
 
     private var hasReply: Bool {
@@ -276,7 +275,7 @@ struct SentBubbleView: View {
                     MessageTextView(text: text)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(IGBubbleShape(isSent: true, position: position).fill(fill))
+                        .background(meBubbleBackground())
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -449,6 +448,7 @@ struct ContentView: View {
     @State private var replyPhotoTarget: UUID? = nil     // story/media quote image
 
     @State private var rowProgress: [ChatElement.ID: BubbleEdges] = [:]
+    @State private var viewportSize: CGSize = .zero
     /// Stable id so the profile / View profile block gets the same pass-under-header blur as bubbles.
     private let profilePassId = UUID(uuidString: "A11CE000-0000-4000-8000-000000000001")!
     @State private var showEditor = false
@@ -629,8 +629,7 @@ struct ContentView: View {
                               replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
                               photo: ChatImageCodec.image(from: element.imageJPEG),
                               position: BubbleGrouping.position(in: elements, at: idx),
-                              screenTop: rowProgress[element.id]?.top,
-                              screenBottom: rowProgress[element.id]?.bottom,
+                              viewportSize: viewportSize,
                               gradA: gradA, gradB: gradB,
                               gradTop: gradTop, gradBottom: gradBottom)
                     .contentShape(Rectangle())
@@ -1127,6 +1126,8 @@ struct ContentView: View {
                     .padding(EdgeInsets(top: 108, leading: 16, bottom: 4, trailing: 16))
                 }
                 .coordinateSpace(name: "viewport")
+                .onAppear { viewportSize = outer.size }
+                .onChange(of: outer.size, perform: { viewportSize = $0 })
                 .onPreferenceChange(BubbleProgressKey.self) { dict in
                     rowProgress = dict
                 }

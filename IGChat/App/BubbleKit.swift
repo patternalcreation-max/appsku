@@ -49,8 +49,16 @@ struct ReplyChrome: View {
     let peerName: String
     var replyText: String? = nil
     var replyImage: UIImage? = nil
-    /// Optional mini text bubble fill when quoting a chat bubble.
-    var quoteBubbleFill: Color = Color(red: 0x3B/255, green: 0x2B/255, blue: 0x85/255)
+    /// Optional override; nil = auto from replyFromMe (Them gray / Me purple).
+    var quoteBubbleFill: Color? = nil
+
+    private var resolvedQuoteFill: Color {
+        if let quoteBubbleFill { return quoteBubbleFill }
+        // Me bubble purple (solid sample of viewport gradA); Them = gray chat bubble
+        return replyFromMe
+            ? Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
+            : Theme.bubbleGray
+    }
 
     private var label: String {
         switch kind {
@@ -104,16 +112,18 @@ struct ReplyChrome: View {
                     }
                 }
         } else if let text = replyText, !text.isEmpty {
+            // Mini bubble matches who was quoted: Them = gray, Me = purple (not always purple)
             Text(text)
                 .font(.system(size: 13))
                 .foregroundColor(.white)
+                .lineLimit(4)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(quoteBubbleFill)
+                    IGBubbleShape(isSent: replyFromMe, position: .single)
+                        .fill(resolvedQuoteFill)
                 )
-                .frame(maxWidth: 260, alignment: .leading)
+                .frame(maxWidth: 260, alignment: replyFromMe ? .trailing : .leading)
         }
     }
 }
