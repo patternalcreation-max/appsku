@@ -237,11 +237,15 @@ struct ReceivedRowView: View {
 // MARK: - Input bar
 
 struct InputBarView: View {
+    var tap: (() -> Void)?
+
     var body: some View {
         ChatBarView()
             .padding(.horizontal, 16)
             .padding(.top, 0)
             .padding(.bottom, 6)
+            .contentShape(Rectangle())
+            .onTapGesture { tap?() }
     }
 }
 
@@ -332,7 +336,7 @@ struct ContentView: View {
                     liveHeader
                 Rectangle().fill(Theme.headerBorder).frame(height: 1)
                 chatArea
-                InputBarView()
+                InputBarView(tap: { showEditor = true })
             }
         }
         .preferredColorScheme(.dark)
@@ -349,8 +353,8 @@ struct ContentView: View {
 
     private var liveHeader: some View {
         HStack(spacing: 12) {
-            GlassCircle(size: 36) {
-                BackButtonArt(height: 21)
+            GlassCircle(size: 32) {
+                BackButtonArt(height: 19)
             }
 
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
@@ -389,14 +393,6 @@ struct ContentView: View {
             Spacer()
 
             HStack(spacing: 10) {
-                GlassCircle(size: 46) {
-                    Button {
-                        elements.append(ChatElement(style: .sent, text: "New message"))
-                    } label: {
-                        LiveduoArt(height: 24)
-                    }
-                    .buttonStyle(.plain)
-                }
                 GlassCircle(size: 46) {
                     Menu {
                         Button {

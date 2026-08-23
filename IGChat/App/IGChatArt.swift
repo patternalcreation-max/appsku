@@ -135,28 +135,27 @@ struct GlassCircle<Content: View>: View {
     var body: some View {
         content()
             .frame(width: size, height: size)
-            .background(Circle().fill(Color.white.opacity(0.03)))
+            .background(Circle().fill(Color.white.opacity(0.025)))
             .background(.ultraThinMaterial, in: Circle())
             .overlay(
                 Circle().strokeBorder(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.22), Color.white.opacity(0.05)],
+                        colors: [Color.white.opacity(0.16), Color.white.opacity(0.04)],
                         startPoint: .top, endPoint: .bottom
                     ),
-                    lineWidth: 1
+                    lineWidth: 0.8
                 )
             )
             .overlay(
-                // top sheen highlight (subtle)
                 Ellipse()
-                    .fill(LinearGradient(colors: [Color.white.opacity(0.07), .clear],
+                    .fill(LinearGradient(colors: [Color.white.opacity(0.05), .clear],
                                          startPoint: .top, endPoint: .bottom))
                     .frame(width: size * 0.6, height: size * 0.38)
                     .offset(y: -size * 0.30)
                     .clipShape(Circle())
                     .allowsHitTesting(false)
             )
-            .shadow(color: Color.black.opacity(0.20), radius: 5, y: 2)
+            .shadow(color: Color.black.opacity(0.15), radius: 4, y: 2)
     }
 }
 
@@ -222,7 +221,6 @@ struct GlassCapsule<Content: View>: View {
 struct HeaderGlassStatic: View {
     var body: some View {
         HStack(spacing: 10) {
-            GlassCircle(size: 46) { LiveduoArt(height: 24) }
             GlassCircle(size: 46) { PhonecallArt(height: 22) }
             GlassCircle(size: 46) { VcArt(height: 22) }
         }
