@@ -129,34 +129,34 @@ struct BackButtonArt: View {
 
 /// One liquid-glass circular container per button (operator spec: separate containers).
 struct GlassCircle<Content: View>: View {
-    var size: CGFloat = 40
+    var size: CGFloat = 46
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         content()
             .frame(width: size, height: size)
-            .background(Circle().fill(Color.white.opacity(0.06)))
+            .background(Circle().fill(Color.white.opacity(0.03)))
             .background(.ultraThinMaterial, in: Circle())
             .overlay(
                 Circle().strokeBorder(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.42), Color.white.opacity(0.08)],
+                        colors: [Color.white.opacity(0.22), Color.white.opacity(0.05)],
                         startPoint: .top, endPoint: .bottom
                     ),
                     lineWidth: 1
                 )
             )
             .overlay(
-                // top sheen highlight
+                // top sheen highlight (subtle)
                 Ellipse()
-                    .fill(LinearGradient(colors: [Color.white.opacity(0.16), .clear],
+                    .fill(LinearGradient(colors: [Color.white.opacity(0.07), .clear],
                                          startPoint: .top, endPoint: .bottom))
                     .frame(width: size * 0.6, height: size * 0.38)
                     .offset(y: -size * 0.30)
                     .clipShape(Circle())
                     .allowsHitTesting(false)
             )
-            .shadow(color: Color.black.opacity(0.28), radius: 6, y: 3)
+            .shadow(color: Color.black.opacity(0.20), radius: 5, y: 2)
     }
 }
 
@@ -222,9 +222,9 @@ struct GlassCapsule<Content: View>: View {
 struct HeaderGlassStatic: View {
     var body: some View {
         HStack(spacing: 10) {
-            GlassCircle(size: 40) { LiveduoArt(height: 24) }
-            GlassCircle(size: 40) { PhonecallArt(height: 22) }
-            GlassCircle(size: 40) { VcArt(height: 22) }
+            GlassCircle(size: 46) { LiveduoArt(height: 24) }
+            GlassCircle(size: 46) { PhonecallArt(height: 22) }
+            GlassCircle(size: 46) { VcArt(height: 22) }
         }
         .colorScheme(.dark)
     }

@@ -149,7 +149,7 @@ struct ProfileContextView: View {
 
             HStack(spacing: 8) {
                 profileButton("View profile")
-                profileButton("Follow")
+                profileButton("Delete")
             }
             .padding(.top, 12)
         }
@@ -163,7 +163,7 @@ struct ProfileContextView: View {
             .foregroundColor(.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.bubbleGray))
+            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.profileButton))
     }
 }
 
@@ -240,7 +240,8 @@ struct InputBarView: View {
     var body: some View {
         ChatBarView()
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.top, 0)
+            .padding(.bottom, 6)
     }
 }
 
@@ -266,7 +267,7 @@ struct PhoneCanvas: View {
                     elementView(element)
                 }
             }
-            .padding(16)
+            .padding(EdgeInsets(top: 16, leading: 16, bottom: 4, trailing: 16))
 
             Spacer(minLength: 0)
             InputBarView()
@@ -348,7 +349,7 @@ struct ContentView: View {
 
     private var liveHeader: some View {
         HStack(spacing: 12) {
-            GlassCircle(size: 34) {
+            GlassCircle(size: 36) {
                 BackButtonArt(height: 21)
             }
 
@@ -388,7 +389,7 @@ struct ContentView: View {
             Spacer()
 
             HStack(spacing: 10) {
-                GlassCircle(size: 40) {
+                GlassCircle(size: 46) {
                     Button {
                         elements.append(ChatElement(style: .sent, text: "New message"))
                     } label: {
@@ -396,7 +397,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                GlassCircle(size: 40) {
+                GlassCircle(size: 46) {
                     Menu {
                         Button {
                             profile.isVerified.toggle()
@@ -432,7 +433,7 @@ struct ContentView: View {
                         PhonecallArt(height: 22)
                     }
                 }
-                GlassCircle(size: 40) {
+                GlassCircle(size: 46) {
                     Button {
                         showExport = true
                     } label: {
@@ -470,7 +471,7 @@ struct ContentView: View {
                             .contextMenu { elementMenu(for: element) }
                     }
                 }
-                .padding(16)
+                .padding(EdgeInsets(top: 16, leading: 16, bottom: 4, trailing: 16))
             }
             .onChange(of: elements.count) { _ in
                 if let last = elements.last {
@@ -538,13 +539,13 @@ struct ContentView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.bubbleGray))
-                Text("Follow")
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.profileButton))
+                Text("Delete")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.bubbleGray))
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.profileButton))
             }
             .padding(.top, 12)
         }
