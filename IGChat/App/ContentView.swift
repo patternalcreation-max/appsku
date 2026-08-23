@@ -1450,7 +1450,7 @@ struct ContentView: View {
                     .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(Color.black)
+                .listRowBackground(Theme.black)
 
                 Button {
                     chatStore.snapshotCurrent(elements)
@@ -1473,7 +1473,7 @@ struct ContentView: View {
                     .padding(.vertical, 6)
                 }
                 .buttonStyle(.plain)
-                .listRowBackground(Color.black)
+                .listRowBackground(Theme.black)
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)

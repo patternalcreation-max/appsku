@@ -1,7 +1,8 @@
 import SwiftUI
 
 enum Theme {
-    static let black = Color(red: 0, green: 0, blue: 0)
+    // Soft night canvas (#0E1217) — not pure black (Telegram-like night)
+    static let black = Color(red: 0x0E / 255.0, green: 0x12 / 255.0, blue: 0x17 / 255.0)
     static let bubbleGray = Color(red: 0x26 / 255.0, green: 0x26 / 255.0, blue: 0x26 / 255.0)
     static let igBlue = Color(red: 0x00 / 255.0, green: 0x95 / 255.0, blue: 0xF6 / 255.0)
     static let secondaryText = Color(red: 0xA8 / 255.0, green: 0xA8 / 255.0, blue: 0xA8 / 255.0)
