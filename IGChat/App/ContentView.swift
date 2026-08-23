@@ -90,7 +90,7 @@ struct ChatHeaderView: View {
                     }
                 }
                 Text(subtitle.isEmpty ? " " : subtitle)
-                    .font(.system(size: 12))
+                    .font(.system(size: 10))
                     .foregroundColor(Theme.secondaryText)
             }
             .contentShape(Rectangle())
