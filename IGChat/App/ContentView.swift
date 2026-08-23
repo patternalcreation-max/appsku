@@ -118,6 +118,7 @@ struct ProfileContextView: View {
     var learnLinkEnabled: Bool = true
     var seenEnabled: Bool = false
     var seenText: String = "Seen"
+    var showStatusAlways: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -406,7 +407,8 @@ struct PhoneCanvas: View {
                     showFollow: showFollow,
                     learnLinkEnabled: learnLinkEnabled,
                     seenEnabled: seenEnabled,
-                    seenText: seenText
+                    seenText: seenText,
+                    showStatusAlways: showStatusAlways
                 )
                 ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                     elementView(element)
