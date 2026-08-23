@@ -112,6 +112,11 @@ struct ProfileContextView: View {
     let avatarContent: AvatarContent
     var statTap: (() -> Void)?
     var statusTap: (() -> Void)?
+    var following: Bool = false
+    var showFollow: Bool = false
+    var learnLinkEnabled: Bool = true
+    var seenEnabled: Bool = false
+    var seenText: String = "Seen"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -127,6 +132,13 @@ struct ProfileContextView: View {
             }
             .padding(.top, 12)
 
+            ForEach(profile.infoLines, id: \.self) { line in
+                Text(line)
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.secondaryText)
+                    .padding(.top, 2)
+            }
+
             (Text("\(profile.followers) followers")
                 + Text(" · ")
                 + Text("\(profile.posts) posts"))
@@ -136,20 +148,27 @@ struct ProfileContextView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { statTap?() }
 
-            Text(profile.statusLine)
-                .font(.system(size: 14))
-                .foregroundColor(Theme.secondaryText)
-                .padding(.top, 4)
-                .contentShape(Rectangle())
-                .onTapGesture { statusTap?() }
+            if !following {
+                Text(profile.statusLine)
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.secondaryText)
+                    .padding(.top, 2)
+                    .contentShape(Rectangle())
+                    .onTapGesture { statusTap?() }
+            }
 
-            Text("Learn about business chats")
-                .font(.system(size: 14))
-                .foregroundColor(Theme.linkPale)
-                .padding(.top, 8)
+            if learnLinkEnabled {
+                Text("Learn about business chats")
+                    .font(.system(size: 12.5))
+                    .foregroundColor(Theme.learnBlue)
+                    .padding(.top, 8)
+            }
 
             HStack(spacing: 8) {
                 profileButton("View profile")
+                if showFollow && !following {
+                    profileButton("Follow")
+                }
             }
             .padding(.top, 12)
         }
@@ -295,6 +314,11 @@ struct PhoneCanvas: View {
     let elements: [ChatElement]
     let profile: IGProfile
     let avatarContent: AvatarContent
+    var following: Bool = false
+    var showFollow: Bool = false
+    var learnLinkEnabled: Bool = true
+    var seenEnabled: Bool = false
+    var seenText: String = "Seen"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -304,18 +328,35 @@ struct PhoneCanvas: View {
                 subtitle: profile.subtitle,
                 avatarContent: avatarContent
             )
-            Rectangle().fill(Theme.headerBorder).frame(height: 1)
 
             VStack(spacing: 20) {
-                ProfileContextView(profile: profile, avatarContent: avatarContent)
-                ForEach(elements) { element in
+                ProfileContextView(
+                    profile: profile,
+                    avatarContent: avatarContent,
+                    following: following,
+                    showFollow: showFollow,
+                    learnLinkEnabled: learnLinkEnabled,
+                    seenEnabled: seenEnabled,
+                    seenText: seenText
+                )
+                ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                     elementView(element)
+                    if seenEnabled, idx == (elements.lastIndex(where: { $0.style == .sent }) ?? -1) {
+                        HStack {
+                            Spacer()
+                            Text(seenText)
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(white: 0.56))
+                                .padding(.trailing, 4)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
                 }
             }
             .padding(EdgeInsets(top: 16, leading: 16, bottom: 4, trailing: 16))
 
             Spacer(minLength: 0)
-            InputBarView(placeholder: .constant("Message…"))
+            InputBarView(placeholder: .constant(profile.barPlaceholder.isEmpty ? "Message…" : profile.barPlaceholder))
         }
         .frame(width: 400, alignment: .top)
         .frame(minHeight: 800, alignment: .top)
@@ -356,6 +397,15 @@ struct ContentView: View {
     @State private var showSaved = false
     @State private var highRes = true
 
+    // v1.16: settings sheet + seen + follow + info lines + toggles
+    @State private var showSettings = false
+    @State private var showFollow = true             // true = Follow button visible
+    @State private var following = false
+    @State private var seenEnabled = true
+    @State private var seenHoursAgo = 0              // 0 = plain "Seen", 1-23 = "Seen Xh ago"
+    @State private var learnLinkEnabled = true
+    @State private var heartHintsEnabled = true
+
     enum EditTarget: Hashable {
         case username
         case followers
@@ -363,6 +413,8 @@ struct ContentView: View {
         case statusLine
         case placeholder
         case subtitle
+        case infoLine(Int)
+        case seenHours
         case element(UUID)
     }
 
@@ -378,7 +430,7 @@ struct ContentView: View {
             Theme.black.ignoresSafeArea()
             VStack(spacing: 0) {
                 chatArea
-                InputBarView(tap: { beginEdit(.placeholder, text: profile.barPlaceholder) }, placeholder: $profile.barPlaceholder)
+                InputBarView(tap: { showSettings = true }, placeholder: $profile.barPlaceholder)
             }
             // Progressive frost across the TOP 15% of the screen: content crossing it
             // gaussian-blurs and fades toward black as it approaches the very top,
@@ -428,6 +480,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showEditor) { editorSheet }
         .sheet(isPresented: $showExport) { exportSheet }
+        .sheet(isPresented: $showSettings) { settingsSheet }
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -437,19 +490,93 @@ struct ContentView: View {
 
     @ViewBuilder
     private func elementView(_ element: ChatElement) -> some View {
-        switch element.style {
-        case .date:
-            DateSeparatorView(text: element.text)
-        case .sent:
-            SentBubbleView(text: element.text,
+        Group {
+            switch element.style {
+            case .date:
+                DateSeparatorView(text: element.text)
+                    .contentShape(Rectangle())
+                    .onTapGesture { beginEdit(.element(element.id), text: element.text) }
+                    .contextMenu { dateMenu(element) }
+            case .sent:
+                SentBubbleView(text: element.text,
                               screenTop: rowProgress[element.id]?.top,
                               screenBottom: rowProgress[element.id]?.bottom)
-        case .received:
-            ReceivedRowView(
-                text: element.text,
-                heartHint: element.heartHint,
-                avatarContent: avatarContent
-            )
+                    .contentShape(Rectangle())
+                    .onTapGesture { beginEdit(.element(element.id), text: element.text) }
+                    .contextMenu { sentMenu(element) }
+            case .received:
+                ReceivedRowView(
+                    text: element.text,
+                    heartHint: element.heartHint && heartHintsEnabled,
+                    avatarContent: avatarContent
+                )
+                    .contentShape(Rectangle())
+                    .onTapGesture { beginEdit(.element(element.id), text: element.text) }
+                    .contextMenu { receivedMenu(element) }
+            }
+        }
+    }
+
+    // MARK: Strict hold-add menus (Me adds only Me, Them only Them)
+
+    /// insert index for "below my chat": right after held row
+    /// insert index for "after their chat": after the next different-sender block
+    private func strictMenu(_ element: ChatElement, isMe: Bool) -> some View {
+        let heldIdx = elements.firstIndex(where: { $0.id == element.id }) ?? 0
+        let style: ChatElement.Style = isMe ? .sent : .received
+        let label = isMe ? "Me" : "Them"
+
+        return Group {
+            Button {
+                withAnimation { elements.insert(ChatElement(style: style, text: "New message"), at: heldIdx) }
+            } label: {
+                Label("Add \(label) above", systemImage: "arrow.up")
+            }
+
+            // different sender right below?
+            let next = heldIdx + 1 < elements.count ? elements[heldIdx + 1] : nil
+            if let n = next, n.style != style {
+                Button {
+                    withAnimation { elements.insert(ChatElement(style: style, text: "New message"), at: heldIdx + 1) }
+                } label: {
+                    Label("Add \(label) below my chat", systemImage: "arrow.down.to.line")
+                }
+                // after their block: skip consecutive different-sender rows
+                Button {
+                    var i = heldIdx + 1
+                    while i < elements.count && elements[i].style != style { i += 1 }
+                    withAnimation { elements.insert(ChatElement(style: style, text: "New message"), at: i) }
+                } label: {
+                    Label("Add \(label) after their chat", systemImage: "arrow.down.below.line")
+                }
+            } else {
+                Button {
+                    withAnimation { elements.insert(ChatElement(style: style, text: "New message"), at: heldIdx + 1) }
+                } label: {
+                    Label("Add \(label) below", systemImage: "arrow.down")
+                }
+            }
+        }
+    }
+
+    private func sentMenu(_ element: ChatElement) -> some View { strictMenu(element, isMe: true) }
+    private func receivedMenu(_ element: ChatElement) -> some View { strictMenu(element, isMe: false) }
+
+    private func dateMenu(_ element: ChatElement) -> some View {
+        let idx = elements.firstIndex(where: { $0.id == element.id }) ?? 0
+        return Group {
+            Button {
+                withAnimation { elements.insert(ChatElement(style: .sent, text: "New message"), at: idx) }
+            } label: { Label("Add Me above", systemImage: "arrow.up") }
+            Button {
+                withAnimation { elements.insert(ChatElement(style: .sent, text: "New message"), at: idx + 1) }
+            } label: { Label("Add Me below", systemImage: "arrow.down") }
+            Button {
+                withAnimation { elements.insert(ChatElement(style: .received, text: "New message"), at: idx) }
+            } label: { Label("Add Them above", systemImage: "arrow.up") }
+            Button {
+                withAnimation { elements.insert(ChatElement(style: .received, text: "New message"), at: idx + 1) }
+            } label: { Label("Add Them below", systemImage: "arrow.down") }
         }
     }
 
@@ -512,28 +639,7 @@ struct ContentView: View {
                                 systemImage: profile.isVerified ? "checkmark.seal.fill" : "checkmark.seal"
                             )
                         }
-                        Divider()
-                        Button {
-                            elements.append(ChatElement(style: .sent, text: "New message"))
-                        } label: {
-                            Label("Purple bubble (Me)", systemImage: "arrow.up.circle")
-                        }
-                        Button {
-                            elements.append(ChatElement(style: .received, text: "New message"))
-                        } label: {
-                            Label("Gray bubble (Target)", systemImage: "arrow.down.circle")
-                        }
-                        Button {
-                            elements.append(ChatElement(style: .date, text: "JUL 16 AT 1:11 PM"))
-                        } label: {
-                            Label("Date separator", systemImage: "clock")
-                        }
-                        Divider()
-                        Button(role: .destructive) {
-                            elements.removeAll()
-                        } label: {
-                            Label("Clear all messages", systemImage: "trash")
-                        }
+                        Toggle("Show Follow button", isOn: $showFollow)
                     } label: {
                         PhonecallArt(height: 22)
                     }
@@ -586,7 +692,7 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         liveProfileContext
-                        ForEach(elements) { element in
+                        ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                             elementView(element)
                                 // progressive gaussian + fade as the row crosses the top 15% band
                                 .blur(radius: frostRadius(for: element))
@@ -603,6 +709,13 @@ struct ContentView: View {
                                     }
                                 )
                         }
+
+                        // "Seen" under the last Me bubble (right-aligned, grayed)
+                        if seenEnabled,
+                           let lastMe = elements.lastIndex(where: { $0.style == .sent }),
+                           idx == lastMe {
+                            seenMarker
+                        }
                     }
                     .padding(EdgeInsets(top: 108, leading: 16, bottom: 4, trailing: 16))
                 }
@@ -617,6 +730,26 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private var seenMarker: some View {
+        HStack {
+            Spacer()
+            Text(seenText)
+                .font(.system(size: 11))
+                .foregroundColor(Color(white: 0.56))
+                .padding(.trailing, 4)
+                .contentShape(Rectangle())
+                .onTapGesture { beginEdit(.seenHours, text: String(seenHoursAgo)) }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var seenText: String {
+        if seenHoursAgo > 0 && seenHoursAgo < 24 {
+            return "Seen \(seenHoursAgo)h ago"
+        }
+        return "Seen"
     }
 
     private var liveProfileContext: some View {
@@ -635,6 +768,23 @@ struct ContentView: View {
                 }
             }
             .padding(.top, 12)
+            .onTapGesture { beginEdit(.username, text: profile.username) }
+            .onLongPressGesture {
+                withAnimation { profile.infoLines.insert("Full name", at: 0) }
+            }
+
+            // info lines (fullname etc.) — tight stack, same style as status
+            ForEach(profile.infoLines.indices, id: \.self) { i in
+                Text(profile.infoLines[i])
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.secondaryText)
+                    .padding(.top, 2)
+                    .contentShape(Rectangle())
+                    .onTapGesture { beginEdit(.infoLine(i), text: profile.infoLines[i]) }
+                    .onLongPressGesture {
+                        withAnimation { profile.infoLines.insert("New line", at: i + 1) }
+                    }
+            }
 
             (Text("\(profile.followers) followers")
                 + Text(" · ")
@@ -652,17 +802,24 @@ struct ContentView: View {
                     }
                 }
 
-            Text(profile.statusLine)
-                .font(.system(size: 14))
-                .foregroundColor(Theme.secondaryText)
-                .padding(.top, 4)
-                .contentShape(Rectangle())
-                .onTapGesture { beginEdit(.statusLine, text: profile.statusLine) }
+            if !following {
+                Text(profile.statusLine)
+                    .font(.system(size: 14))
+                    .foregroundColor(Theme.secondaryText)
+                    .padding(.top, 2)
+                    .contentShape(Rectangle())
+                    .onTapGesture { beginEdit(.statusLine, text: profile.statusLine) }
+                    .onLongPressGesture {
+                        withAnimation { profile.statusLine = profile.statusLine + "\nNew line" }
+                    }
+            }
 
-            Text("Learn about business chats")
-                .font(.system(size: 14))
-                .foregroundColor(Theme.linkPale)
-                .padding(.top, 8)
+            if learnLinkEnabled {
+                Text("Learn about business chats")
+                    .font(.system(size: 12.5))
+                    .foregroundColor(Theme.learnBlue)
+                    .padding(.top, 8)
+            }
 
             HStack(spacing: 8) {
                 Text("View profile")
@@ -671,6 +828,24 @@ struct ContentView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Theme.profileButton))
+
+                if showFollow && !following {
+                    Text("Follow")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.profileButton))
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            withAnimation {
+                                following = true
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                withAnimation { showFollow = false }
+                            }
+                        }
+                }
             }
             .padding(.top, 12)
         }
@@ -771,6 +946,8 @@ struct ContentView: View {
         case .statusLine: return "Status line"
         case .placeholder: return "Message placeholder"
         case .subtitle: return "Subtitle (Business chat)"
+        case .infoLine: return "Text line"
+        case .seenHours: return "Seen — hours ago (0 = plain, 24+ = plain)"
         case .element(let id):
             if let el = elements.first(where: { $0.id == id }) {
                 switch el.style {
@@ -804,6 +981,13 @@ struct ContentView: View {
             profile.barPlaceholder = editorText
         case .subtitle:
             profile.subtitle = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .infoLine(let i):
+            if profile.infoLines.indices.contains(i) {
+                profile.infoLines[i] = editorText
+            }
+        case .seenHours:
+            let n = Int(editorText.trimmingCharacters(in: .whitespaces)) ?? 0
+            seenHoursAgo = max(0, min(n, 48))
         case .element(let id):
             if let idx = elements.firstIndex(where: { $0.id == id }) {
                 elements[idx].text = editorText
@@ -812,6 +996,64 @@ struct ContentView: View {
             break
         }
         showEditor = false
+    }
+
+    // MARK: Settings sheet (triggered by chat bar — its only job)
+
+    private var settingsSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Target profile") {
+                    TextField("Username", text: $profile.username)
+                    TextField("Followers", text: $profile.followers)
+                    TextField("Posts", text: $profile.posts)
+                    Toggle("Verified badge", isOn: $profile.isVerified)
+                    TextField("Message placeholder", text: $profile.barPlaceholder)
+                }
+                Section("Display") {
+                    Toggle("Show Follow button", isOn: $showFollow)
+                    Toggle("Show \"Learn about business chats\"", isOn: $learnLinkEnabled)
+                    Toggle("Show \"Double tap to ❤️\" hints", isOn: $heartHintsEnabled)
+                }
+                Section("Seen") {
+                    Toggle("\"Seen\" under last Me message", isOn: $seenEnabled)
+                    if seenEnabled {
+                        Stepper("Hours ago: \(seenHoursAgo == 0 ? "plain" : "\(seenHoursAgo)h")", value: $seenHoursAgo, in: 0...48)
+                    }
+                }
+                Section("Messages") {
+                    Button {
+                        elements.append(ChatElement(style: .sent, text: "New message"))
+                    } label: {
+                        Label("Add Me bubble", systemImage: "arrow.up.circle")
+                    }
+                    Button {
+                        elements.append(ChatElement(style: .received, text: "New message"))
+                    } label: {
+                        Label("Add Them bubble", systemImage: "arrow.down.circle")
+                    }
+                    Button {
+                        elements.append(ChatElement(style: .date, text: IGSeed.smartDate()))
+                    } label: {
+                        Label("Add date separator", systemImage: "clock")
+                    }
+                    Button(role: .destructive) {
+                        elements.removeAll()
+                    } label: {
+                        Label("Clear all messages", systemImage: "trash")
+                    }
+                }
+            }
+            .navigationTitle("Chat settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showSettings = false }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 
     // MARK: Export sheet
@@ -859,7 +1101,12 @@ struct ContentView: View {
         let canvas = PhoneCanvas(
             elements: elements,
             profile: profile,
-            avatarContent: avatarContent
+            avatarContent: avatarContent,
+            following: following,
+            showFollow: showFollow,
+            learnLinkEnabled: learnLinkEnabled,
+            seenEnabled: seenEnabled,
+            seenText: seenText
         )
         let renderer = ImageRenderer(content: canvas)
         renderer.scale = highRes ? 3.0 : 1.0

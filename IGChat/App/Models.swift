@@ -21,6 +21,8 @@ struct IGProfile {
     var statusLine: String = "You don't follow each other on Instagram"
     var subtitle: String = "Business chat"
     var barPlaceholder: String = "Message…"
+    // extra info lines under username (fullname etc.) — rendered tight, same style as status
+    var infoLines: [String] = []
 
     var initials: String {
         let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -30,9 +32,15 @@ struct IGProfile {
 }
 
 enum IGSeed {
+    static func smartDate() -> String {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f.string(from: Date()).uppercased()
+    }
+
     static func defaultElements() -> [ChatElement] {
         [
-            ChatElement(style: .date, text: "TODAY AT 9:41 AM"),
+            ChatElement(style: .date, text: smartDate()),
             ChatElement(style: .sent, text: "Hey"),
             ChatElement(style: .received, text: "Hi", heartHint: false)
         ]

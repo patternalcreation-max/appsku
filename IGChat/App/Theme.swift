@@ -7,6 +7,7 @@ enum Theme {
     static let secondaryText = Color(red: 0xA8 / 255.0, green: 0xA8 / 255.0, blue: 0xA8 / 255.0)
     static let dateText = Color(red: 0x73 / 255.0, green: 0x73 / 255.0, blue: 0x73 / 255.0)
     static let linkPale = Color(red: 0xE0 / 255.0, green: 0xF1 / 255.0, blue: 0xFF / 255.0)
+    static let learnBlue = Color(red: 113 / 255.0, green: 183 / 255.0, blue: 255 / 255.0)
     static let headerBorder = Color(red: 0x1A / 255.0, green: 0x1A / 255.0, blue: 0x1A / 255.0)
     static let batteryBorder = Color.white.opacity(0.4)
     static let gradientStart = Color(red: 0x81 / 255.0, green: 0x34 / 255.0, blue: 0xAF / 255.0)
