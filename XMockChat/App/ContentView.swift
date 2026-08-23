@@ -99,7 +99,6 @@ struct ContentView: View {
             Theme.black.ignoresSafeArea()
             VStack(spacing: 0) {
                 header
-                Rectangle().fill(Theme.border).frame(height: 1)
                 chatArea
                 inputBar
                 XTabBar()
@@ -258,26 +257,27 @@ struct ContentView: View {
     // MARK: Input bar
 
     private var inputBar: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Theme.border).frame(height: 1)
+        HStack(spacing: 12) {
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundColor(Theme.secondaryText)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(Theme.bubbleGray))
             HStack(spacing: 12) {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(Theme.primaryText)
                 Text("Message")
                     .font(.system(size: 15))
                     .foregroundColor(Theme.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Theme.bubbleGray))
                 Image(systemName: "waveform")
                     .font(.system(size: 20))
-                    .foregroundColor(Theme.primaryText)
+                    .foregroundColor(Theme.secondaryText)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Theme.bubbleGray))
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     // MARK: Editor sheet
@@ -408,7 +408,6 @@ struct PhoneCanvas: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Rectangle().fill(Theme.border).frame(height: 1)
             VStack(spacing: 12) {
                 ForEach(elements) { element in
                     switch element.style {
@@ -469,25 +468,26 @@ struct PhoneCanvas: View {
     }
 
     private var inputBar: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Theme.border).frame(height: 1)
+        HStack(spacing: 12) {
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .medium))
+                .foregroundColor(Theme.secondaryText)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(Theme.bubbleGray))
             HStack(spacing: 12) {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(Theme.primaryText)
                 Text("Message")
                     .font(.system(size: 15))
                     .foregroundColor(Theme.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Theme.bubbleGray))
                 Image(systemName: "waveform")
                     .font(.system(size: 20))
-                    .foregroundColor(Theme.primaryText)
+                    .foregroundColor(Theme.secondaryText)
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Theme.bubbleGray))
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }

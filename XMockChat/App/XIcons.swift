@@ -216,6 +216,19 @@ struct XTabIcon: View {
         return SVGPathShape(d: pathData, viewBox: viewBox)
             .fill(icon.color)
             .frame(width: size, height: size * (viewBox.height / viewBox.width))
+            .overlay(alignment: .topTrailing) {
+                if let badge = icon.badge {
+                    Text("\(badge)")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Circle().fill(Theme.blue))
+                        .fixedSize()
+                        .offset(x: -2, y: 2)
+                }
+            }
     }
 }
 
@@ -228,6 +241,15 @@ enum XTab: Int, CaseIterable, Identifiable {
 
     var id: Int { rawValue }
 
+    /// Blue notification badge shown on the tab (nil = no badge)
+    var badge: Int? {
+        switch self {
+        case .home, .search, .grok: return nil
+        case .notifications: return 4
+        case .messages: return 7
+        }
+    }
+
     var pathData: (String, CGRect) {
         switch self {
         case .home: return (XIconPaths.homePath, XIconPaths.homeViewBox)
@@ -238,7 +260,7 @@ enum XTab: Int, CaseIterable, Identifiable {
         }
     }
 
-    var color: Color { Theme.secondaryText }
+    var color: Color { .white }
 }
 
 struct XTabBar: View {
