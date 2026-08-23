@@ -209,6 +209,7 @@ struct SentBubbleView: View {
     var replyImage: UIImage? = nil
     var photo: UIImage? = nil
     var position: BubbleGroupPos = .single
+    var landscapeCrop: Double = 0.25
     /// Chat viewport size — gradient is locked to this, bubbles only mask it (IG Me style).
     var viewportSize: CGSize = .zero
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
@@ -294,6 +295,7 @@ struct ReceivedRowView: View {
     var replyImage: UIImage? = nil
     var photo: UIImage? = nil
     var position: BubbleGroupPos = .single
+    var landscapeCrop: Double = 0.25
 
     private var hasReply: Bool {
         let t = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -604,6 +606,7 @@ struct ContentView: View {
                               photo: ChatImageCodec.image(from: element.imageJPEG),
                               position: BubbleGrouping.position(in: elements, at: idx),
                               viewportSize: viewportSize,
+                              landscapeCrop: landscapeCrop,
                               gradA: gradA, gradB: gradB,
                               gradTop: gradTop, gradBottom: gradBottom)
                     .contentShape(Rectangle())
@@ -622,7 +625,8 @@ struct ContentView: View {
                     replyKind: element.replyKind,
                     replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
                     photo: ChatImageCodec.image(from: element.imageJPEG),
-                    position: BubbleGrouping.position(in: elements, at: idx)
+                    position: BubbleGrouping.position(in: elements, at: idx),
+                    landscapeCrop: landscapeCrop
                 )
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
