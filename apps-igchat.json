@@ -1,0 +1,19 @@
+{
+  "name": "IG Chat Mockup",
+  "subtitle": "IG DM mock chat generator",
+  "icon": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/IGChat/App/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+  "apps": [
+    {
+      "name": "IG Chat",
+      "bundleIdentifier": "com.patternalcreation.igchat",
+      "version": "1.0.0",
+      "versionDate": "2026-08-23",
+      "downloadURL": "https://github.com/patternalcreation-max/appsku/releases/download/igchat-v1.0.0/IGChat.ipa",
+      "developerName": "patternalcreation-max",
+      "iconURL": "https://raw.githubusercontent.com/patternalcreation-max/appsku/main/IGChat/App/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+      "size": 0,
+      "screenshots": [],
+      "versions": []
+    }
+  ]
+}

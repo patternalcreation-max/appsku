@@ -132,7 +132,7 @@ struct ChatHeaderView: View {
                 .font(.system(size: 26, weight: .light))
                 .foregroundColor(.white)
 
-            avatarContent
+            AvatarView(content: avatarContent, size: 32)
                 .onTapGesture { avatarTap?() }
 
             VStack(alignment: .leading, spacing: 1) {
@@ -176,8 +176,7 @@ struct ProfileContextView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            avatarContent
-                .frame(width: 96, height: 96)
+            AvatarView(content: avatarContent, size: 96)
 
             Text(profile.username.isEmpty ? " " : profile.username)
                 .font(.system(size: 20, weight: .semibold))
@@ -271,8 +270,7 @@ struct ReceivedRowView: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            avatarContent
-                .frame(width: 28, height: 28)
+            AvatarView(content: avatarContent, size: 28)
                 .padding(.bottom, 24)
             VStack(alignment: .leading, spacing: 6) {
                 MessageTextView(text: text)
@@ -439,7 +437,7 @@ struct ContentView: View {
                 .foregroundColor(.white)
 
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
-                avatarContent
+                AvatarView(content: avatarContent, size: 32)
             }
             .buttonStyle(.plain)
 
@@ -557,8 +555,7 @@ struct ContentView: View {
     private var liveProfileContext: some View {
         VStack(spacing: 0) {
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
-                avatarContent
-                    .frame(width: 96, height: 96)
+                AvatarView(content: avatarContent, size: 96)
             }
             .buttonStyle(.plain)
 
