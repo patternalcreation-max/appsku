@@ -1027,6 +1027,94 @@ struct ContentView: View {
         showEditor = false
     }
 
+    // MARK: Date separator bucket picker (4 cards, tap = select, tap again = shuffle, Add = insert)
+
+    private var dateBucketSheet: some View {
+        let buckets = DateBuckets.buckets()
+        return NavigationStack {
+            VStack(spacing: 14) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(Array(buckets.enumerated()), id: \.1.id) { bi, bk in
+                        let isPicked = bi == pickedBucket
+                        Button {
+                            if pickedBucket == bi {
+                                pickedIdx = (pickedIdx + 1) % max(bk.options.count, 1)
+                            } else {
+                                pickedBucket = bi
+                                pickedIdx = Int.random(in: 0..<max(bk.options.count, 1))
+                            }
+                        } label: {
+                            VStack(spacing: 4) {
+                                Text(bk.name)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.white)
+                                Text(bk.options.indices.contains(pickedIdx) && isPicked
+                                     ? bk.options[pickedIdx].label
+                                     : (bk.options.first?.label ?? ""))
+                                    .font(.system(size: 12.5))
+                                    .foregroundColor(Theme.secondaryText)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(red: 0.17, green: 0.17, blue: 0.18))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(isPicked ? Theme.barPurple : .clear, lineWidth: 2)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14)
+
+                Text("Tap the card again to shuffle the time")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.secondaryText)
+
+                Button {
+                    insertPickedSeparator(buckets: buckets)
+                } label: {
+                    Text("Add separator")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Theme.barPurple))
+                        .padding(.horizontal, 14)
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 18)
+            .navigationTitle("When?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { pickerRef = nil }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .presentationDetents([.height(340)])
+    }
+
+    private func insertPickedSeparator(buckets: [DateBuckets.Bucket]) {
+        guard let ref = pickerRef,
+              let idx = elements.firstIndex(where: { $0.id == ref }) else { return }
+        guard buckets.indices.contains(pickedBucket) else { return }
+        let bucket = buckets[pickedBucket]
+        guard bucket.options.indices.contains(pickedIdx) else { return }
+        let label = bucket.options[pickedIdx].label
+        withAnimation {
+            elements.insert(ChatElement(style: .date, text: label), at: pickerAbove ? idx : idx + 1)
+        }
+        pickerRef = nil
+    }
+
     // MARK: Settings sheet (triggered by chat bar — its only job)
 
     private var settingsSheet: some View {
