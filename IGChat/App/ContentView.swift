@@ -409,19 +409,28 @@ struct HeaderBlurBand: View {
         GeometryReader { geo in
             let h = max(bandH, 1)
             let soft = 20 + CGFloat(max(frostBlur, 0)) * 0.6
-            HeaderGaussianBlur()
-                .frame(width: geo.size.width, height: h + soft)
-                // Soft bottom only — no color haze, just alpha feather so no hard bias line
-                .mask(
-                    LinearGradient(stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: 0.55),
-                        .init(color: .black.opacity(0.55), location: 0.78),
-                        .init(color: .clear, location: 1)
-                    ], startPoint: .top, endPoint: .bottom)
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .allowsHitTesting(false)
+            ZStack(alignment: .top) {
+                HeaderGaussianBlur()
+                // Pull system material’s grey tint back to chat canvas (#0E1217)
+                // so the blur band doesn’t look washed / different from the chat bg.
+                LinearGradient(stops: [
+                    .init(color: Theme.black.opacity(0.72), location: 0),
+                    .init(color: Theme.black.opacity(0.55), location: 0.5),
+                    .init(color: Theme.black.opacity(0.28), location: 0.82),
+                    .init(color: Theme.black.opacity(0.0), location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+            }
+            .frame(width: geo.size.width, height: h + soft)
+            .mask(
+                LinearGradient(stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.55),
+                    .init(color: .black.opacity(0.55), location: 0.78),
+                    .init(color: .clear, location: 1)
+                ], startPoint: .top, endPoint: .bottom)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(false)
         }
         .ignoresSafeArea(edges: .top)
         .allowsHitTesting(false)
