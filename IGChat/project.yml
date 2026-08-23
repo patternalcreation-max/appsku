@@ -16,8 +16,8 @@ targets:
       base:
         PRODUCT_NAME: IGChat
         PRODUCT_BUNDLE_IDENTIFIER: com.patternalcreation.igchat
-        MARKETING_VERSION: "1.17.2"
-        CURRENT_PROJECT_VERSION: "20"
+        MARKETING_VERSION: "1.17.3"
+        CURRENT_PROJECT_VERSION: "21"
         TARGETED_DEVICE_FAMILY: "1"
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""

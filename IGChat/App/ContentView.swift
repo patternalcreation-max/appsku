@@ -722,23 +722,6 @@ struct ContentView: View {
 
     // MARK: Chat area
 
-    /// Row fully above 0.075 of viewport (half the 15% band) => fully frosted.
-    private func frostRadius(for element: ChatElement) -> CGFloat {
-        guard let top = rowProgress[element.id]?.top else { return 0 }
-        let band: Double = 0.15
-        let t = top / band            // 0 at viewport top, 1 at band bottom
-        let k = min(max(1 - t, 0), 1) // 1 fully inside band top area
-        return CGFloat(k * 14)        // up to 14pt gaussian
-    }
-
-    private func frostOpacity(for element: ChatElement) -> Double {
-        guard let top = rowProgress[element.id]?.top else { return 1 }
-        let band: Double = 0.15
-        let t = top / band
-        let k = min(max(1 - t, 0), 1)
-        return 1 - k * 0.95
-    }
-
     private var chatArea: some View {
         GeometryReader { outer in
             ScrollViewReader { proxy in
@@ -747,9 +730,6 @@ struct ContentView: View {
                         liveProfileContext
                         ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                             elementView(element)
-                                // progressive gaussian + fade as the row crosses the top 15% band
-                                .blur(radius: frostRadius(for: element))
-                                .opacity(frostOpacity(for: element))
                                 .background(
                                     // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
