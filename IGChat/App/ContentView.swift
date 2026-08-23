@@ -378,20 +378,9 @@ struct BubbleProgressKey: PreferenceKey {
 
 // MARK: - Static export canvas (400 × 800)
 
-/// Real backdrop gaussian blur of whatever scrolls underneath (UIKit UIVisualEffectView).
-/// Not a haze overlay on each bubble — the band itself blurs content behind it.
-struct HeaderGaussianBlur: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIVisualEffectView {
-        // True gaussian backdrop blur (dark). No extra tint views on top.
-        let v = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        v.isUserInteractionEnabled = false
-        v.backgroundColor = .clear
-        return v
-    }
-    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {}
-}
-
-/// Soft-edged blur strip from the notch down through the header chrome.
+/// Soft header frost — same canvas color as chat BG (#0E1217), soft bottom edge.
+/// UIKit materials always lighten dark backgrounds into a grey “aura”; we skip them
+/// so the band never shifts color. Content under the header dissolves into the canvas.
 struct HeaderBlurBand: View {
     var bandPct: Double
     var headerOnly: Bool
@@ -409,17 +398,14 @@ struct HeaderBlurBand: View {
         GeometryReader { geo in
             let h = max(bandH, 1)
             let soft = 20 + CGFloat(max(frostBlur, 0)) * 0.6
-            ZStack(alignment: .top) {
-                HeaderGaussianBlur()
-                // Pull system material’s grey tint back to chat canvas (#0E1217)
-                // so the blur band doesn’t look washed / different from the chat bg.
-                LinearGradient(stops: [
-                    .init(color: Theme.black.opacity(0.72), location: 0),
-                    .init(color: Theme.black.opacity(0.55), location: 0.5),
-                    .init(color: Theme.black.opacity(0.28), location: 0.82),
-                    .init(color: Theme.black.opacity(0.0), location: 1)
-                ], startPoint: .top, endPoint: .bottom)
-            }
+            // Pure Theme.black scrim (identical to chat BG) — no material tint / grey wash.
+            LinearGradient(stops: [
+                .init(color: Theme.black.opacity(1.0), location: 0),
+                .init(color: Theme.black.opacity(0.97), location: 0.42),
+                .init(color: Theme.black.opacity(0.72), location: 0.68),
+                .init(color: Theme.black.opacity(0.28), location: 0.88),
+                .init(color: Theme.black.opacity(0.0), location: 1)
+            ], startPoint: .top, endPoint: .bottom)
             .frame(width: geo.size.width, height: h + soft)
             .mask(
                 LinearGradient(stops: [
@@ -517,7 +503,7 @@ struct ContentView: View {
                 InputBarView(tap: { showSettings = true }, placeholder: $profile.barPlaceholder)
             }
 
-            // Real gaussian blur of chat scrolling underneath (to the notch)
+            // Soft canvas-colored frost under header (no material grey aura)
             HeaderBlurBand(bandPct: bandPct, headerOnly: headerBlurOnly, safeTop: safeTop, frostBlur: frostBlur)
 
             // Floating toolbar — transparent chrome
@@ -1662,7 +1648,7 @@ struct ContentView: View {
                         Slider(value: $frostBlur, in: 0...40, step: 1)
                     }
                     Toggle("Blur zone = header only", isOn: $headerBlurOnly)
-                    Text("Gaussian blur of chat behind the header (to the notch). Not a haze overlay.")
+                    Text("Soft fade behind the header (same color as chat BG). No grey material aura.")
                         .font(.caption)
                         .foregroundColor(Theme.secondaryText)
                     VStack(alignment: .leading, spacing: 4) {
