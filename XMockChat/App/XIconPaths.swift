@@ -34,7 +34,7 @@ enum XIconPaths {
 
 // MARK: - Preset library (shown in icon picker)
 
-enum IconPreset: Identifiable {
+struct IconPreset: Identifiable {
     let id: String
     let name: String
     let path: String
