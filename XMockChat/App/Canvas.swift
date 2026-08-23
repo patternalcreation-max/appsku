@@ -147,11 +147,23 @@ struct ChatScreen: View {
 
     private var inputBar: some View {
         HStack(spacing: 12) {
-            Image(systemName: "plus")
-                .font(.system(size: 20, weight: .medium))
-                .foregroundColor(Theme.secondaryText)
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(Theme.bubbleGray))
+            if let chatMenu {
+                Menu {
+                    chatMenu()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(Theme.secondaryText)
+                        .frame(width: 40, height: 40)
+                        .background(Circle().fill(Theme.bubbleGray))
+                }
+            } else {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(Theme.secondaryText)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(Theme.bubbleGray))
+            }
             HStack(spacing: 12) {
                 Text(session.inputPlaceholder)
                     .font(.system(size: 15))

@@ -133,6 +133,7 @@ struct ChatDetailView: View {
     @State private var showExport = false
     @State private var showSaved = false
     @State private var highRes = true
+    @State private var showIconSettings = false
 
     enum EditTarget: Hashable {
         case name
@@ -177,6 +178,7 @@ struct ChatDetailView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showEditor) { editorSheet }
         .sheet(isPresented: $showExport) { exportSheet }
+        .sheet(isPresented: $showIconSettings) { IconSettingsView() }
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -240,6 +242,11 @@ struct ChatDetailView: View {
                 showExport = true
             } label: {
                 Label("Export screenshot", systemImage: "square.and.arrow.down")
+            }
+            Button {
+                showIconSettings = true
+            } label: {
+                Label("Icon settings (SVG)\u{2026}", systemImage: "shield.checkered")
             }
         }
     }
