@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import PhotosUI
-import UniformTypeIdentifiers
 
 // MARK: - Shapes (IGBubbleShape lives in BubbleKit.swift)
 
@@ -408,32 +407,6 @@ struct FrostBand: View {
 }
 
 
-/// Drag-reorder bubbles inside the mock chat scroll.
-struct ChatReorderDrop: DropDelegate {
-    let itemId: UUID
-    @Binding var elements: [ChatElement]
-    @Binding var draggingId: UUID?
-
-    func dropEntered(info: DropInfo) {
-        guard let draggingId,
-              draggingId != itemId,
-              let from = elements.firstIndex(where: { $0.id == draggingId }),
-              let to = elements.firstIndex(where: { $0.id == itemId }),
-              from != to else { return }
-        withAnimation(.easeInOut(duration: 0.15)) {
-            elements.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
-        }
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        draggingId = nil
-        return true
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-}
 
 // MARK: - Main view
 
@@ -1062,11 +1035,6 @@ struct ContentView: View {
         return depth * CGFloat(max(frostBlur, 0)) * 0.48
     }
 
-    private func passHeaderOpacity(for id: UUID, viewportH: CGFloat, dragging: Bool) -> Double {
-        if dragging { return 0.55 }
-        let depth = Double(passHeaderDepth(for: id, viewportH: viewportH))
-        return 1.0 - 0.22 * depth
-    }
 
     // MARK: Chat area
 
@@ -1077,7 +1045,6 @@ struct ContentView: View {
                     VStack(spacing: 0) {
                         liveProfileContext
                             .blur(radius: passHeaderBlur(for: profilePassId, viewportH: outer.size.height))
-                            .opacity(passHeaderOpacity(for: profilePassId, viewportH: outer.size.height, dragging: false))
                             .background(
                                 GeometryReader { row in
                                     let f = row.frame(in: .named("viewport"))
@@ -1091,18 +1058,9 @@ struct ContentView: View {
                         ForEach(Array(elements.enumerated()), id: \.element.id) { idx, element in
                             elementView(element, at: idx)
                                 .padding(.top, idx == 0 ? 8 : BubbleGrouping.spacing(before: idx, in: elements))
+                                // Blur only under header — no opacity fade (opacity looked "greyed",
+                                // and onDrag long-press was also dimming bubbles to 0.55).
                                 .blur(radius: passHeaderBlur(for: element.id, viewportH: outer.size.height))
-                                .opacity(passHeaderOpacity(for: element.id, viewportH: outer.size.height,
-                                                           dragging: draggingId == element.id))
-                                .onDrag {
-                                    draggingId = element.id
-                                    return NSItemProvider(object: element.id.uuidString as NSString)
-                                }
-                                .onDrop(of: [.text], delegate: ChatReorderDrop(
-                                    itemId: element.id,
-                                    elements: $elements,
-                                    draggingId: $draggingId
-                                ))
                                 .background(
                                     // per-row viewport tracking for the fixed-gradient window
                                     GeometryReader { row in
