@@ -67,6 +67,7 @@ struct AvatarView: View {
 struct ChatHeaderView: View {
     let username: String
     let isVerified: Bool
+    var subtitle: String = "Business chat"
     let avatarContent: AvatarContent
     var avatarTap: (() -> Void)?
     var nameTap: (() -> Void)?
@@ -88,7 +89,7 @@ struct ChatHeaderView: View {
                         VerifiedBadge(size: 13)
                     }
                 }
-                Text("Business chat")
+                Text(subtitle.isEmpty ? " " : subtitle)
                     .font(.system(size: 12))
                     .foregroundColor(Theme.secondaryText)
             }
@@ -263,9 +264,10 @@ struct ReceivedRowView: View {
 
 struct InputBarView: View {
     var tap: (() -> Void)?
+    @Binding var placeholder: String
 
     var body: some View {
-        ChatBarView()
+        ChatBarView(placeholder: $placeholder)
             .padding(.horizontal, 16)
             .padding(.top, 0)
             .padding(.bottom, 6)
@@ -300,6 +302,7 @@ struct PhoneCanvas: View {
             ChatHeaderView(
                 username: profile.username,
                 isVerified: profile.isVerified,
+                subtitle: profile.subtitle,
                 avatarContent: avatarContent
             )
             Rectangle().fill(Theme.headerBorder).frame(height: 1)
@@ -313,7 +316,7 @@ struct PhoneCanvas: View {
             .padding(EdgeInsets(top: 16, leading: 16, bottom: 4, trailing: 16))
 
             Spacer(minLength: 0)
-            InputBarView()
+            InputBarView(placeholder: .constant("Message…"))
         }
         .frame(width: 400, alignment: .top)
         .frame(minHeight: 800, alignment: .top)
@@ -359,6 +362,8 @@ struct ContentView: View {
         case followers
         case posts
         case statusLine
+        case placeholder
+        case subtitle
         case element(UUID)
     }
 
@@ -374,16 +379,19 @@ struct ContentView: View {
             Theme.black.ignoresSafeArea()
             VStack(spacing: 0) {
                 chatArea
-                InputBarView(tap: { showEditor = true })
+                InputBarView(tap: { beginEdit(.placeholder, text: profile.barPlaceholder) }, placeholder: $profile.barPlaceholder)
             }
             // Progressive frost across the TOP 15% of the screen: content crossing it
             // gaussian-blurs and fades toward black as it approaches the very top,
             // behind the floating glass toolbar.
             GeometryReader { geo in
                 let bandH = geo.size.height * 0.15
-                Rectangle()
-                    .fill(.thickMaterial)
-                    .frame(height: bandH)
+                ZStack {
+                    Rectangle().fill(.thickMaterial)
+                    Rectangle().fill(.ultraThinMaterial)
+                    Rectangle().fill(.regularMaterial)
+                }
+                .frame(height: bandH)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .mask(alignment: .top) {
                         // invisible container: blur+fade starts when content enters the band,
@@ -485,6 +493,11 @@ struct ContentView: View {
                         )
                     }
                 }
+                Text(profile.subtitle.isEmpty ? " " : profile.subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.secondaryText)
+                    .contentShape(Rectangle())
+                    .onTapGesture { beginEdit(.subtitle, text: profile.subtitle) }
             }
 
             Spacer()
@@ -743,6 +756,8 @@ struct ContentView: View {
         case .followers: return "Followers"
         case .posts: return "Posts"
         case .statusLine: return "Status line"
+        case .placeholder: return "Message placeholder"
+        case .subtitle: return "Subtitle (Business chat)"
         case .element(let id):
             if let el = elements.first(where: { $0.id == id }) {
                 switch el.style {
@@ -772,6 +787,10 @@ struct ContentView: View {
             profile.posts = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
         case .statusLine:
             profile.statusLine = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .placeholder:
+            profile.barPlaceholder = editorText
+        case .subtitle:
+            profile.subtitle = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
         case .element(let id):
             if let idx = elements.firstIndex(where: { $0.id == id }) {
                 elements[idx].text = editorText

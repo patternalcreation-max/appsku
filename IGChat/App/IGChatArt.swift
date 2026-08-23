@@ -89,8 +89,10 @@ struct ScaledArtShape: Shape {
     }
 }
 
-/// The operator's complete chat bar art (pill + purple camera circle + icons + "Message…" text).
+/// The operator's complete chat bar art (pill + purple camera circle + icons + editable placeholder).
 struct ChatBarView: View {
+    @Binding var placeholder: String
+
     var body: some View {
         GeometryReader { geo in
             let h = geo.size.height
@@ -102,7 +104,7 @@ struct ChatBarView: View {
                     .fill(Theme.barPurple)
                 ScaledArtShape(base: IGChatArt.barWhiteIcons, artSize: IGChatArt.barSize)
                     .fill(Color.white, style: FillStyle(eoFill: true, antialiased: true))
-                Text("Message…")
+                Text(placeholder.isEmpty ? " " : placeholder)
                     .font(.system(size: h * 0.322, weight: .medium))
                     .foregroundColor(Theme.barMessageText)
                     .padding(.leading, w * 0.1195)

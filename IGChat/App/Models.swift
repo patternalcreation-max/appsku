@@ -19,6 +19,8 @@ struct IGProfile {
     var followers: String = "482K"
     var posts: String = "11K"
     var statusLine: String = "You don't follow each other on Instagram"
+    var subtitle: String = "Business chat"
+    var barPlaceholder: String = "Message…"
 
     var initials: String {
         let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
