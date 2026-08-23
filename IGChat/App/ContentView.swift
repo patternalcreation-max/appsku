@@ -605,8 +605,8 @@ struct ContentView: View {
                               replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
                               photo: ChatImageCodec.image(from: element.imageJPEG),
                               position: BubbleGrouping.position(in: elements, at: idx),
-                              viewportSize: viewportSize,
                               landscapeCrop: landscapeCrop,
+                              viewportSize: viewportSize,
                               gradA: gradA, gradB: gradB,
                               gradTop: gradTop, gradBottom: gradBottom)
                     .contentShape(Rectangle())
