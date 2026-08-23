@@ -228,29 +228,18 @@ struct PhotoMessageView: View {
     }
 
     /// scaledToFill + pan (focus) + zoom inside the crop window.
-    @ViewBuilder
     private func framedImage(in size: CGSize) -> some View {
         let zoom = CGFloat(f.zoom)
         let frameAspect = size.width / max(size.height, 1)
-        // Cover size before zoom
-        let coverW: CGFloat
-        let coverH: CGFloat
-        if aspect > frameAspect {
-            coverH = size.height
-            coverW = coverH * aspect
-        } else {
-            coverW = size.width
-            coverH = coverW / aspect
-        }
+        let coverH: CGFloat = aspect > frameAspect ? size.height : (size.width / aspect)
+        let coverW: CGFloat = aspect > frameAspect ? (coverH * aspect) : size.width
         let drawW = coverW * zoom
         let drawH = coverH * zoom
         let excessX = max(drawW - size.width, 0)
         let excessY = max(drawH - size.height, 0)
-        // focus 0 = top/left edge, 1 = bottom/right edge
         let ox = (0.5 - CGFloat(f.focusX)) * excessX
         let oy = (0.5 - CGFloat(f.focusY)) * excessY
-
-        Image(uiImage: image)
+        return Image(uiImage: image)
             .resizable()
             .interpolation(.high)
             .frame(width: drawW, height: drawH)
