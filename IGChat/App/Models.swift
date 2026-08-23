@@ -25,6 +25,8 @@ struct ChatElement: Identifiable, Hashable, Codable {
     var replyImageJPEG: Data? = nil
     /// JPEG for a photo message (text may be empty).
     var imageJPEG: Data? = nil
+    /// Per-photo landscape crop override (0…1). nil = use Settings default.
+    var landscapeCrop: Double? = nil
     /// For `.date` rows: underlying instant used by smart IG formatting / presets.
     var stampAt: Date? = nil
 
@@ -36,15 +38,17 @@ struct ChatElement: Identifiable, Hashable, Codable {
     var hasImage: Bool { imageJPEG != nil }
 
     enum CodingKeys: String, CodingKey {
-        case id, style, text, heartHint, replyText, replyFromMe, replyKind, replyImageJPEG, imageJPEG, stampAt
+        case id, style, text, heartHint, replyText, replyFromMe, replyKind, replyImageJPEG, imageJPEG, landscapeCrop, stampAt
     }
 
     init(id: UUID = UUID(), style: Style, text: String, heartHint: Bool = false,
          replyText: String? = nil, replyFromMe: Bool = false, replyKind: ReplyKind = .chat,
-         replyImageJPEG: Data? = nil, imageJPEG: Data? = nil, stampAt: Date? = nil) {
+         replyImageJPEG: Data? = nil, imageJPEG: Data? = nil, landscapeCrop: Double? = nil,
+         stampAt: Date? = nil) {
         self.id = id; self.style = style; self.text = text; self.heartHint = heartHint
         self.replyText = replyText; self.replyFromMe = replyFromMe; self.replyKind = replyKind
         self.replyImageJPEG = replyImageJPEG; self.imageJPEG = imageJPEG
+        self.landscapeCrop = landscapeCrop
         self.stampAt = stampAt
     }
 
@@ -59,6 +63,7 @@ struct ChatElement: Identifiable, Hashable, Codable {
         replyKind = try c.decodeIfPresent(ReplyKind.self, forKey: .replyKind) ?? .chat
         replyImageJPEG = try c.decodeIfPresent(Data.self, forKey: .replyImageJPEG)
         imageJPEG = try c.decodeIfPresent(Data.self, forKey: .imageJPEG)
+        landscapeCrop = try c.decodeIfPresent(Double.self, forKey: .landscapeCrop)
         stampAt = try c.decodeIfPresent(Date.self, forKey: .stampAt)
     }
 }

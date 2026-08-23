@@ -179,24 +179,28 @@ struct PhotoMessageView: View {
     let image: UIImage
     let isSent: Bool
     var position: BubbleGroupPos = .single
-    /// 0 = full landscape visible (no crop); 1 = shortest window + fill (max crop). From Settings.
+    /// 0 = full landscape visible (no crop); 1 = shortest window + fill (max crop). IG-like.
     var landscapeCrop: Double = 0.25
 
     private var aspect: CGFloat {
         max(image.size.width, 1) / max(image.size.height, 1)
     }
 
-    private var isLandscape: Bool { aspect >= 1.15 }
+    private var isLandscape: Bool { aspect >= 1.05 }
+
+    private var cropAmount: CGFloat {
+        CGFloat(min(max(landscapeCrop, 0), 1))
+    }
 
     private var fittedSize: CGSize {
         let maxW: CGFloat = 280
         if isLandscape {
-            let crop = min(max(landscapeCrop, 0), 1)
-            // Full height if uncropped; at crop=1 use a short window (~38% of full)
+            // 0% = full aspect height; 100% ≈ IG DM landscape window (~4:3 / short)
             let fullH = maxW / aspect
-            let minH = max(fullH * 0.38, 96)
-            let targetH = fullH + (minH - fullH) * crop
-            return CGSize(width: maxW, height: targetH)
+            let igH = maxW * 0.75          // ~4:3 window (common IG landscape DM look)
+            let minH = max(min(igH, fullH * 0.42), 88)
+            let targetH = fullH + (minH - fullH) * cropAmount
+            return CGSize(width: maxW, height: max(targetH, 1))
         }
         let maxH: CGFloat = aspect <= 0.85 ? 320 : 240
         var w = maxW
@@ -212,7 +216,7 @@ struct PhotoMessageView: View {
         HStack(alignment: .center, spacing: 8) {
             if isSent { MediaSideButtons() }
             Group {
-                if isLandscape && landscapeCrop > 0.02 {
+                if isLandscape {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
@@ -226,6 +230,7 @@ struct PhotoMessageView: View {
                 }
             }
             .clipShape(IGBubbleShape(isSent: isSent, position: position))
+            .id("photo-\(fittedSize.width)x\(fittedSize.height)-\(cropAmount)")
             if !isSent { MediaSideButtons() }
         }
     }

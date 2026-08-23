@@ -233,17 +233,26 @@ struct SentBubbleView: View {
         )
     }
 
-    /// Bubble shape masks a window into the viewport-fixed gradient (not a per-bubble gradient).
+    /// Viewport-locked Me gradient with a solid fallback so the bubble never goes “cropped” / transparent.
     private func meBubbleBackground() -> some View {
-        GeometryReader { geo in
-            let f = geo.frame(in: .named("viewport"))
-            let vw = max(viewportSize.width, 1)
-            let vh = max(viewportSize.height, 1)
-            viewportGradient
-                .frame(width: vw, height: vh)
-                .offset(x: -f.minX, y: -f.minY)
-        }
-        .mask(IGBubbleShape(isSent: true, position: position))
+        // Base always fills the bubble (fixes holes when viewport offset misses).
+        Rectangle()
+            .fill(
+                LinearGradient(colors: [gradA, gradB], startPoint: .top, endPoint: .bottom)
+            )
+            .overlay {
+                if viewportSize.height > 20, viewportSize.width > 20 {
+                    GeometryReader { geo in
+                        let f = geo.frame(in: .named("viewport"))
+                        let vw = max(viewportSize.width, 1)
+                        let vh = max(viewportSize.height, 1)
+                        viewportGradient
+                            .frame(width: vw, height: vh)
+                            .offset(x: -f.minX, y: -f.minY)
+                    }
+                    .clipped()
+                }
+            }
     }
 
     private var hasReply: Bool {
@@ -276,6 +285,7 @@ struct SentBubbleView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(meBubbleBackground())
+                        .clipShape(IGBubbleShape(isSent: true, position: position))
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -432,6 +442,8 @@ struct ContentView: View {
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var messagePhotoPickerItem: PhotosPickerItem?
     @State private var messagePhotoTarget: UUID? = nil   // attach photo to this bubble
+    @State private var cropPhotoTarget: UUID? = nil      // edit landscape crop for this photo
+    @State private var cropDraft: Double = 0.25
     @State private var replyPhotoPickerItem: PhotosPickerItem?
     @State private var replyPhotoTarget: UUID? = nil     // story/media quote image
 
@@ -541,6 +553,54 @@ struct ContentView: View {
             .preferredColorScheme(.dark)
         }
         .sheet(isPresented: Binding(
+            get: { cropPhotoTarget != nil },
+            set: { if !$0 { cropPhotoTarget = nil } }
+        )) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Match IG landscape window")
+                        .font(.headline)
+                    Text("0% = full photo · 100% = short IG-style crop")
+                        .font(.caption)
+                        .foregroundColor(Theme.secondaryText)
+                    if let id = cropPhotoTarget,
+                       let el = elements.first(where: { $0.id == id }),
+                       let img = ChatImageCodec.image(from: el.imageJPEG) {
+                        PhotoMessageView(
+                            image: img,
+                            isSent: el.style == .sent,
+                            position: .single,
+                            landscapeCrop: cropDraft
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    }
+                    Text("Crop: \(Int(cropDraft * 100))%")
+                    Slider(value: $cropDraft, in: 0...1, step: 0.05)
+                    Spacer()
+                }
+                .padding()
+                .navigationTitle("Crop photo")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { cropPhotoTarget = nil }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            if let id = cropPhotoTarget,
+                               let idx = elements.firstIndex(where: { $0.id == id }) {
+                                elements[idx].landscapeCrop = cropDraft
+                            }
+                            cropPhotoTarget = nil
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .preferredColorScheme(.dark)
+        }
+        .sheet(isPresented: Binding(
             get: { replyPhotoTarget != nil },
             set: { if !$0 { replyPhotoTarget = nil } }
         )) {
@@ -617,7 +677,7 @@ struct ContentView: View {
                               replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
                               photo: ChatImageCodec.image(from: element.imageJPEG),
                               position: BubbleGrouping.position(in: elements, at: idx),
-                              landscapeCrop: landscapeCrop,
+                              landscapeCrop: element.landscapeCrop ?? landscapeCrop,
                               viewportSize: viewportSize,
                               gradA: gradA, gradB: gradB,
                               gradTop: gradTop, gradBottom: gradBottom)
@@ -638,7 +698,7 @@ struct ContentView: View {
                     replyImage: ChatImageCodec.image(from: element.replyImageJPEG),
                     photo: ChatImageCodec.image(from: element.imageJPEG),
                     position: BubbleGrouping.position(in: elements, at: idx),
-                    landscapeCrop: landscapeCrop
+                    landscapeCrop: element.landscapeCrop ?? landscapeCrop
                 )
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
@@ -755,9 +815,16 @@ struct ContentView: View {
             Label(element.hasImage ? "Replace photo…" : "Attach photo…", systemImage: "photo")
         }
         if element.hasImage {
+            Button {
+                cropDraft = element.landscapeCrop ?? landscapeCrop
+                cropPhotoTarget = element.id
+            } label: {
+                Label("Crop landscape…", systemImage: "crop")
+            }
             Button(role: .destructive) {
                 if let idx = elements.firstIndex(where: { $0.id == element.id }) {
                     elements[idx].imageJPEG = nil
+                    elements[idx].landscapeCrop = nil
                 }
             } label: {
                 Label("Remove photo", systemImage: "photo.badge.minus")
@@ -1656,8 +1723,8 @@ struct ContentView: View {
                         Slider(value: $subtitleFontSize, in: 8...14, step: 0.5)
                     }
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Landscape crop: \(Int(landscapeCrop * 100))%")
-                        Text("0% = full photo · 100% = max crop (shorter window)")
+                        Text("Default landscape crop: \(Int(landscapeCrop * 100))%")
+                        Text("0% = full · 100% = IG short window. Hold a photo → Crop landscape for one bubble.")
                             .font(.caption)
                             .foregroundColor(Theme.secondaryText)
                         Slider(value: $landscapeCrop, in: 0...1, step: 0.05)
