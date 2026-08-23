@@ -193,6 +193,22 @@ struct MessageTextView: View {
 
 struct SentBubbleView: View {
     let text: String
+    /// 0 = near the very top of the screen, 1 = near the bottom. nil = static (export uses default gradient).
+    var screenProgress: Double?
+
+    /// Blue (top, <70%) -> purple (bottom, >80%), smooth transition between.
+    private var fill: LinearGradient {
+        let t = min(max(screenProgress ?? 0.85, 0), 1)
+        // ramp 0.70...0.80
+        let k = min(max((t - 0.70) / 0.10, 0), 1)
+        // blue #5158DF -> purple #6B3FC7
+        func lerp(_ a: Double, _ b: Double) -> Double { a + (b - a) * k }
+        let end = Color(red: lerp(0x51, 0x6B) / 255.0,
+                        green: lerp(0x58, 0x3F) / 255.0,
+                        blue: lerp(0xDF, 0xC7) / 255.0)
+        return LinearGradient(colors: [Theme.gradientStart, end],
+                              startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
 
     var body: some View {
         HStack {
@@ -200,7 +216,7 @@ struct SentBubbleView: View {
             MessageTextView(text: text)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .background(IGBubbleShape(isSent: true).fill(Theme.bubbleGradient))
+                .background(IGBubbleShape(isSent: true).fill(fill))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -249,6 +265,34 @@ struct InputBarView: View {
     }
 }
 
+// MARK: - Position gradient + top fade mask helpers
+
+struct BubbleProgressKey: PreferenceKey {
+    static var defaultValue: [ChatElement.ID: Double] = [:]
+    static func reduce(value: inout [ChatElement.ID: Double], nextValue: () -> [ChatElement.ID: Double]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
+    }
+}
+
+/// Blur+fade modifier applied to content scrolling under the floating header.
+struct UnderHeaderFade: ViewModifier {
+    var height: CGFloat
+    func body(content: Content) -> some View {
+        content
+            .mask(
+                VStack(spacing: 0) {
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .black, location: 1),
+                    ], startPoint: .top, endPoint: .bottom)
+                        .frame(height: height)
+                    Rectangle().fill(Color.black)
+                }
+                .frame(maxHeight: .infinity)
+            )
+    }
+}
+
 // MARK: - Static export canvas (400 × 800)
 
 struct PhoneCanvas: View {
@@ -287,7 +331,7 @@ struct PhoneCanvas: View {
         case .date:
             DateSeparatorView(text: element.text)
         case .sent:
-            SentBubbleView(text: element.text)
+            SentBubbleView(text: element.text, screenProgress: rowProgress[element.id])
         case .received:
             ReceivedRowView(
                 text: element.text,
@@ -306,6 +350,7 @@ struct ContentView: View {
     @State private var avatarImage: UIImage?
     @State private var photoPickerItem: PhotosPickerItem?
 
+    @State private var rowProgress: [ChatElement.ID: Double] = [:]
     @State private var showEditor = false
     @State private var editorText: String = ""
     @State private var editorTarget: EditTarget?
@@ -333,10 +378,17 @@ struct ContentView: View {
         ZStack {
             Theme.black.ignoresSafeArea()
             VStack(spacing: 0) {
-                    liveHeader
-                Rectangle().fill(Theme.headerBorder).frame(height: 1)
                 chatArea
                 InputBarView(tap: { showEditor = true })
+            }
+            // Floating toolbar — no header container; messages scrolling under it
+            // get gaussian-blurred + faded to black (see UnderHeaderFade on chatArea).
+            VStack {
+                liveHeader
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
+                Spacer(minLength: 0)
             }
         }
         .preferredColorScheme(.dark)
@@ -455,30 +507,34 @@ struct ContentView: View {
     // MARK: Chat area
 
     private var chatArea: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 20) {
-                    liveProfileContext
-                    ForEach(elements) { element in
-                        liveElementView(element)
-                            .id(element.id)
-                            .contentShape(Rectangle())
-                            .onTapGesture { beginEdit(.element(element.id), text: element.text) }
-                            .contextMenu { elementMenu(for: element) }
+        GeometryReader { outer in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 20) {
+                        liveProfileContext
+                        ForEach(elements) { element in
+                            elementView(element)
+                                .background(
+                                    // per-row position tracking for the gradient strategy
+                                    GeometryReader { row in
+                                        Color.clear.preference(
+                                            key: BubbleProgressKey.self,
+                                            value: [element.id: Double(row.frame(in: .global).minY / max(outer.size.height, 1))]
+                                        )
+                                    }
+                                )
+                        }
                     }
+                    .padding(EdgeInsets(top: 76, leading: 16, bottom: 4, trailing: 16))
                 }
-                .padding(EdgeInsets(top: 16, leading: 16, bottom: 4, trailing: 16))
-            }
-            .onChange(of: elements.count) { _ in
-                if let last = elements.last {
-                    withAnimation {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                .onPreferenceChange(BubbleProgressKey.self) { dict in
+                    rowProgress = dict
+                }
+                .modifier(UnderHeaderFade(height: 86))
+                .onChange(of: elements.count) { _ in
+                    if let last = elements.last {
+                        withAnimation { proxy.scrollTo(last, anchor: .bottom) }
                     }
-                }
-            }
-            .onAppear {
-                if let last = elements.last {
-                    proxy.scrollTo(last.id, anchor: .bottom)
                 }
             }
         }
