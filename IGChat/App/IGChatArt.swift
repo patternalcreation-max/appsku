@@ -135,7 +135,16 @@ struct GlassCircle<Content: View>: View {
     var body: some View {
         content()
             .frame(width: size, height: size)
-            .background(Circle().fill(Color.white.opacity(0.025)))
+            .background(
+                Circle().fill(
+                    RadialGradient(
+                        colors: [.clear, Color.white.opacity(0.055)],
+                        center: .center,
+                        startRadius: size * 0.22,
+                        endRadius: size * 0.52
+                    )
+                )
+            )
             .background(.ultraThinMaterial, in: Circle())
             .overlay(
                 Circle().strokeBorder(

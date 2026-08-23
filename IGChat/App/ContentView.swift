@@ -277,25 +277,6 @@ struct BubbleProgressKey: PreferenceKey {
     }
 }
 
-/// Blur+fade modifier applied to content scrolling under the floating header.
-struct UnderHeaderFade: ViewModifier {
-    var height: CGFloat
-    func body(content: Content) -> some View {
-        content
-            .mask(
-                VStack(spacing: 0) {
-                    LinearGradient(stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black, location: 1),
-                    ], startPoint: .top, endPoint: .bottom)
-                        .frame(height: height)
-                    Rectangle().fill(Color.black)
-                }
-                .frame(maxHeight: .infinity)
-            )
-    }
-}
-
 // MARK: - Static export canvas (400 × 800)
 
 struct PhoneCanvas: View {
@@ -384,8 +365,27 @@ struct ContentView: View {
                 chatArea
                 InputBarView(tap: { showEditor = true })
             }
-            // Floating toolbar — no header container; messages scrolling under it
-            // get gaussian-blurred + faded to black (see UnderHeaderFade on chatArea).
+            // Progressive frost: content scrolling under the toolbar slowly gaussian-blurs
+            // (material masked by a gradient) and sinks toward black — glass rims read as
+            // real glass refracting the blurred content behind them.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .frame(height: 92)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .mask(alignment: .top) {
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 92)
+                }
+                .overlay(alignment: .top) {
+                    LinearGradient(colors: [Theme.black.opacity(0.7), .clear],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 92)
+                        .allowsHitTesting(false)
+                }
+                .allowsHitTesting(false)
+                .ignoresSafeArea(edges: .top)
+
+            // Floating toolbar — no header container
             VStack {
                 liveHeader
                     .padding(.horizontal, 12)
@@ -549,7 +549,6 @@ struct ContentView: View {
                 .onPreferenceChange(BubbleProgressKey.self) { dict in
                     rowProgress = dict
                 }
-                .modifier(UnderHeaderFade(height: 86))
                 .onChange(of: elements.count) { _ in
                     if let last = elements.last {
                         withAnimation { proxy.scrollTo(last, anchor: .bottom) }
