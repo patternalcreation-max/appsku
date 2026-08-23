@@ -18,3 +18,8 @@ enum Theme {
         endPoint: .bottomTrailing
     )
 }
+
+    // Operator chat bar art (Untitled.svg)
+    static let barPill = Color(red: 29/255.0, green: 30/255.0, blue: 32/255.0)
+    static let barPurple = Color(red: 84/255.0, green: 83/255.0, blue: 254/255.0)
+    static let barMessageText = Color(red: 164/255.0, green: 168/255.0, blue: 179/255.0)

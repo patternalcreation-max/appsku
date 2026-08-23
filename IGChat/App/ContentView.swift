@@ -73,9 +73,7 @@ struct ChatHeaderView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 26, weight: .light))
-                .foregroundColor(.white)
+            BackButtonArt(height: 22)
 
             AvatarView(content: avatarContent, size: 32)
                 .onTapGesture { avatarTap?() }
@@ -87,7 +85,7 @@ struct ChatHeaderView: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                     if isVerified {
-                        VerifiedBadge()
+                        VerifiedBadge(size: 13)
                     }
                 }
                 Text("Business chat")
@@ -99,11 +97,10 @@ struct ChatHeaderView: View {
 
             Spacer()
 
-            PhoneIcon(size: 22)
-            VideoCallIcon(size: 22)
+            HeaderGlassStatic()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
     }
 }
 
@@ -236,27 +233,9 @@ struct ReceivedRowView: View {
 
 struct InputBarView: View {
     var body: some View {
-        HStack(spacing: 12) {
-            CameraRoundIcon(size: 40)
-
-            HStack {
-                Text("Message...")
-                    .font(.system(size: 15))
-                    .foregroundColor(Theme.secondaryText)
-                Spacer()
-                HStack(spacing: 12) {
-                    VoiceClipIcon(size: 22)
-                    AddPhotoIcon(size: 22)
-                    GifStickerIcon(size: 22)
-                }
-                .foregroundColor(.white)
-            }
+        ChatBarView()
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Capsule().fill(Theme.bubbleGray))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+            .padding(.vertical, 12)
     }
 }
 
@@ -364,9 +343,7 @@ struct ContentView: View {
 
     private var liveHeader: some View {
         HStack(spacing: 12) {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 26, weight: .light))
-                .foregroundColor(.white)
+            BackButtonArt(height: 22)
 
             PhotosPicker(selection: $photoPickerItem, matching: .images) {
                 AvatarView(content: avatarContent, size: 32)
@@ -403,52 +380,54 @@ struct ContentView: View {
 
             Spacer()
 
-            Menu {
-                Button {
-                    profile.isVerified.toggle()
-                } label: {
-                    Label(
-                        profile.isVerified ? "Hide verified badge" : "Show verified badge",
-                        systemImage: profile.isVerified ? "checkmark.seal.fill" : "checkmark.seal"
-                    )
-                }
-                Divider()
+            GlassCapsule {
                 Button {
                     elements.append(ChatElement(style: .sent, text: "New message"))
                 } label: {
-                    Label("Purple bubble (Me)", systemImage: "arrow.up.circle")
+                    LiveduoArt(height: 24)
+                }
+                .buttonStyle(.plain)
+                Menu {
+                    Button {
+                        profile.isVerified.toggle()
+                    } label: {
+                        Label(
+                            profile.isVerified ? "Hide verified badge" : "Show verified badge",
+                            systemImage: profile.isVerified ? "checkmark.seal.fill" : "checkmark.seal"
+                        )
+                    }
+                    Divider()
+                    Button {
+                        elements.append(ChatElement(style: .sent, text: "New message"))
+                    } label: {
+                        Label("Purple bubble (Me)", systemImage: "arrow.up.circle")
+                    }
+                    Button {
+                        elements.append(ChatElement(style: .received, text: "New message"))
+                    } label: {
+                        Label("Gray bubble (Target)", systemImage: "arrow.down.circle")
+                    }
+                    Button {
+                        elements.append(ChatElement(style: .date, text: "JUL 16 AT 1:11 PM"))
+                    } label: {
+                        Label("Date separator", systemImage: "clock")
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        elements.removeAll()
+                    } label: {
+                        Label("Clear all messages", systemImage: "trash")
+                    }
+                } label: {
+                    PhonecallArt(height: 22)
                 }
                 Button {
-                    elements.append(ChatElement(style: .received, text: "New message"))
+                    showExport = true
                 } label: {
-                    Label("Gray bubble (Target)", systemImage: "arrow.down.circle")
+                    VcArt(height: 22)
                 }
-                Button {
-                    elements.append(ChatElement(style: .date, text: "JUL 16 AT 1:11 PM"))
-                } label: {
-                    Label("Date separator", systemImage: "clock")
-                }
-                Divider()
-                Button(role: .destructive) {
-                    elements.removeAll()
-                } label: {
-                    Label("Clear all messages", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(Theme.igBlue)
+                .buttonStyle(.plain)
             }
-
-            Button {
-                showExport = true
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundColor(Theme.igBlue)
-            }
-            .buttonStyle(.plain)
-        }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .onChange(of: photoPickerItem) { newItem in
