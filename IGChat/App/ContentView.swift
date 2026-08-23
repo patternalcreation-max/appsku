@@ -345,6 +345,8 @@ struct PhoneCanvas: View {
     var seenText: String = "Seen"
     var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
     var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
+    var gradTop: Double = 15
+    var gradBottom: Double = 30
 
     var body: some View {
         VStack(spacing: 0) {
@@ -544,13 +546,13 @@ struct ContentView: View {
             }
         }
         .onChange(of: profile) { IGPersistence.saveProfile($0) }
+        .onChange(of: elements) { chatStore.snapshotCurrent($0) }
         .onChange(of: gradA) { saveLook() }
         .onChange(of: gradB) { saveLook() }
         .onChange(of: bandPct) { saveLook() }
         .onChange(of: frostBlur) { saveLook() }
         .onChange(of: gradTop) { saveLook() }
         .onChange(of: gradBottom) { saveLook() }
-        .onChange(of: elements) { chatStore.snapshotCurrent($0) }
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
         } message: {

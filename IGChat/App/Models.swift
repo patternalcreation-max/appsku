@@ -1,5 +1,5 @@
 import Foundation
-import UIKit
+import SwiftUI
 
 struct ChatElement: Identifiable, Hashable, Codable {
     enum Style: Equatable, Codable {
