@@ -155,6 +155,9 @@ Button(action: onBack) {
                     .lineLimit(1)
                 if isVerified {
                     VerifiedBadge(size: 14)
+                        .alignmentGuide(.firstTextBaseline) { d in
+                            d[.bottom] - 2
+                        }
                 }
             }
             .contentShape(Rectangle())
@@ -515,6 +518,9 @@ struct PhoneCanvas: View {
                     .foregroundColor(.white)
                 if isVerified {
                     VerifiedBadge(size: 14)
+                        .alignmentGuide(.firstTextBaseline) { d in
+                            d[.bottom] - 2
+                        }
                 }
             }
             Spacer()

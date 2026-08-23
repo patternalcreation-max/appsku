@@ -95,6 +95,9 @@ struct ChatRow: View {
                         .foregroundColor(.white)
                     if session.isVerified {
                         VerifiedBadge(size: 13)
+                            .alignmentGuide(.firstTextBaseline) { d in
+                                d[.bottom] - 2
+                            }
                     }
                 }
                 Text(session.title)
