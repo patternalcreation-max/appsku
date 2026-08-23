@@ -123,6 +123,7 @@ struct ChatListView: View {
 
 struct ChatDetailView: View {
     @EnvironmentObject var store: ChatStore
+    @Environment(\.dismiss) private var dismiss
     let sessionID: UUID
 
     @State private var showEditor = false
@@ -132,9 +133,6 @@ struct ChatDetailView: View {
     @State private var showExport = false
     @State private var showSaved = false
     @State private var highRes = true
-    @State private var showSettings = false
-
-    @State private var photoPickerItem: PhotosPickerItem?
 
     enum EditTarget: Hashable {
         case name
@@ -154,78 +152,131 @@ struct ChatDetailView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let scale = min(geo.size.width / 400, geo.size.height / 800)
-            PhoneCanvas(session: binding,
-                        icons: store.icons,
-                        onTapName: { beginEdit(.name, text: binding.wrappedValue.displayName) },
-                        onTapPlaceholder: { beginEdit(.placeholder, text: binding.wrappedValue.inputPlaceholder) },
-                        onTapElement: { id in
-                            if let el = binding.wrappedValue.elements.first(where: { $0.id == id }) {
-                                beginEdit(.element(id), text: el.text)
-                            }
-                        },
-                        onLongPressElement: { id in
-                            editorTarget = .element(id)
-                            if let el = binding.wrappedValue.elements.first(where: { $0.id == id }) {
-                                editorText = el.text
-                            }
-                        })
-                .scaleEffect(scale)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipped()
-                .contextMenu {
-                    Button {
-                        showExport = true
-                    } label: {
-                        Label("Export screenshot", systemImage: "square.and.arrow.down")
-                    }
-                    Button {
-                        binding.wrappedValue.elements.append(ChatElement(style: .sent, text: "New message"))
-                    } label: {
-                        Label("Add message (me)", systemImage: "arrow.up.circle")
-                    }
-                    Button {
-                        binding.wrappedValue.elements.append(ChatElement(style: .received, text: "New message"))
-                    } label: {
-                        Label("Add message (user)", systemImage: "arrow.down.circle")
-                    }
-                    Button {
-                        binding.wrappedValue.elements.append(ChatElement(style: .timestamp, text: "Today"))
-                    } label: {
-                        Label("Add timestamp", systemImage: "clock")
-                    }
-                    Button {
-                        binding.wrappedValue.elements.append(ChatElement(style: .notice, text: "🔒 Notice text"))
-                    } label: {
-                        Label("Add notice", systemImage: "lock.shield")
-                    }
-                }
+        ZStack {
+            Theme.black.ignoresSafeArea()
+            ChatScreen(session: binding,
+                       icons: store.icons,
+                       onBack: { dismiss() },
+                       onTapName: { beginEdit(.name, text: binding.wrappedValue.displayName) },
+                       onTapPlaceholder: { beginEdit(.placeholder, text: binding.wrappedValue.inputPlaceholder) },
+                       onTapElement: { id in
+                           if let el = binding.wrappedValue.elements.first(where: { $0.id == id }) {
+                               beginEdit(.element(id), text: el.text)
+                           }
+                       },
+                       elementMenu: { element in
+                           AnyView(elementContextMenu(element))
+                       },
+                       chatMenu: {
+                           AnyView(chatContextMenu)
+                       },
+                       onAvatarChange: { data in
+                           binding.wrappedValue.avatarPNG = data
+                       })
         }
-        .background(Theme.black.ignoresSafeArea())
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                }
-                .foregroundColor(Theme.blue)
-            }
-        }
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showEditor) { editorSheet }
         .sheet(isPresented: $showExport) { exportSheet }
-        .sheet(isPresented: $showSettings) {
-            SessionSettingsView(session: binding)
-                .presentationDetents([.medium, .large])
-        }
         .alert("Saved to Photos", isPresented: $showSaved) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Screenshot exported to your photo library.")
         }
+    }
+
+    // MARK: Context menus
+
+    private var chatContextMenu: some View {
+        Group {
+            Button {
+                binding.wrappedValue.elements.append(ChatElement(style: .sent, text: "New message"))
+            } label: {
+                Label("Add chat me (blue)", systemImage: "arrow.up.circle")
+            }
+            Button {
+                binding.wrappedValue.elements.append(ChatElement(style: .received, text: "New message"))
+            } label: {
+                Label("Add chat user (gray)", systemImage: "arrow.down.circle")
+            }
+            Button {
+                binding.wrappedValue.elements.append(ChatElement(style: .timestamp, text: "Today"))
+            } label: {
+                Label("Add timestamp", systemImage: "clock")
+            }
+            Button {
+                binding.wrappedValue.elements.append(ChatElement(style: .notice, text: "\u{1F512} Notice text"))
+            } label: {
+                Label("Add notice", systemImage: "lock.shield")
+            }
+            Divider()
+            Button {
+                binding.wrappedValue.isVerified.toggle()
+            } label: {
+                Label(binding.wrappedValue.isVerified ? "Hide verified badge" : "Show verified badge",
+                      systemImage: "checkmark.circle")
+            }
+            Button {
+                binding.wrappedValue.badgeNotifications = max(0, binding.wrappedValue.badgeNotifications - 1)
+            } label: {
+                Label("Bell badge: \(binding.wrappedValue.badgeNotifications) \u{2212}", systemImage: "bell")
+            }
+            Button {
+                binding.wrappedValue.badgeNotifications += 1
+            } label: {
+                Label("Bell badge: \(binding.wrappedValue.badgeNotifications) +", systemImage: "bell")
+            }
+            Button {
+                binding.wrappedValue.badgeMessages = max(0, binding.wrappedValue.badgeMessages - 1)
+            } label: {
+                Label("Messages badge: \(binding.wrappedValue.badgeMessages) \u{2212}", systemImage: "envelope")
+            }
+            Button {
+                binding.wrappedValue.badgeMessages += 1
+            } label: {
+                Label("Messages badge: \(binding.wrappedValue.badgeMessages) +", systemImage: "envelope")
+            }
+            Divider()
+            Button {
+                showExport = true
+            } label: {
+                Label("Export screenshot", systemImage: "square.and.arrow.down")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func elementContextMenu(_ element: ChatElement) -> some View {
+        Button(role: .destructive) {
+            binding.wrappedValue.elements.removeAll { $0.id == element.id }
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+        Divider()
+        Button {
+            insertAfter(element, style: .sent, text: "New message")
+        } label: {
+            Label("Add blue bubble below", systemImage: "arrow.up.circle")
+        }
+        Button {
+            insertAfter(element, style: .received, text: "New message")
+        } label: {
+            Label("Add gray bubble below", systemImage: "arrow.down.circle")
+        }
+        Button {
+            insertAfter(element, style: .timestamp, text: "Today")
+        } label: {
+            Label("Add timestamp below", systemImage: "clock")
+        }
+        Button {
+            insertAfter(element, style: .notice, text: "Notice text")
+        } label: {
+            Label("Add notice below", systemImage: "lock.shield")
+        }
+    }
+
+    private func insertAfter(_ element: ChatElement, style: ChatStyle, text: String) {
+        guard let idx = binding.wrappedValue.elements.firstIndex(where: { $0.id == element.id }) else { return }
+        binding.wrappedValue.elements.insert(ChatElement(style: style, text: text), at: binding.wrappedValue.elements.index(after: idx))
     }
 
     // MARK: Editor sheet
@@ -246,16 +297,6 @@ struct ChatDetailView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") { commitEdit() }
                             .fontWeight(.semibold)
-                    }
-                    if case .element(let id) = editorTarget {
-                        ToolbarItem(placement: .destructiveAction) {
-                            Button(role: .destructive) {
-                                binding.wrappedValue.elements.removeAll { $0.id == id }
-                                showEditor = false
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                        }
                     }
                 }
         }
@@ -302,15 +343,15 @@ struct ChatDetailView: View {
         showEditor = false
     }
 
-    // MARK: Export sheet
+    // MARK: Export
 
     private var exportSheet: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 Toggle(isOn: $highRes) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("High resolution (3×)")
-                        Text("1200 × 2400 px PNG")
+                        Text("High resolution (3\u{00d7})")
+                        Text("1200 \u{00d7} 2400 px PNG")
                             .font(.footnote)
                             .foregroundColor(Theme.secondaryText)
                     }
@@ -344,8 +385,10 @@ struct ChatDetailView: View {
 
     private func exportPNG() {
         showExport = false
-        let canvas = PhoneCanvas(session: .constant(binding.wrappedValue),
-                                 icons: store.icons)
+        let sessionCopy = binding.wrappedValue
+        let canvas = ChatScreen(session: .constant(sessionCopy),
+                                icons: store.icons,
+                                exportFrame: true)
         let renderer = ImageRenderer(content: canvas)
         renderer.scale = highRes ? 3.0 : 1.0
         guard let image = renderer.uiImage else { return }

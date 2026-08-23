@@ -1,15 +1,24 @@
 import SwiftUI
+import PhotosUI
 
-// MARK: - Phone canvas (fixed 400x800, used for both interactive editor and export)
+// MARK: - Chat screen (fullscreen interactive OR fixed 400x800 export canvas)
 
-struct PhoneCanvas: View {
+struct ChatScreen: View {
     @Binding var session: ChatSession
     let icons: IconOverrides
 
+    /// true = fixed 400×800 canvas for PNG export; false = fullscreen interactive
+    var exportFrame: Bool = false
+
+    var onBack: (() -> Void)? = nil
     var onTapName: (() -> Void)? = nil
     var onTapPlaceholder: (() -> Void)? = nil
     var onTapElement: ((UUID) -> Void)? = nil
-    var onLongPressElement: ((UUID) -> Void)? = nil
+    var elementMenu: ((ChatElement) -> AnyView)? = nil
+    var chatMenu: (() -> AnyView)? = nil
+    var onAvatarChange: ((Data?) -> Void)? = nil
+
+    @State private var photoPickerItem: PhotosPickerItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,27 +28,52 @@ struct PhoneCanvas: View {
             XTabBar(badgeNotifications: session.badgeNotifications,
                     badgeMessages: session.badgeMessages)
         }
-        .frame(width: 400, height: 800)
+        .modifier(ExportFrame(enabled: exportFrame))
         .background(Theme.black)
     }
 
     // MARK: Header
 
+    private var avatarView: some View {
+        Group {
+            if let png = session.avatarPNG, let img = UIImage(data: png) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                Theme.avatarGray
+            }
+        }
+        .frame(width: 32, height: 32)
+        .clipShape(Circle())
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
-            BackArrowIcon(icons: icons, size: 20)
-
-            Group {
-                if let png = session.avatarPNG, let img = UIImage(data: png) {
-                    Image(uiImage: img).resizable().scaledToFill()
-                } else {
-                    Theme.avatarGray
+            if let onBack {
+                Button(action: onBack) {
+                    BackArrowIcon(icons: icons, size: 20)
                 }
+                .buttonStyle(.plain)
+            } else {
+                BackArrowIcon(icons: icons, size: 20)
             }
-            .frame(width: 32, height: 32)
-            .clipShape(Circle())
-            .contentShape(Rectangle())
-            .onTapGesture { onTapName?() }
+
+            if let onAvatarChange {
+                PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                    avatarView
+                }
+                .buttonStyle(.plain)
+                .onChange(of: photoPickerItem) { newItem in
+                    guard let newItem else { return }
+                    Task {
+                        if let data = try? await newItem.loadTransferable(type: Data.self) {
+                            await MainActor.run { onAvatarChange(data) }
+                        }
+                        await MainActor.run { photoPickerItem = nil }
+                    }
+                }
+            } else {
+                avatarView
+            }
 
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(session.displayName.isEmpty ? " " : session.displayName)
@@ -60,7 +94,7 @@ struct PhoneCanvas: View {
                      fallbackVB: XIconPaths.audioCallViewBox,
                      size: 17,
                      color: Theme.secondaryText)
-                .padding(.trailing, 8)
+                .padding(.trailing, 10)
             SlotIcon(preset: icons.videoCall,
                      fallbackPath: XIconPaths.videoCallPath,
                      fallbackVB: XIconPaths.videoCallViewBox,
@@ -77,16 +111,20 @@ struct PhoneCanvas: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 12) {
-                    ForEach($session.elements) { $element in
+                    ForEach(session.elements) { element in
                         elementView(element)
                             .id(element.id)
                             .contentShape(Rectangle())
                             .onTapGesture { onTapElement?(element.id) }
+                            .modifier(ElementContextMenu(element: element, menu: elementMenu))
                     }
                 }
                 .padding(16)
+                if exportFrame {
+                    Spacer(minLength: 0)
+                }
             }
-            .frame(height: 800 - 57 - 64 - 49)
+            .modifier(ChatAreaContextMenu(menu: chatMenu))
             .onAppear {
                 if let last = session.elements.last {
                     proxy.scrollTo(last.id, anchor: .bottom)
@@ -133,6 +171,46 @@ struct PhoneCanvas: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Conditional context menus (no-ops in export mode)
+
+private struct ElementContextMenu: ViewModifier {
+    let element: ChatElement
+    let menu: ((ChatElement) -> AnyView)?
+
+    func body(content: Content) -> some View {
+        if let menu {
+            content.contextMenu { menu(element) }
+        } else {
+            content
+        }
+    }
+}
+
+private struct ChatAreaContextMenu: ViewModifier {
+    let menu: (() -> AnyView)?
+
+    func body(content: Content) -> some View {
+        if let menu {
+            content.contextMenu { menu() }
+        } else {
+            content
+        }
+    }
+}
+
+private struct ExportFrame: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.frame(width: 400, alignment: .top)
+                .frame(minHeight: 800, alignment: .top)
+        } else {
+            content
+        }
     }
 }
 
