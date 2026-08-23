@@ -196,18 +196,18 @@ struct SentBubbleView: View {
     /// 0 = near the very top of the screen, 1 = near the bottom. nil = static (export uses default gradient).
     var screenProgress: Double?
 
-    /// Blue (top, <70%) -> purple (bottom, >80%), smooth transition between.
+    /// Vertical gradient: purple above, blue below. As the message rises on screen
+    /// (<70% region) the blue stop eases to purple; below 80% it stays blue.
     private var fill: LinearGradient {
-        let t = min(max(screenProgress ?? 0.85, 0), 1)
-        // ramp 0.70...0.80
-        let k = min(max((t - 0.70) / 0.10, 0), 1)
-        // blue #5158DF -> purple #6B3FC7
+        let t = min(max(screenProgress ?? 1.0, 0), 1)
+        // k = 1 high on screen (purple lean), k = 0 low on screen (blue). Ramp 0.70...0.80.
+        let k = min(max((0.80 - t) / 0.10, 0), 1)
         func lerp(_ a: Double, _ b: Double) -> Double { a + (b - a) * k }
         let end = Color(red: lerp(0x51, 0x6B) / 255.0,
                         green: lerp(0x58, 0x3F) / 255.0,
                         blue: lerp(0xDF, 0xC7) / 255.0)
         return LinearGradient(colors: [Theme.gradientStart, end],
-                              startPoint: .topLeading, endPoint: .bottomTrailing)
+                              startPoint: .top, endPoint: .bottom)
     }
 
     var body: some View {
@@ -230,7 +230,10 @@ struct ReceivedRowView: View {
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             AvatarView(content: avatarContent, size: 28)
-                .padding(.bottom, 24)
+                // align avatar bottom with the BUBBLE bottom (not the hint below it)
+                .alignmentGuide(.bottom) { d in
+                    d[.bottom] + (heartHint ? 25 : 0)
+                }
             VStack(alignment: .leading, spacing: 6) {
                 MessageTextView(text: text)
                     .padding(.horizontal, 16)
