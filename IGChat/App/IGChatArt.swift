@@ -136,11 +136,16 @@ struct GlassCircle<Content: View>: View {
         content()
             .frame(width: size, height: size)
             .background(
+                // subtle glass in the center; rims glassy with a slight cool color bias
                 Circle().fill(
                     RadialGradient(
-                        colors: [.clear, Color.white.opacity(0.055)],
+                        stops: [
+                            .init(color: Color.white.opacity(0.015), location: 0),
+                            .init(color: Color.white.opacity(0.015), location: 0.45),
+                            .init(color: Color(red: 0.62, green: 0.72, blue: 1.0).opacity(0.055), location: 1)
+                        ],
                         center: .center,
-                        startRadius: size * 0.22,
+                        startRadius: 0,
                         endRadius: size * 0.52
                     )
                 )
@@ -149,7 +154,7 @@ struct GlassCircle<Content: View>: View {
             .overlay(
                 Circle().strokeBorder(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.16), Color.white.opacity(0.04)],
+                        colors: [Color(red: 0.72, green: 0.80, blue: 1.0).opacity(0.17), Color.white.opacity(0.04)],
                         startPoint: .top, endPoint: .bottom
                     ),
                     lineWidth: 0.8

@@ -386,14 +386,23 @@ struct ContentView: View {
                     .frame(height: bandH)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .mask(alignment: .top) {
-                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                            .frame(height: bandH)
+                        // invisible container: blur+fade starts when content enters the band,
+                        // fully vanished to black by 50% of the bar area height
+                        LinearGradient(stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.5),
+                            .init(color: .clear, location: 1)
+                        ], startPoint: .top, endPoint: .bottom)
+                        .frame(height: bandH)
                     }
                     .overlay(alignment: .top) {
-                        LinearGradient(colors: [Theme.black.opacity(0.7), .clear],
-                                       startPoint: .top, endPoint: .bottom)
-                            .frame(height: bandH)
-                            .allowsHitTesting(false)
+                        LinearGradient(stops: [
+                            .init(color: Theme.black.opacity(0.9), location: 0),
+                            .init(color: Theme.black.opacity(0.9), location: 0.5),
+                            .init(color: .clear, location: 1)
+                        ], startPoint: .top, endPoint: .bottom)
+                        .frame(height: bandH)
+                        .allowsHitTesting(false)
                     }
                     .allowsHitTesting(false)
             }
