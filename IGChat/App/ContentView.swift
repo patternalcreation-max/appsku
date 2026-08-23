@@ -276,9 +276,14 @@ struct InputBarView: View {
 
 // MARK: - Position gradient + top fade mask helpers
 
+struct BubbleEdges: Equatable {
+    var top: Double
+    var bottom: Double
+}
+
 struct BubbleProgressKey: PreferenceKey {
-    static var defaultValue: [ChatElement.ID: (Double, Double)] = [:]
-    static func reduce(value: inout [ChatElement.ID: (Double, Double)], nextValue: () -> [ChatElement.ID: (Double, Double)]) {
+    static var defaultValue: [ChatElement.ID: BubbleEdges] = [:]
+    static func reduce(value: inout [ChatElement.ID: BubbleEdges], nextValue: () -> [ChatElement.ID: BubbleEdges]) {
         value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }
@@ -340,7 +345,7 @@ struct ContentView: View {
     @State private var avatarImage: UIImage?
     @State private var photoPickerItem: PhotosPickerItem?
 
-    @State private var rowProgress: [ChatElement.ID: (Double, Double)] = [:]
+    @State private var rowProgress: [ChatElement.ID: BubbleEdges] = [:]
     @State private var showEditor = false
     @State private var editorText: String = ""
     @State private var editorTarget: EditTarget?
@@ -421,8 +426,8 @@ struct ContentView: View {
             DateSeparatorView(text: element.text)
         case .sent:
             SentBubbleView(text: element.text,
-                              screenTop: rowProgress[element.id]?.0,
-                              screenBottom: rowProgress[element.id]?.1)
+                              screenTop: rowProgress[element.id]?.top,
+                              screenBottom: rowProgress[element.id]?.bottom)
         case .received:
             ReceivedRowView(
                 text: element.text,
@@ -552,7 +557,7 @@ struct ContentView: View {
                                         let h = max(outer.size.height, 1)
                                         Color.clear.preference(
                                             key: BubbleProgressKey.self,
-                                            value: [element.id: (Double(f.minY / h), Double(f.maxY / h))]
+                                            value: [element.id: BubbleEdges(top: Double(f.minY / h), bottom: Double(f.maxY / h))]
                                         )
                                     }
                                 )
