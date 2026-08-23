@@ -91,8 +91,9 @@ struct ReplyChrome: View {
 
     private var replyBar: some View {
         Capsule()
-            .fill(Color(white: 0.35))
-            .frame(width: 3)
+            // Soft / dim — not bright white-grey
+            .fill(Color(white: 0.22).opacity(0.85))
+            .frame(width: 2.5)
             .frame(maxHeight: .infinity)
     }
 
