@@ -94,44 +94,118 @@ enum IGSeed {
             ChatElement(style: .received, text: "Hi", heartHint: false)
         ]
     }
-    /// Patricia / Kimchi Pump.fun script (Us = Me, Patricia = Them)
-    static func patriciaKimchiElements() -> [ChatElement] {
-        var out: [ChatElement] = [IGStamp.makeSeparator(.hours2)]
-        func me(_ s: String) { out.append(ChatElement(style: .sent, text: s)) }
-        func them(_ s: String) { out.append(ChatElement(style: .received, text: s)) }
+    /// Patricia / Kimchi Pump.fun script (Us = Me, Patricia = Them).
+    /// Timestamps: from ~5:00 PM (local) through "now", with uneven gaps so it doesn't look instant.
+    static func patriciaKimchiElements(now: Date = Date()) -> [ChatElement] {
+        var cal = Calendar.current
+        cal.timeZone = .current
 
-        me("Hey Patricia,\nI saw the reel.\nThe mama of Kimchi one.")
-        me("You played it as a joke, but the timing is actually perfect. He’s all over the internet right now and barely says anything himself.")
-        me("You already have an angle that doesn’t look forced.")
-        me("If you want this set up properly, send me your Solana wallet and make a Pump.fun account.\n100% of the creator fees go to you. No split.")
+        // "Jam 5 sore tadi" — 17:00 local; if that is still in the future, use yesterday.
+        var start = cal.date(bySettingHour: 17, minute: Int.random(in: 0...18), second: Int.random(in: 0...50), of: now) ?? now
+        if start >= now {
+            start = cal.date(byAdding: .day, value: -1, to: start) ?? start
+        }
 
-        them("Wait you actually watched that?? 😭\nI was being messy for content. I even said “his dad is Asian” like I was filing a birth certificate.")
-        them("I’m not gonna lie though… I’ve been in a Kimchi rabbit hole for days. I keep refreshing like a crazy person.")
-        them("If I do that, can I actually interact with him through this?\nIf yes I’ll make the account right now.")
+        struct Line { let me: Bool; let text: String }
+        let lines: [Line] = [
+            .init(me: true,  text: "Hey Patricia,\nI saw the reel.\nThe mama of Kimchi one."),
+            .init(me: true,  text: "You played it as a joke, but the timing is actually perfect. He’s all over the internet right now and barely says anything himself."),
+            .init(me: true,  text: "You already have an angle that doesn’t look forced."),
+            .init(me: true,  text: "If you want this set up properly, send me your Solana wallet and make a Pump.fun account.\n100% of the creator fees go to you. No split."),
 
-        me("Yes.")
-        me("And you’re not even the only one who saw that reel.\nOrangie already posted your video. The mama of Kimchi one.")
-        me("He’s been close with Kimchi since they were kids playing Fortnite.\nSo the people around him have already seen you claiming him as your son.")
-        me("Send the wallet when the account is ready.")
+            .init(me: false, text: "Wait you actually watched that?? 😭\nI was being messy for content. I even said “his dad is Asian” like I was filing a birth certificate."),
+            .init(me: false, text: "I’m not gonna lie though… I’ve been in a Kimchi rabbit hole for days. I keep refreshing like a crazy person."),
+            .init(me: false, text: "If I do that, can I actually interact with him through this?\nIf yes I’ll make the account right now."),
 
-        them("STOP.\nOrangie posted it?? The Fortnite friend??\nI need a second. I made that reel in my kitchen like it was nothing.")
-        them("Okay. I’ll do whatever I have to if it actually gets me in front of him.\nDo I just… make the account and that’s it? I’m not trying to look like I wandered into the wrong app.")
+            .init(me: true,  text: "Yes."),
+            .init(me: true,  text: "And you’re not even the only one who saw that reel.\nOrangie already posted your video. The mama of Kimchi one."),
+            .init(me: true,  text: "He’s been close with Kimchi since they were kids playing Fortnite.\nSo the people around him have already seen you claiming him as your son."),
+            .init(me: true,  text: "Send the wallet when the account is ready."),
 
-        me("Yeah. Make the Pump.fun account, send the Solana wallet, that’s it.")
-        me("You don’t have to start talking like a trader. Keep being you. The reel already did the work.")
-        me("We’re not putting you in a situation where you look lost.")
+            .init(me: false, text: "STOP.\nOrangie posted it?? The Fortnite friend??\nI need a second. I made that reel in my kitchen like it was nothing."),
+            .init(me: false, text: "Okay. I’ll do whatever I have to if it actually gets me in front of him.\nDo I just… make the account and that’s it? I’m not trying to look like I wandered into the wrong app."),
 
-        them("Fine. I’m doing it.\n\nIf this gets me ignored I’m deleting the reel.")
-        them("Here :\nWallet\n\nJust made the Pump.fun account too.")
-        them("Please don’t make me look crazy.\nI already look crazy enough calling myself his mom.")
+            .init(me: true,  text: "Yeah. Make the Pump.fun account, send the Solana wallet, that’s it."),
+            .init(me: true,  text: "You don’t have to start talking like a trader. Keep being you. The reel already did the work."),
+            .init(me: true,  text: "We’re not putting you in a situation where you look lost."),
 
-        me("Got it.\nBefore we launch, look at this.\nThis is the banner and the token logo.\nWhat do you think?")
+            .init(me: false, text: "Fine. I’m doing it.\n\nIf this gets me ignored I’m deleting the reel."),
+            .init(me: false, text: "Here :\nWallet\n\nJust made the Pump.fun account too."),
+            .init(me: false, text: "Please don’t make me look crazy.\nI already look crazy enough calling myself his mom."),
 
-        them("WAIT.\nThat’s actually funny. Like stupid funny.\nAnd it looks sexy. Hot. I look good in that, I’m not even gonna pretend I don’t.")
-        them("I like it. A lot.\nIf Kimchi sees this and still ignores me I’m going to take it personally.")
+            .init(me: true,  text: "Got it.\nBefore we launch, look at this.\nThis is the banner and the token logo.\nWhat do you think?"),
 
-        me("Then we’re using it.\nWe’ll launch it first, then post the screen record on X.\nYou’ll see it before it goes public.")
-        me("Thank you, Patricia.")
+            .init(me: false, text: "WAIT.\nThat’s actually funny. Like stupid funny.\nAnd it looks sexy. Hot. I look good in that, I’m not even gonna pretend I don’t."),
+            .init(me: false, text: "I like it. A lot.\nIf Kimchi sees this and still ignores me I’m going to take it personally."),
+
+            .init(me: true,  text: "Then we’re using it.\nWe’ll launch it first, then post the screen record on X.\nYou’ll see it before it goes public."),
+            .init(me: true,  text: "Thank you, Patricia."),
+        ]
+
+        // Raw gaps: short inside a burst, slow between speaker turns (not "fast respond").
+        var raw: [TimeInterval] = [0]
+        for i in 1..<lines.count {
+            let same = lines[i].me == lines[i - 1].me
+            if same {
+                raw.append(TimeInterval(Int.random(in: 20...150)))          // 20s…2.5m
+            } else {
+                // Mix of "thinking" replies — minutes, sometimes longer
+                let roll = Int.random(in: 0...9)
+                if roll <= 5 {
+                    raw.append(TimeInterval(Int.random(in: 9 * 60...28 * 60)))   // 9–28m
+                } else if roll <= 8 {
+                    raw.append(TimeInterval(Int.random(in: 28 * 60...55 * 60)))  // 28–55m
+                } else {
+                    raw.append(TimeInterval(Int.random(in: 55 * 60...95 * 60)))  // 55–95m
+                }
+            }
+        }
+
+        let span = max(now.timeIntervalSince(start) - TimeInterval(Int.random(in: 90...420)), 60)
+        let sum = raw.reduce(0, +)
+        let scale = sum > 0 ? span / sum : 1
+
+        var times: [Date] = []
+        var cursor = start
+        for (idx, gap) in raw.enumerated() {
+            if idx == 0 {
+                times.append(start)
+            } else {
+                cursor = cursor.addingTimeInterval(gap * scale)
+                if cursor > now.addingTimeInterval(-45) {
+                    cursor = now.addingTimeInterval(-45)
+                }
+                times.append(cursor)
+            }
+        }
+        // Last bubble near "now" (a few minutes ago)
+        if times.count > 1 {
+            times[times.count - 1] = now.addingTimeInterval(-TimeInterval(Int.random(in: 45...360)))
+        }
+
+        var out: [ChatElement] = []
+        var lastStampAt: Date?
+        for (i, line) in lines.enumerated() {
+            let d = times[i]
+            let showStamp: Bool
+            if let last = lastStampAt {
+                let gap = d.timeIntervalSince(last)
+                // New stamp when enough wall-clock passed, or IG label would change (day/hour style)
+                showStamp = gap >= 22 * 60
+                    || IGStamp.label(for: d, now: now) != IGStamp.label(for: last, now: now)
+            } else {
+                showStamp = true
+            }
+            if showStamp {
+                out.append(ChatElement(style: .date, text: IGStamp.label(for: d, now: now), stampAt: d))
+                lastStampAt = d
+            }
+            out.append(ChatElement(
+                style: line.me ? .sent : .received,
+                text: line.text,
+                stampAt: d
+            ))
+        }
         return out
     }
 
