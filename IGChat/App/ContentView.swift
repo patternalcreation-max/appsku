@@ -1,0 +1,801 @@
+import SwiftUI
+import PhotosUI
+
+// MARK: - Shapes
+
+struct IGBubbleShape: Shape {
+    let isSent: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let r: CGFloat = 20
+        let tailR: CGFloat = 4
+        let bottomRight: CGFloat = isSent ? tailR : r
+        let bottomLeft: CGFloat = isSent ? r : tailR
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + r, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + r), control: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRight))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - bottomRight, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - bottomLeft), control: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+        p.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.minY), control: CGPoint(x: rect.minX, y: rect.minY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+// MARK: - Avatar
+
+enum AvatarContent {
+    case placeholder(String)
+    case image(UIImage)
+}
+
+struct AvatarView: View {
+    let content: AvatarContent
+    var size: CGFloat
+
+    var body: some View {
+        Group {
+            switch content {
+            case .placeholder(let initials):
+                ZStack {
+                    Circle().fill(Color.white)
+                    Text(initials)
+                        .font(.system(size: size * 0.36, weight: .semibold))
+                        .foregroundColor(.black)
+                }
+            case .image(let img):
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+}
+
+// MARK: - Status bar
+
+struct StatusBarView: View {
+    var timeText: String = "2:08"
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 4) {
+                Text(timeText)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                Image(systemName: "moonphase.waxing.crescent")
+                    .font(.system(size: 11))
+                    .foregroundColor(.white)
+            }
+            Spacer()
+            HStack(spacing: 6) {
+                Image(systemName: "wifi")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                Text("17")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                BatteryShape(level: 0.17)
+                    .fill(Color.white)
+                    .frame(width: 22, height: 12)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+    }
+}
+
+struct BatteryShape: Shape {
+    let level: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let body = CGRect(x: rect.minX, y: rect.minY, width: rect.width - 3, height: rect.height)
+        p.addRoundedRect(in: body, cornerSize: CGSize(width: 3, height: 3))
+        let nub = CGRect(x: rect.maxX - 2.5, y: rect.midY - 2, width: 2.5, height: 4)
+        p.addRoundedRect(in: nub, cornerSize: CGSize(width: 1, height: 1))
+        // Cut the inner fill region by drawing level as subpath (fill uses even-odd? keep simple: hollow shell + separate fill)
+        let inner = CGRect(x: body.minX + 1.5, y: body.minY + 1.5, width: (body.width - 3) * level, height: body.height - 3)
+        p.addRoundedRect(in: inner, cornerSize: CGSize(width: 1.5, height: 1.5))
+        return p
+    }
+}
+
+// MARK: - Verified badge
+
+struct VerifiedBadge: View {
+    var body: some View {
+        Image(systemName: "checkmark.seal.fill")
+            .font(.system(size: 12))
+            .foregroundColor(Theme.igBlue)
+    }
+}
+
+// MARK: - Chat header
+
+struct ChatHeaderView: View {
+    let username: String
+    let isVerified: Bool
+    let avatarContent: AvatarContent
+    var avatarTap: (() -> Void)?
+    var nameTap: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 26, weight: .light))
+                .foregroundColor(.white)
+
+            avatarContent
+                .onTapGesture { avatarTap?() }
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(username.isEmpty ? " " : username)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    if isVerified {
+                        VerifiedBadge()
+                    }
+                }
+                Text("Business chat")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.secondaryText)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { nameTap?() }
+
+            Spacer()
+
+            Image(systemName: "phone")
+                .font(.system(size: 20))
+                .foregroundColor(.white)
+            Image(systemName: "video")
+                .font(.system(size: 20))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+}
+
+// MARK: - Profile context block
+
+struct ProfileContextView: View {
+    let profile: IGProfile
+    let avatarContent: AvatarContent
+    var statTap: (() -> Void)?
+    var statusTap: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            avatarContent
+                .frame(width: 96, height: 96)
+
+            Text(profile.username.isEmpty ? " " : profile.username)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.top, 12)
+
+            (Text("\(profile.followers) followers")
+                + Text(" · ")
+                + Text("\(profile.posts) posts"))
+                .font(.system(size: 14))
+                .foregroundColor(Theme.secondaryText)
+                .padding(.top, 4)
+                .contentShape(Rectangle())
+                .onTapGesture { statTap?() }
+
+            Text(profile.statusLine)
+                .font(.system(size: 14))
+                .foregroundColor(Theme.secondaryText)
+                .padding(.top, 4)
+                .contentShape(Rectangle())
+                .onTapGesture { statusTap?() }
+
+            Text("Learn about business chats")
+                .font(.system(size: 14))
+                .foregroundColor(Theme.linkPale)
+                .padding(.top, 8)
+
+            HStack(spacing: 8) {
+                profileButton("View profile")
+                profileButton("Follow")
+            }
+            .padding(.top, 12)
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 24)
+    }
+
+    private func profileButton(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Theme.bubbleGray))
+    }
+}
+
+// MARK: - Messages
+
+struct DateSeparatorView: View {
+    let text: String
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(Theme.dateText)
+            .frame(maxWidth: .infinity)
+    }
+}
+
+struct MessageTextView: View {
+    let text: String
+
+    var body: some View {
+        Text(verbatim: text)
+            .font(.system(size: 15))
+            .lineSpacing(15 * 0.4)
+            .foregroundColor(.white)
+    }
+}
+
+struct SentBubbleView: View {
+    let text: String
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 64)
+            MessageTextView(text: text)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(IGBubbleShape(isSent: true).fill(Theme.bubbleGradient))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+struct ReceivedRowView: View {
+    let text: String
+    let heartHint: Bool
+    let avatarContent: AvatarContent
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            avatarContent
+                .frame(width: 28, height: 28)
+                .padding(.bottom, 24)
+            VStack(alignment: .leading, spacing: 6) {
+                MessageTextView(text: text)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(IGBubbleShape(isSent: false).fill(Theme.bubbleGray))
+                    .fixedSize(horizontal: false, vertical: true)
+                if heartHint {
+                    Text("Double tap to ❤️")
+                        .font(.system(size: 11))
+                        .foregroundColor(Theme.secondaryText)
+                        .padding(.leading, 4)
+                }
+            }
+            Spacer(minLength: 48)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - Input bar
+
+struct InputBarView: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(Theme.igBlue)
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+            }
+            .frame(width: 40, height: 40)
+
+            HStack {
+                Text("Message...")
+                    .font(.system(size: 15))
+                    .foregroundColor(Theme.secondaryText)
+                Spacer()
+                HStack(spacing: 12) {
+                    Image(systemName: "mic").font(.system(size: 18))
+                    Image(systemName: "photo").font(.system(size: 18))
+                    Image(systemName: "doc").font(.system(size: 18))
+                    Image(systemName: "plus.circle").font(.system(size: 18))
+                }
+                .foregroundColor(.white)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Theme.bubbleGray))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Static export canvas (400 × 800)
+
+struct PhoneCanvas: View {
+    let elements: [ChatElement]
+    let profile: IGProfile
+    let avatarContent: AvatarContent
+
+    var body: some View {
+        VStack(spacing: 0) {
+            StatusBarView()
+            ChatHeaderView(
+                username: profile.username,
+                isVerified: profile.isVerified,
+                avatarContent: avatarContent
+            )
+            Rectangle().fill(Theme.headerBorder).frame(height: 1)
+
+            VStack(spacing: 20) {
+                ProfileContextView(profile: profile, avatarContent: avatarContent)
+                ForEach(elements) { element in
+                    elementView(element)
+                }
+            }
+            .padding(16)
+
+            Spacer(minLength: 0)
+            InputBarView()
+        }
+        .frame(width: 400, alignment: .top)
+        .frame(minHeight: 800, alignment: .top)
+        .background(Theme.black)
+    }
+
+    @ViewBuilder
+    private func elementView(_ element: ChatElement) -> some View {
+        switch element.style {
+        case .date:
+            DateSeparatorView(text: element.text)
+        case .sent:
+            SentBubbleView(text: element.text)
+        case .received:
+            ReceivedRowView(
+                text: element.text,
+                heartHint: element.heartHint,
+                avatarContent: avatarContent
+            )
+        }
+    }
+}
+
+// MARK: - Main view
+
+struct ContentView: View {
+    @State private var elements: [ChatElement] = IGSeed.defaultElements()
+    @State private var profile = IGProfile()
+    @State private var avatarImage: UIImage?
+    @State private var photoPickerItem: PhotosPickerItem?
+
+    @State private var showEditor = false
+    @State private var editorText: String = ""
+    @State private var editorTarget: EditTarget?
+
+    @State private var showExport = false
+    @State private var showSaved = false
+    @State private var highRes = true
+
+    enum EditTarget: Hashable {
+        case username
+        case followers
+        case posts
+        case statusLine
+        case element(UUID)
+    }
+
+    private var avatarContent: AvatarContent {
+        if let avatarImage {
+            return .image(avatarImage)
+        }
+        return .placeholder(profile.initials)
+    }
+
+    var body: some View {
+        ZStack {
+            Theme.black.ignoresSafeArea()
+            VStack(spacing: 0) {
+                StatusBarView()
+                liveHeader
+                Rectangle().fill(Theme.headerBorder).frame(height: 1)
+                chatArea
+                InputBarView()
+            }
+        }
+        .preferredColorScheme(.dark)
+        .sheet(isPresented: $showEditor) { editorSheet }
+        .sheet(isPresented: $showExport) { exportSheet }
+        .alert("Saved to Photos", isPresented: $showSaved) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Chat mockup exported to your photo library.")
+        }
+    }
+
+    // MARK: Live header (interactive)
+
+    private var liveHeader: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 26, weight: .light))
+                .foregroundColor(.white)
+
+            PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                avatarContent
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(profile.username.isEmpty ? " " : profile.username)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    if profile.isVerified {
+                        VerifiedBadge()
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { beginEdit(.username, text: profile.username) }
+                .contextMenu {
+                    Button {
+                        profile.isVerified.toggle()
+                    } label: {
+                        Label(
+                            profile.isVerified ? "Hide verified badge" : "Show verified badge",
+                            systemImage: "checkmark.seal"
+                        )
+                    }
+                }
+                Text("Business chat")
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.secondaryText)
+            }
+
+            Spacer()
+
+            Menu {
+                Button {
+                    elements.append(ChatElement(style: .sent, text: "New message"))
+                } label: {
+                    Label("Purple bubble (Me)", systemImage: "arrow.up.circle")
+                }
+                Button {
+                    elements.append(ChatElement(style: .received, text: "New message"))
+                } label: {
+                    Label("Gray bubble (Target)", systemImage: "arrow.down.circle")
+                }
+                Button {
+                    elements.append(ChatElement(style: .date, text: "JUL 16 AT 1:11 PM"))
+                } label: {
+                    Label("Date separator", systemImage: "clock")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    elements.removeAll()
+                } label: {
+                    Label("Clear all messages", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(Theme.igBlue)
+            }
+
+            Button {
+                showExport = true
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundColor(Theme.igBlue)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .onChange(of: photoPickerItem) { newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    await MainActor.run { avatarImage = image }
+                }
+            }
+        }
+    }
+
+    // MARK: Chat area
+
+    private var chatArea: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 20) {
+                    liveProfileContext
+                    ForEach(elements) { element in
+                        liveElementView(element)
+                            .id(element.id)
+                            .contentShape(Rectangle())
+                            .onTapGesture { beginEdit(.element(element.id), text: element.text) }
+                            .contextMenu { elementMenu(for: element) }
+                    }
+                }
+                .padding(16)
+            }
+            .onChange(of: elements.count) { _ in
+                if let last = elements.last {
+                    withAnimation {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
+            }
+            .onAppear {
+                if let last = elements.last {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
+            }
+        }
+    }
+
+    private var liveProfileContext: some View {
+        VStack(spacing: 0) {
+            PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                avatarContent
+                    .frame(width: 96, height: 96)
+            }
+            .buttonStyle(.plain)
+
+            Text(profile.username.isEmpty ? " " : profile.username)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.top, 12)
+
+            (Text("\(profile.followers) followers")
+                + Text(" · ")
+                + Text("\(profile.posts) posts"))
+                .font(.system(size: 14))
+                .foregroundColor(Theme.secondaryText)
+                .padding(.top, 4)
+                .contentShape(Rectangle())
+                .onTapGesture { beginEdit(.followers, text: profile.followers) }
+                .contextMenu {
+                    Button {
+                        beginEdit(.posts, text: profile.posts)
+                    } label: {
+                        Label("Edit posts count", systemImage: "square.grid.2x2")
+                    }
+                }
+
+            Text(profile.statusLine)
+                .font(.system(size: 14))
+                .foregroundColor(Theme.secondaryText)
+                .padding(.top, 4)
+                .contentShape(Rectangle())
+                .onTapGesture { beginEdit(.statusLine, text: profile.statusLine) }
+
+            Text("Learn about business chats")
+                .font(.system(size: 14))
+                .foregroundColor(Theme.linkPale)
+                .padding(.top, 8)
+
+            HStack(spacing: 8) {
+                Text("View profile")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.bubbleGray))
+                Text("Follow")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.bubbleGray))
+            }
+            .padding(.top, 12)
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 24)
+    }
+
+    @ViewBuilder
+    private func liveElementView(_ element: ChatElement) -> some View {
+        switch element.style {
+        case .date:
+            DateSeparatorView(text: element.text)
+        case .sent:
+            SentBubbleView(text: element.text)
+        case .received:
+            ReceivedRowView(
+                text: element.text,
+                heartHint: element.heartHint,
+                avatarContent: avatarContent
+            )
+        }
+    }
+
+    private func elementMenu(for element: ChatElement) -> some View {
+        Group {
+            Button(role: .destructive) {
+                elements.removeAll { $0.id == element.id }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            Divider()
+            Button {
+                insertAfter(element, style: .sent, text: "New message")
+            } label: {
+                Label("Add purple bubble below", systemImage: "arrow.up.circle")
+            }
+            Button {
+                insertAfter(element, style: .received, text: "New message")
+            } label: {
+                Label("Add gray bubble below", systemImage: "arrow.down.circle")
+            }
+            Button {
+                insertAfter(element, style: .date, text: "JUL 16 AT 1:11 PM")
+            } label: {
+                Label("Add date separator below", systemImage: "clock")
+            }
+            if element.style == .received {
+                Divider()
+                Button {
+                    if let idx = elements.firstIndex(where: { $0.id == element.id }) {
+                        elements[idx].heartHint.toggle()
+                    }
+                } label: {
+                    Label(
+                        element.heartHint ? "Hide \u{201C}Double tap\u{201D} hint" : "Show \u{201C}Double tap to ❤️\u{201D}",
+                        systemImage: "heart"
+                    )
+                }
+            }
+        }
+    }
+
+    private func insertAfter(_ element: ChatElement, style: ChatElement.Style, text: String) {
+        guard let idx = elements.firstIndex(where: { $0.id == element.id }) else { return }
+        elements.insert(ChatElement(style: style, text: text), at: elements.index(after: idx))
+    }
+
+    // MARK: Editor sheet
+
+    private var editorSheet: some View {
+        NavigationStack {
+            TextEditor(text: $editorText)
+                .font(.system(size: 16))
+                .padding(12)
+                .frame(maxHeight: 320)
+                .background(Color(red: 0.11, green: 0.12, blue: 0.13))
+                .navigationTitle(editorTitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showEditor = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { commitEdit() }
+                            .fontWeight(.semibold)
+                    }
+                }
+        }
+        .presentationDetents([.height(340)])
+        .preferredColorScheme(.dark)
+    }
+
+    private var editorTitle: String {
+        switch editorTarget {
+        case .username: return "Username"
+        case .followers: return "Followers"
+        case .posts: return "Posts"
+        case .statusLine: return "Status line"
+        case .element(let id):
+            if let el = elements.first(where: { $0.id == id }) {
+                switch el.style {
+                case .date: return "Date separator"
+                case .sent: return "Purple message"
+                case .received: return "Gray message"
+                }
+            }
+            return "Edit"
+        case nil: return "Edit"
+        }
+    }
+
+    private func beginEdit(_ target: EditTarget, text: String) {
+        editorTarget = target
+        editorText = text
+        showEditor = true
+    }
+
+    private func commitEdit() {
+        switch editorTarget {
+        case .username:
+            profile.username = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .followers:
+            profile.followers = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .posts:
+            profile.posts = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .statusLine:
+            profile.statusLine = editorText.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .element(let id):
+            if let idx = elements.firstIndex(where: { $0.id == id }) {
+                elements[idx].text = editorText
+            }
+        case nil:
+            break
+        }
+        showEditor = false
+    }
+
+    // MARK: Export sheet
+
+    private var exportSheet: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                Toggle(isOn: $highRes) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("High resolution (3×)")
+                        Text("1200 × 2400 px PNG")
+                            .font(.footnote)
+                            .foregroundColor(Theme.secondaryText)
+                    }
+                }
+                .tint(Theme.igBlue)
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 16).fill(Theme.bubbleGray))
+                .padding(.horizontal)
+
+                Button {
+                    exportPNG()
+                } label: {
+                    Label("Save screenshot to Photos", systemImage: "square.and.arrow.down")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Capsule().fill(Theme.igBlue))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal)
+
+                Spacer()
+            }
+            .padding(.top, 24)
+            .navigationTitle("Export")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.height(300)])
+        .preferredColorScheme(.dark)
+    }
+
+    private func exportPNG() {
+        showExport = false
+        let canvas = PhoneCanvas(
+            elements: elements,
+            profile: profile,
+            avatarContent: avatarContent
+        )
+        let renderer = ImageRenderer(content: canvas)
+        renderer.scale = highRes ? 3.0 : 1.0
+        guard let image = renderer.uiImage else { return }
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        showSaved = true
+    }
+}

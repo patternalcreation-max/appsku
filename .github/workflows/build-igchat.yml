@@ -1,0 +1,117 @@
+name: Build IGChat IPA
+
+on:
+  push:
+    branches: [main]
+    tags: ['igchat-v*']
+    paths:
+      - 'IGChat/**'
+      - '.github/workflows/build-igchat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          elif [ -d /Applications/Xcode_26.5.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.5.app
+          elif [ -d /Applications/Xcode_26.4.1.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.4.1.app
+          elif [ -d /Applications/Xcode_26.4.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.4.app
+          elif [ -d /Applications/Xcode_26.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.3.app
+          else
+            sudo xcode-select -s /Applications/Xcode.app
+          fi
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: IGChat
+        run: xcodegen generate
+
+      - name: Build app unsigned
+        working-directory: IGChat
+        run: |
+          set +e
+          xcodebuild build \
+            -project IGChat.xcodeproj \
+            -scheme IGChat \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            ENABLE_BITCODE=NO \
+            ENABLE_CODE_COVERAGE=NO \
+            CLANG_ENABLE_CODE_COVERAGE=NO \
+            ARCHS=arm64 \
+            ASSETCATALOG_COMPILER_SKIP_VALIDATION=YES \
+            -destination 'generic/platform=iOS' 2>&1 | tee build_output.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          grep -i "error:" build_output.log || true
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "---- compiler error context ----"
+            grep -n -i -C 3 "error:" build_output.log | head -160 || true
+            grep -i "error:" build_output.log | head -40 | while IFS= read -r line; do
+              safe=${line//'%'/'%25'}
+              safe=${safe//$'\n'/'%0A'}
+              safe=${safe//$'\r'/'%0D'}
+              echo "::error::$safe"
+            done
+          fi
+          exit $EXIT_CODE
+
+      - name: Inspect and package IPA
+        working-directory: IGChat
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find build/Build/Products -path "*Release-iphoneos/*.app" -type d | head -1)
+          test -n "$APP_PATH"
+          echo "APP_PATH=$APP_PATH"
+          plutil -p "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/IGChat"
+          test -f "$APP_PATH/Assets.car"
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          cd build
+          zip -ry IGChat.ipa Payload
+          ls -lah IGChat.ipa
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: igchat-build-log
+          path: IGChat/build_output.log
+          retention-days: 14
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IGChat-ipa
+          path: IGChat/build/IGChat.ipa
+          retention-days: 90
+
+      - name: Create Release on tag
+        if: startsWith(github.ref, 'refs/tags/') && success()
+        uses: softprops/action-gh-release@v2
+        with:
+          files: IGChat/build/IGChat.ipa
+          generate_release_notes: true
