@@ -329,14 +329,22 @@ struct SentBubbleView: View {
                 }
             }
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                HStack {
-                    Spacer(minLength: 64)
-                    MessageTextView(text: text)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(meBubbleBackground())
-                        .clipShape(IGBubbleShape(isSent: true, position: position))
-                        .fixedSize(horizontal: false, vertical: true)
+                let link = LinkURLAnalyzer.analyze(text)
+                if let link, link.isURLOnly {
+                    LinkPreviewBlock(text: text, isSent: true)
+                } else {
+                    HStack {
+                        Spacer(minLength: 64)
+                        MessageTextView(text: text)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(meBubbleBackground())
+                            .clipShape(IGBubbleShape(isSent: true, position: position))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if link != nil {
+                        LinkPreviewBlock(text: text, isSent: true)
+                    }
                 }
             }
         }
@@ -390,11 +398,19 @@ struct ReceivedRowView: View {
                     PhotoMessageView(image: photo, isSent: false, position: position, frame: photoFrame, maxWidth: photoMaxWidth)
                 }
                 if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    MessageTextView(text: text)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(IGBubbleShape(isSent: false, position: position).fill(Theme.bubbleGray))
-                        .fixedSize(horizontal: false, vertical: true)
+                    let link = LinkURLAnalyzer.analyze(text)
+                    if let link, link.isURLOnly {
+                        LinkPreviewBlock(text: text, isSent: false)
+                    } else {
+                        MessageTextView(text: text)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(IGBubbleShape(isSent: false, position: position).fill(Theme.bubbleGray))
+                            .fixedSize(horizontal: false, vertical: true)
+                        if link != nil {
+                            LinkPreviewBlock(text: text, isSent: false)
+                        }
+                    }
                 }
                 if heartHint {
                     Text("Double tap to ❤️")
