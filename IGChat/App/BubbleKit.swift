@@ -49,16 +49,16 @@ struct ReplyChrome: View {
     let peerName: String
     var replyText: String? = nil
     var replyImage: UIImage? = nil
-    /// Optional override; nil = auto from replyFromMe (Them gray / Me purple).
+    /// Optional override; nil = auto from replyFromMe (Them gray / Me hot purple).
     var quoteBubbleFill: Color? = nil
+    /// Live Me bubble top color (gradA). Used when quoting a Me message.
+    var meQuoteFill: Color = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
 
     private var resolvedQuoteFill: Color {
         if let quoteBubbleFill { return quoteBubbleFill }
-        // Full-strength fills (never a washed/greyed overlay):
-        // Me → purple; Them → same gray as live received bubbles.
-        return replyFromMe
-            ? Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
-            : Theme.bubbleGray
+        // Full-strength fills (never washed/greyed):
+        // Me → same hot purple as live Me bubbles (gradA). Them → bubbleGray.
+        return replyFromMe ? meQuoteFill : Theme.bubbleGray
     }
 
     private var label: String {
@@ -91,8 +91,8 @@ struct ReplyChrome: View {
 
     private var replyBar: some View {
         Capsule()
-            // Soft / dim — not bright white-grey
-            .fill(Color(white: 0.22).opacity(0.85))
+            // Match IG reply rail — readable, not washed out
+            .fill(Color(white: 0.45).opacity(0.95))
             .frame(width: 2.5)
             .frame(maxHeight: .infinity)
     }

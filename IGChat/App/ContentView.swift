@@ -318,7 +318,8 @@ struct SentBubbleView: View {
                     replyFromMe: replyFromMe,
                     peerName: replyName,
                     replyText: replyText,
-                    replyImage: replyImage
+                    replyImage: replyImage,
+                    meQuoteFill: gradA
                 )
             }
             if let photo {
@@ -356,6 +357,7 @@ struct ReceivedRowView: View {
     var position: BubbleGroupPos = .single
     var photoFrame: PhotoFrame = .default
     var photoMaxWidth: CGFloat = 280
+    var gradA: Color = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
 
     private var hasReply: Bool {
         let t = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -380,7 +382,8 @@ struct ReceivedRowView: View {
                         replyFromMe: replyFromMe,
                         peerName: replyName,
                         replyText: replyText,
-                        replyImage: replyImage
+                        replyImage: replyImage,
+                        meQuoteFill: gradA
                     )
                 }
                 if let photo {
@@ -799,7 +802,8 @@ struct ContentView: View {
                     photo: ChatImageCodec.image(from: element.imageJPEG),
                     position: BubbleGrouping.position(in: elements, at: idx),
                     photoFrame: resolvedFrame(for: element),
-                    photoMaxWidth: CGFloat(photoMaxWidth)
+                    photoMaxWidth: CGFloat(photoMaxWidth),
+                    gradA: gradA
                 )
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
