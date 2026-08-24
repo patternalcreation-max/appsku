@@ -49,16 +49,21 @@ struct ReplyChrome: View {
     let peerName: String
     var replyText: String? = nil
     var replyImage: UIImage? = nil
-    /// Optional override; nil = auto from replyFromMe (Them gray / Me hot purple).
+    /// Optional override. Default = muted IG quote (always dimmer than live bubbles).
     var quoteBubbleFill: Color? = nil
-    /// Live Me bubble top color (gradA). Used when quoting a Me message.
+    /// Kept for call-site compat; ignored — quotes are always muted, never full Me color.
     var meQuoteFill: Color = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
 
+    /// IG reply snippet: darker/muted grey, never full Me purple / full received grey brightness.
     private var resolvedQuoteFill: Color {
         if let quoteBubbleFill { return quoteBubbleFill }
-        // Full-strength fills (never washed/greyed):
-        // Me → same hot purple as live Me bubbles (gradA). Them → bubbleGray.
-        return replyFromMe ? meQuoteFill : Theme.bubbleGray
+        // Slightly darker than live Them bubbles so the quote reads as "pudar".
+        return Color(red: 0x1A/255, green: 0x1A/255, blue: 0x1A/255)
+    }
+
+    private var quoteTextColor: Color {
+        // Dim text inside quote (not bright white like live bubbles)
+        Color(red: 0x8E/255, green: 0x8E/255, blue: 0x8E/255)
     }
 
     private var label: String {
@@ -91,8 +96,8 @@ struct ReplyChrome: View {
 
     private var replyBar: some View {
         Capsule()
-            // Match IG reply rail — readable, not washed out
-            .fill(Color(white: 0.45).opacity(0.95))
+            // Soft rail next to muted quote
+            .fill(Color(white: 0.28).opacity(0.9))
             .frame(width: 2.5)
             .frame(maxHeight: .infinity)
     }
@@ -114,18 +119,24 @@ struct ReplyChrome: View {
                     }
                 }
         } else if let text = replyText, !text.isEmpty {
-            // Same chrome as a real bubble — full color, NOT faded/greyed-out.
-            // Them = Theme.bubbleGray (normal received). Me = purple. Opacity always 1.
-            MessageTextView(text: text)
+            // Muted quote snippet (IG): darker fill + dim text — not full Me/Them brightness.
+            Text(verbatim: text
+                    .components(separatedBy: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n"))
+                .font(.system(size: 13))
+                .lineSpacing(13 * 0.28)
+                .foregroundColor(quoteTextColor)
                 .lineLimit(4)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
                 .background(
                     IGBubbleShape(isSent: replyFromMe, position: .single)
                         .fill(resolvedQuoteFill)
                 )
-                .opacity(1)
-                .frame(maxWidth: 260, alignment: replyFromMe ? .trailing : .leading)
+                .opacity(0.92)
+                .frame(maxWidth: 240, alignment: replyFromMe ? .trailing : .leading)
         }
     }
 }
