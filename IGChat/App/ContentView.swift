@@ -271,26 +271,33 @@ struct SentBubbleView: View {
     var position: BubbleGroupPos = .single
     var photoFrame: PhotoFrame = .default
     var photoMaxWidth: CGFloat = 280
-    /// Chat viewport size — gradient is locked to this, bubbles only mask it (IG Me style).
+    /// Chat viewport size — gradient is locked to the visible chat band (below header).
     var viewportSize: CGSize = .zero
-    var gradA: Color = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
-    var gradB: Color = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
-    var gradTop: Double = 30
-    var gradBottom: Double = 55
+    /// Y where chat content starts (header chrome). Wash t=0 begins here, not at the notch.
+    var washTopInset: CGFloat = 0
+    /// Bottom chrome (input bar) excluded from wash band.
+    var washBottomInset: CGFloat = 0
+    var gradA: Color = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
+    var gradB: Color = Color(red: 0x3B/255, green: 0x5B/255, blue: 0xDB/255)
+    var gradTop: Double = 35
+    var gradBottom: Double = 60
 
-/// Screen-locked fill: sample the IG wash across this bubble’s Y span (stable, no offset tricks).
+    /// Screen-locked fill: sample wash across this bubble’s Y in the content band (below header).
     private func meBubbleBackground() -> some View {
         GeometryReader { geo in
             let f = geo.frame(in: .named("viewport"))
             let vh = max(viewportSize.height, 1)
-            let t0 = Double(f.minY / vh)
-            let t1 = Double(f.maxY / vh)
-            let purpleUntil = gradTop / 100.0
-            let blueFrom = gradBottom / 100.0
+            let top = max(washTopInset, 0)
+            let bottom = max(washBottomInset, 0)
+            let usable = max(vh - top - bottom, 1)
+            // Remap: first bubble under header → t≈0 (full ungu). Bottom of chat → t≈1 (biru).
+            let t0 = Double((f.minY - top) / usable)
+            let t1 = Double((f.maxY - top) / usable)
             let stops = MeWash.stops(
                 t0: t0, t1: t1,
                 a: gradA, b: gradB,
-                purpleUntil: purpleUntil, blueFrom: blueFrom
+                purpleUntil: gradTop / 100.0,
+                blueFrom: gradBottom / 100.0
             )
             LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
                 .frame(width: geo.size.width, height: geo.size.height)
@@ -513,11 +520,11 @@ struct ContentView: View {
     @State private var showChatList = false
 
     // Look & feel
-    @State private var gradA = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
-    @State private var gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
+    @State private var gradA = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
+    @State private var gradB = Color(red: 0x3B/255, green: 0x5B/255, blue: 0xDB/255)
     @State private var frostBlur: Double = 22
-    @State private var gradTop: Double = 30
-    @State private var gradBottom: Double = 55
+    @State private var gradTop: Double = 35
+    @State private var gradBottom: Double = 60
     @State private var subtitleFontSize: Double = 10
     @State private var photoWindow: Double = 0.35
     @State private var photoFocusX: Double = 0.5
@@ -710,11 +717,20 @@ struct ContentView: View {
                 showStatusAlways = UserDefaults.standard.bool(forKey: "igchat.showStatusAlways")
             }
             if let l = IGPersistence.loadLook() {
-                gradA = Color(igHex: l.gradAHex)
-                gradB = Color(igHex: l.gradBHex)
+                // Upgrade muted v1 defaults → hot IG wash (old pair was nearly identical violet)
+                let mutedOld = Set(["6B3FC7", "5158DF"])
+                if mutedOld.contains(l.gradAHex.uppercased()) && mutedOld.contains(l.gradBHex.uppercased()) {
+                    gradA = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
+                    gradB = Color(red: 0x3B/255, green: 0x5B/255, blue: 0xDB/255)
+                    gradTop = 35
+                    gradBottom = 60
+                } else {
+                    gradA = Color(igHex: l.gradAHex)
+                    gradB = Color(igHex: l.gradBHex)
+                    gradTop = l.gradTop
+                    gradBottom = l.gradBottom
+                }
                 frostBlur = l.frostBlur
-                gradTop = l.gradTop
-                gradBottom = l.gradBottom
                 subtitleFontSize = l.subtitleFontSize
                 photoWindow = l.photoWindow != 0 ? l.photoWindow : l.landscapeCrop
                 photoFocusX = l.photoFocusX
@@ -760,6 +776,8 @@ struct ContentView: View {
                               photoFrame: resolvedFrame(for: element),
                               photoMaxWidth: CGFloat(photoMaxWidth),
                               viewportSize: viewportSize,
+                              washTopInset: safeTop + 96,
+                              washBottomInset: 70,
                               gradA: gradA, gradB: gradB,
                               gradTop: gradTop, gradBottom: gradBottom)
                     .id("\(element.id)-\(meWashId)")
@@ -1742,7 +1760,7 @@ struct ContentView: View {
                     Toggle("Show \"Double tap to ❤️\" hints", isOn: $heartHintsEnabled)
                 }
                                                 Section("Me gradient") {
-                    Text("Pola IG: ungu di atas layar → fade → biru solid di bawah. Tiap bubble ambil warna sesuai posisi Y-nya.")
+                    Text("Wash mulai dari bawah header (bukan notch). Ungu hot di atas chat → biru di bawah.")
                         .font(.caption)
                         .foregroundColor(Theme.secondaryText)
 
@@ -1796,11 +1814,11 @@ struct ContentView: View {
                         .font(.caption2)
                         .foregroundColor(Theme.secondaryText)
 
-                    Button("Reset pola IG") {
-                        gradTop = 30
-                        gradBottom = 55
-                        gradA = Color(red: 0x6B/255, green: 0x3F/255, blue: 0xC7/255)
-                        gradB = Color(red: 0x51/255, green: 0x58/255, blue: 0xDF/255)
+                    Button("Reset pola IG (hot)") {
+                        gradTop = 35
+                        gradBottom = 60
+                        gradA = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
+                        gradB = Color(red: 0x3B/255, green: 0x5B/255, blue: 0xDB/255)
                     }
                 }
 
