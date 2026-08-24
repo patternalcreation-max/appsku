@@ -348,6 +348,8 @@ struct SentBubbleView: View {
                 }
             }
         }
+        // IG: Me bubbles sit in from the right edge (not flush)
+        .padding(.trailing, Theme.meEdgeInset)
     }
 }
 
@@ -1305,7 +1307,7 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .padding(EdgeInsets(top: safeTop + 96, leading: 16, bottom: 4, trailing: 16))
+                    .padding(EdgeInsets(top: safeTop + 96, leading: 16, bottom: 4, trailing: 12))
                 }
                 .coordinateSpace(name: "viewport")
                 // Draw under status bar so blur can run all the way to the notch
@@ -1334,7 +1336,7 @@ struct ContentView: View {
             Text(seenText)
                 .font(.system(size: 11))
                 .foregroundColor(Color(white: 0.56))
-                .padding(.trailing, 4)
+                .padding(.trailing, Theme.meEdgeInset)
                 .contentShape(Rectangle())
                 .onTapGesture { beginEdit(.seenHours, text: String(seenHoursAgo)) }
         }

@@ -4,6 +4,8 @@ enum Theme {
     // Soft night canvas (#0E1217) — not pure black (Telegram-like night)
     static let black = Color(red: 0x0E / 255.0, green: 0x12 / 255.0, blue: 0x17 / 255.0)
     static let bubbleGray = Color(red: 0x26 / 255.0, green: 0x26 / 255.0, blue: 0x26 / 255.0)
+    /// Extra trailing gap for Me bubbles vs screen edge (IG DM inset).
+    static let meEdgeInset: CGFloat = 12
     static let igBlue = Color(red: 0x00 / 255.0, green: 0x95 / 255.0, blue: 0xF6 / 255.0)
     static let secondaryText = Color(red: 0xA8 / 255.0, green: 0xA8 / 255.0, blue: 0xA8 / 255.0)
     static let dateText = Color(red: 0x73 / 255.0, green: 0x73 / 255.0, blue: 0x73 / 255.0)
