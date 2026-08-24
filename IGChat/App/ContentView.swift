@@ -179,6 +179,85 @@ struct DateSeparatorView: View {
     }
 }
 
+
+/// IG-style: emoji-only messages render big, with no bubble.
+enum MessageEmoji {
+    /// True when trimmed text is only emoji grapheme clusters (+ whitespace/newlines).
+    static func isEmojiOnly(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let clusters = trimmed.filter { ch in
+            !ch.isWhitespace && ch != "\n" && ch != "\r"
+        }
+        guard !clusters.isEmpty else { return false }
+        return clusters.allSatisfy { isEmojiCluster($0) }
+    }
+
+    static func emojiCount(_ text: String) -> Int {
+        text.filter { ch in !ch.isWhitespace && ch != "\n" && ch != "\r" }.count
+    }
+
+    /// Point size for the big emoji row (scales down a bit with more glyphs).
+    static func bigFontSize(for text: String) -> CGFloat {
+        switch emojiCount(text) {
+        case 0, 1: return 56
+        case 2: return 48
+        case 3: return 42
+        case 4, 5: return 36
+        default: return 32
+        }
+    }
+
+    private static func isEmojiCluster(_ ch: Character) -> Bool {
+        // Digits/letters alone are never emoji-only content.
+        if ch.isLetter || ch.isNumber { return false }
+        for scalar in ch.unicodeScalars {
+            let p = scalar.properties
+            if p.isEmojiPresentation { return true }
+            if p.isEmoji && scalar.value > 0x238C { return true }
+            if p.isEmojiModifier || p.isEmojiModifierBase { return true }
+            // ZWJ / VS-16 are part of emoji sequences
+            if scalar.value == 0x200D || scalar.value == 0xFE0F { continue }
+            if p.isEmoji { return true }
+        }
+        // Fallback: Extended_Pictographic via CFStringTransform is heavy; use Unicode scalar ranges common for emoji
+        for scalar in ch.unicodeScalars {
+            let v = scalar.value
+            switch v {
+            case 0x1F300...0x1FAFF, // Misc symbols & pictographs … extended-A
+                 0x2600...0x27BF,   // Misc symbols / dingbats
+                 0x1F1E6...0x1F1FF, // flags
+                 0x1F900...0x1F9FF,
+                 0x2300...0x23FF,
+                 0x2B50, 0x2B55,
+                 0x231A...0x231B,
+                 0x25AA...0x25AB, 0x25B6, 0x25C0, 0x25FB...0x25FE,
+                 0x2934...0x2935,
+                 0x3297, 0x3299,
+                 0xA9, 0xAE,
+                 0x203C, 0x2049:
+                return true
+            default:
+                break
+            }
+        }
+        return false
+    }
+}
+
+struct BigEmojiTextView: View {
+    let text: String
+    var isSent: Bool = true
+
+    var body: some View {
+        let size = MessageEmoji.bigFontSize(for: text)
+        Text(verbatim: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            .font(.system(size: size))
+            .multilineTextAlignment(isSent ? .trailing : .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 struct MessageTextView: View {
     let text: String
 
@@ -334,6 +413,11 @@ struct SentBubbleView: View {
                 let link = LinkURLAnalyzer.analyze(text)
                 if let link, link.isURLOnly {
                     LinkPreviewBlock(text: text, isSent: true)
+                } else if MessageEmoji.isEmojiOnly(text) {
+                    HStack {
+                        Spacer(minLength: 64)
+                        BigEmojiTextView(text: text, isSent: true)
+                    }
                 } else {
                     HStack {
                         Spacer(minLength: 64)
@@ -405,6 +489,8 @@ struct ReceivedRowView: View {
                     let link = LinkURLAnalyzer.analyze(text)
                     if let link, link.isURLOnly {
                         LinkPreviewBlock(text: text, isSent: false)
+                    } else if MessageEmoji.isEmojiOnly(text) {
+                        BigEmojiTextView(text: text, isSent: false)
                     } else {
                         MessageTextView(text: text)
                             .padding(.horizontal, 16)
