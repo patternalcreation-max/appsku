@@ -49,21 +49,43 @@ struct ReplyChrome: View {
     let peerName: String
     var replyText: String? = nil
     var replyImage: UIImage? = nil
-    /// Optional override. Default = muted IG quote (always dimmer than live bubbles).
+    /// Optional override for quote fill.
     var quoteBubbleFill: Color? = nil
-    /// Kept for call-site compat; ignored — quotes are always muted, never full Me color.
+    /// Live Me bubble color (gradA). Used for Me quotes — faded, never full brightness.
     var meQuoteFill: Color = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
 
-    /// IG reply snippet: darker/muted grey, never full Me purple / full received grey brightness.
+    /// Sender-tinted quote: Me → faded purple from gradA; Them → darker muted grey.
     private var resolvedQuoteFill: Color {
         if let quoteBubbleFill { return quoteBubbleFill }
-        // Slightly darker than live Them bubbles so the quote reads as "pudar".
+        if replyFromMe {
+            // Mix hot Me color toward near-black so it reads pudar vs live bubble.
+            return Self.mix(meQuoteFill, Color(white: 0.07), 0.58)
+        }
         return Color(red: 0x1A/255, green: 0x1A/255, blue: 0x1A/255)
     }
 
     private var quoteTextColor: Color {
-        // Dim text inside quote (not bright white like live bubbles)
-        Color(red: 0x8E/255, green: 0x8E/255, blue: 0x8E/255)
+        if replyFromMe {
+            // Soft white on faded purple (not full bright)
+            return Color.white.opacity(0.70)
+        }
+        return Color(red: 0x8E/255, green: 0x8E/255, blue: 0x8E/255)
+    }
+
+    private static func mix(_ a: Color, _ b: Color, _ t: Double) -> Color {
+        let u = min(max(t, 0), 1)
+        let ua = UIColor(a)
+        let ub = UIColor(b)
+        var ar: CGFloat = 0, ag: CGFloat = 0, ab: CGFloat = 0, aa: CGFloat = 0
+        var br: CGFloat = 0, bg: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        ua.getRed(&ar, green: &ag, blue: &ab, alpha: &aa)
+        ub.getRed(&br, green: &bg, blue: &bb, alpha: &ba)
+        return Color(
+            red: Double(ar + (br - ar) * u),
+            green: Double(ag + (bg - ag) * u),
+            blue: Double(ab + (bb - ab) * u),
+            opacity: Double(aa + (ba - aa) * u)
+        )
     }
 
     private var label: String {
@@ -96,8 +118,9 @@ struct ReplyChrome: View {
 
     private var replyBar: some View {
         Capsule()
-            // Soft rail next to muted quote
-            .fill(Color(white: 0.28).opacity(0.9))
+            .fill(replyFromMe
+                  ? Self.mix(meQuoteFill, Color.black, 0.45).opacity(0.85)
+                  : Color(white: 0.28).opacity(0.9))
             .frame(width: 2.5)
             .frame(maxHeight: .infinity)
     }
@@ -110,11 +133,16 @@ struct ReplyChrome: View {
                 .scaledToFill()
                 .frame(width: kind == .story ? 120 : 100, height: kind == .story ? 190 : 100)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.black.opacity(0.28))
+                )
+                .opacity(0.88)
                 .overlay(alignment: .bottomLeading) {
                     if kind == .story {
                         Image(systemName: "play.rectangle.fill")
                             .font(.system(size: 14))
-                            .foregroundColor(.white)
+                            .foregroundColor(.white.opacity(0.85))
                             .padding(8)
                     }
                 }
