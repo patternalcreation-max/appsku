@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
 // MARK: - URL analysis
 
@@ -86,7 +87,7 @@ actor LinkPreviewCache {
     static let shared = LinkPreviewCache()
 
     private let memory = NSCache<NSString, NSData>()
-    private let defaultsKey = "igchat.linkPreview.v1"
+    private let defaultsKey = "igchat.linkPreview.v2"
 
     private var diskIndex: [String: LinkPreviewData] = [:]
     private var loaded = false
@@ -144,16 +145,23 @@ actor LinkPreviewCache {
 // MARK: - Fetcher
 
 enum LinkPreviewFetcher {
-    private static let ua =
+    /// AppsFlyer / OG gateways only unfurl for known crawler UAs (Safari gets a bare SPA).
+    private static let crawlerUserAgents: [String] = [
+        "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+        "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)",
+        "Twitterbot/1.0",
+        "Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)",
         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+    ]
 
     static func fetch(url: URL) async -> LinkPreviewData {
         let urlString = url.absoluteString
-        if let cached = await LinkPreviewCache.shared.get(urlString) {
+        // Keep cache hits that already have an image; otherwise re-fetch (v1 Safari misses).
+        if let cached = await LinkPreviewCache.shared.get(urlString), cached.imageJPEG != nil {
             return cached
         }
 
-        let domain = LinkURLAnalyzer.domain(from: url)
+        let domain = displayDomain(for: url)
         let fallbackTitle = fallbackTitle(for: url, domain: domain)
         var preview = LinkPreviewData(
             url: urlString,
@@ -162,36 +170,66 @@ enum LinkPreviewFetcher {
             imageJPEG: nil
         )
 
-        do {
-            var request = URLRequest(url: url, timeoutInterval: 12)
-            request.setValue(ua, forHTTPHeaderField: "User-Agent")
-            request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            if let html = String(data: data, encoding: .utf8)
-                ?? String(data: data, encoding: .isoLatin1),
-               (200..<400).contains(status) || !html.isEmpty {
+        for ua in crawlerUserAgents {
+            do {
+                var request = URLRequest(url: url, timeoutInterval: 14)
+                request.setValue(ua, forHTTPHeaderField: "User-Agent")
+                request.setValue("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+                request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
+                let (data, response) = try await URLSession.shared.data(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let finalURL = response.url ?? url
+                guard let html = String(data: data, encoding: .utf8)
+                    ?? String(data: data, encoding: .isoLatin1),
+                      !html.isEmpty,
+                      status == 0 || (200..<500).contains(status) else {
+                    continue
+                }
+
                 if let title = metaContent(html, property: "og:title")
                     ?? metaContent(html, name: "twitter:title")
                     ?? htmlTitle(html) {
                     let cleaned = decodeHTMLEntities(title).trimmingCharacters(in: .whitespacesAndNewlines)
                     if !cleaned.isEmpty { preview.title = cleaned }
                 }
+
+                // Prefer host from final redirect / og:url for display (join.pump.fun → pump.fun)
+                preview.domain = displayDomain(for: finalURL)
+                if let ogURLString = metaContent(html, property: "og:url"),
+                   let ogURL = resolveURL(ogURLString, base: finalURL) {
+                    preview.domain = displayDomain(for: ogURL)
+                }
+
                 if let imageURLString = metaContent(html, property: "og:image")
                     ?? metaContent(html, name: "twitter:image")
-                    ?? metaContent(html, property: "og:image:url"),
-                   let imageURL = resolveURL(imageURLString, base: url) {
-                    if let jpeg = await downloadJPEG(from: imageURL) {
+                    ?? metaContent(html, property: "og:image:url")
+                    ?? metaContent(html, property: "og:image:secure_url"),
+                   let imageURL = resolveURL(imageURLString, base: finalURL) {
+                    if let jpeg = await downloadImageJPEG(from: imageURL) {
                         preview.imageJPEG = jpeg
                     }
                 }
+
+                // Stop early once we have a real OG title or image (crawler success).
+                if preview.imageJPEG != nil || preview.title != fallbackTitle {
+                    break
+                }
+            } catch {
+                continue
             }
-        } catch {
-            // Keep fallback title/domain; no image.
         }
 
         await LinkPreviewCache.shared.set(preview)
         return preview
+    }
+
+    /// join.pump.fun / www.pump.fun → pump.fun (matches IG card footer).
+    private static func displayDomain(for url: URL) -> String {
+        var host = LinkURLAnalyzer.domain(from: url)
+        if host.hasPrefix("join."), host.count > 5 {
+            host = String(host.dropFirst(5))
+        }
+        return host
     }
 
     private static func fallbackTitle(for url: URL, domain: String) -> String {
@@ -253,17 +291,29 @@ enum LinkPreviewFetcher {
         return URL(string: trimmed, relativeTo: base)?.absoluteURL
     }
 
-    private static func downloadJPEG(from url: URL) async -> Data? {
+    private static func downloadImageJPEG(from url: URL) async -> Data? {
         do {
-            var request = URLRequest(url: url, timeoutInterval: 12)
-            request.setValue(ua, forHTTPHeaderField: "User-Agent")
+            var request = URLRequest(url: url, timeoutInterval: 14)
+            request.setValue(crawlerUserAgents[0], forHTTPHeaderField: "User-Agent")
+            request.setValue("image/avif,image/webp,image/apng,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200..<400).contains(status), let image = UIImage(data: data) else { return nil }
-            return downscaleJPEG(image, maxWidth: 600)
+            guard (200..<400).contains(status), !data.isEmpty else { return nil }
+            // UIImage handles JPEG/PNG/WebP on iOS 14+
+            guard let image = UIImage(data: data) ?? imageFromDataViaImageIO(data) else { return nil }
+            return downscaleJPEG(image, maxWidth: 720)
         } catch {
             return nil
         }
+    }
+
+    private static func imageFromDataViaImageIO(_ data: Data) -> UIImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(src) > 0,
+              let cg = CGImageSourceCreateImageAtIndex(src, 0, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cg)
     }
 
     private static func downscaleJPEG(_ image: UIImage, maxWidth: CGFloat) -> Data? {
@@ -447,9 +497,10 @@ struct LinkPreviewBlock: View {
                 card
             }
         } else {
+            // Them: card left, action buttons on the RIGHT (same as photo bubbles)
             HStack(alignment: .center, spacing: 8) {
-                LinkPreviewSideButtons()
                 card
+                LinkPreviewSideButtons()
             }
         }
     }
