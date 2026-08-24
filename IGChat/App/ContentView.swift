@@ -281,6 +281,8 @@ struct SentBubbleView: View {
     var gradB: Color = Color(red: 0x3B/255, green: 0x5B/255, blue: 0xDB/255)
     var gradTop: Double = 35
     var gradBottom: Double = 60
+    /// Extra trailing gap from screen edge (Settings).
+    var meEdgeInset: CGFloat = 12
 
     /// Screen-locked fill: sample wash across this bubble’s Y in the content band (below header).
     private func meBubbleBackground() -> some View {
@@ -348,8 +350,8 @@ struct SentBubbleView: View {
                 }
             }
         }
-        // IG: Me bubbles sit in from the right edge (not flush)
-        .padding(.trailing, Theme.meEdgeInset)
+        // IG: Me bubbles sit in from the right edge (Settings: Me edge inset)
+        .padding(.trailing, meEdgeInset)
     }
 }
 
@@ -555,6 +557,7 @@ struct ContentView: View {
     @State private var photoFocusY: Double = 0.5
     @State private var photoZoom: Double = 1.0
     @State private var photoMaxWidth: Double = 280
+    @State private var meEdgeInset: Double = 12
 
     enum EditTarget: Hashable {
         case username
@@ -759,6 +762,7 @@ struct ContentView: View {
                 photoFocusY = l.photoFocusY
                 photoZoom = max(l.photoZoom, 1)
                 photoMaxWidth = l.photoMaxWidth > 0 ? l.photoMaxWidth : 280
+                meEdgeInset = min(max(l.meEdgeInset ?? 12, 0), 40)
             }
         }
         .onChange(of: profile, perform: { IGPersistence.saveProfile($0) })
@@ -781,6 +785,7 @@ struct ContentView: View {
         .onChange(of: photoFocusY, perform: { _ in saveLook() })
         .onChange(of: photoZoom, perform: { _ in saveLook() })
         .onChange(of: photoMaxWidth, perform: { _ in saveLook() })
+        .onChange(of: meEdgeInset, perform: { _ in saveLook() })
         .onChange(of: scenePhase, perform: { phase in
             if phase == .background || phase == .inactive {
                 chatStore.flush(elements)
@@ -837,7 +842,8 @@ struct ContentView: View {
                               washTopInset: safeTop + 96,
                               washBottomInset: 70,
                               gradA: gradA, gradB: gradB,
-                              gradTop: gradTop, gradBottom: gradBottom)
+                              gradTop: gradTop, gradBottom: gradBottom,
+                              meEdgeInset: CGFloat(meEdgeInset))
                     .id("\(element.id)-\(meWashId)")
                     .contentShape(Rectangle())
                     .onTapGesture { beginEdit(.element(element.id), text: element.text) }
@@ -1336,7 +1342,7 @@ struct ContentView: View {
             Text(seenText)
                 .font(.system(size: 11))
                 .foregroundColor(Color(white: 0.56))
-                .padding(.trailing, Theme.meEdgeInset)
+                .padding(.trailing, CGFloat(meEdgeInset))
                 .contentShape(Rectangle())
                 .onTapGesture { beginEdit(.seenHours, text: String(seenHoursAgo)) }
         }
@@ -1779,6 +1785,7 @@ struct ContentView: View {
             photoFocusY: photoFocusY,
             photoZoom: photoZoom,
             photoMaxWidth: photoMaxWidth,
+            meEdgeInset: meEdgeInset,
             landscapeCrop: photoWindow
         ))
     }
@@ -1961,6 +1968,12 @@ struct ContentView: View {
                         .font(.caption).foregroundColor(Theme.secondaryText)
                     Text("Edge soft: \(Int(frostBlur))")
                     Slider(value: $frostBlur, in: 0...40, step: 1)
+                }
+                Section("Me bubble layout") {
+                    Text("Jarak Me bubble dari edge kanan (kayak IG). 0 = mepet, 12 = default.")
+                        .font(.caption).foregroundColor(Theme.secondaryText)
+                    Text("Me edge inset: \(Int(meEdgeInset))pt")
+                    Slider(value: $meEdgeInset, in: 0...32, step: 1)
                 }
                 Section("Photo defaults") {
                     Text("Hold any photo → Crop / frame for per-bubble overrides.")

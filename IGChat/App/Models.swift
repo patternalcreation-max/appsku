@@ -565,6 +565,8 @@ enum IGPersistence {
         var photoFocusY: Double = 0.5
         var photoZoom: Double = 1.0
         var photoMaxWidth: Double = 280
+        /// Extra trailing inset for Me bubbles (pt). Optional for older Look blobs.
+        var meEdgeInset: Double? = nil
         // legacy (ignored in UI; still decoded if present)
         var bandPct: Double = 15
         var headerBlurOnly: Bool = true
