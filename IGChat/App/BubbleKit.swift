@@ -54,20 +54,19 @@ struct ReplyChrome: View {
     /// Live Me bubble color (gradA). Used for Me quotes — faded, never full brightness.
     var meQuoteFill: Color = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
 
-    /// Sender-tinted quote: Me → faded purple from gradA; Them → darker muted grey.
+    /// Sender-tinted quote: Me → recognizable faded purple from gradA; Them → muted grey.
+    /// Keep mix mild (~0.35 toward black) so Me quotes stay purple — heavy wash reads as Them grey.
     private var resolvedQuoteFill: Color {
         if let quoteBubbleFill { return quoteBubbleFill }
         if replyFromMe {
-            // Mix hot Me color toward near-black so it reads pudar vs live bubble.
-            return Self.mix(meQuoteFill, Color(white: 0.07), 0.58)
+            return Self.mix(meQuoteFill, Color.black, 0.35)
         }
         return Color(red: 0x1A/255, green: 0x1A/255, blue: 0x1A/255)
     }
 
     private var quoteTextColor: Color {
         if replyFromMe {
-            // Soft white on faded purple (not full bright)
-            return Color.white.opacity(0.70)
+            return Color.white.opacity(0.75)
         }
         return Color(red: 0x8E/255, green: 0x8E/255, blue: 0x8E/255)
     }
@@ -117,10 +116,9 @@ struct ReplyChrome: View {
     }
 
     private var replyBar: some View {
+        // Always muted grey — never bright, never purple-tinted (any me/them/image).
         Capsule()
-            .fill(replyFromMe
-                  ? Self.mix(meQuoteFill, Color.black, 0.45).opacity(0.85)
-                  : Color(white: 0.28).opacity(0.9))
+            .fill(Color(white: 0.28).opacity(0.9))
             .frame(width: 2.5)
             .frame(maxHeight: .infinity)
     }

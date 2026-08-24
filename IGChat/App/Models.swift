@@ -407,6 +407,21 @@ struct ChatSession: Identifiable, Equatable, Codable {
     var id = UUID()
     var title: String
     var elements: [ChatElement]
+    var updatedAt: Date = Date()
+
+    enum CodingKeys: String, CodingKey { case id, title, elements, updatedAt }
+
+    init(id: UUID = UUID(), title: String, elements: [ChatElement], updatedAt: Date = Date()) {
+        self.id = id; self.title = title; self.elements = elements; self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decode(String.self, forKey: .title)
+        elements = try c.decode([ChatElement].self, forKey: .elements)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+    }
 }
 
 @MainActor
@@ -447,20 +462,28 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    /// Restore-only helper. Does not create a chat and does not force-open a thread.
+    /// currentId is kept for list highlight, but launch UI should stay on the list.
     func openDefault(elements: [ChatElement], title: String) {
-        if let first = chats.first {
-            if currentId == nil { currentId = first.id }
-        } else {
-            let d = ChatSession(title: title, elements: elements)
-            chats.append(d)
-            currentId = d.id
+        // Intentionally no auto-create / auto-select for list-first launch.
+        // Legacy callers may still invoke this; keep as no-op restore guard.
+        _ = elements; _ = title
+        if let id = currentId, !chats.contains(where: { $0.id == id }) {
+            currentId = nil
         }
     }
 
     func snapshotCurrent(_ elements: [ChatElement]) {
         if let idx = chats.firstIndex(where: { $0.id == currentId }) {
             chats[idx].elements = elements
+            chats[idx].updatedAt = Date()
         }
+    }
+
+    /// Flush whatever is currently edited without requiring a chat switch.
+    func flush(_ elements: [ChatElement]) {
+        snapshotCurrent(elements)
+        persist()
     }
 
     func createChat(title: String? = nil, elements: [ChatElement]? = nil) -> ChatSession {
@@ -486,6 +509,8 @@ final class ChatStore: ObservableObject {
 enum IGPersistence {
     private static let profileKey = "igchat.profile.v1"
     private static let lookKey = "igchat.look.v1"
+    private static let settingsKey = "igchat.settings.v1"
+    private static let avatarKey = "igchat.avatar.jpeg.v1"
 
     static func saveProfile(_ p: IGProfile) {
         if let data = try? JSONEncoder().encode(p) {
@@ -495,6 +520,36 @@ enum IGPersistence {
     static func loadProfile() -> IGProfile? {
         guard let data = UserDefaults.standard.data(forKey: profileKey) else { return nil }
         return try? JSONDecoder().decode(IGProfile.self, from: data)
+    }
+
+    struct Settings: Codable, Equatable {
+        var showFollow: Bool = true
+        var following: Bool = false
+        var seenEnabled: Bool = true
+        var seenHoursAgo: Int = 0
+        var learnLinkEnabled: Bool = true
+        var heartHintsEnabled: Bool = true
+        var showStatusAlways: Bool = true
+    }
+    static func saveSettings(_ s: Settings) {
+        if let data = try? JSONEncoder().encode(s) {
+            UserDefaults.standard.set(data, forKey: settingsKey)
+        }
+    }
+    static func loadSettings() -> Settings? {
+        guard let data = UserDefaults.standard.data(forKey: settingsKey) else { return nil }
+        return try? JSONDecoder().decode(Settings.self, from: data)
+    }
+
+    static func saveAvatarJPEG(_ data: Data?) {
+        if let data {
+            UserDefaults.standard.set(data, forKey: avatarKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: avatarKey)
+        }
+    }
+    static func loadAvatarJPEG() -> Data? {
+        UserDefaults.standard.data(forKey: avatarKey)
     }
 
     struct Look: Codable {

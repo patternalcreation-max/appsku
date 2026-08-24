@@ -520,7 +520,10 @@ struct ContentView: View {
 
     // v1.18: multi-chat + look & feel
     @StateObject private var chatStore = ChatStore()
-    @State private var showChatList = false
+    /// Launch always on list; thread only after explicit open.
+    enum AppRoute: Equatable { case list, thread }
+    @State private var route: AppRoute = .list
+    @Environment(\.scenePhase) private var scenePhase
 
     // Look & feel
     @State private var gradA = Color(red: 0xD9/255, green: 0x46/255, blue: 0xEF/255)
@@ -568,23 +571,12 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack {
-            Theme.black.ignoresSafeArea()
-            VStack(spacing: 0) {
-                chatArea
-                InputBarView(tap: { showSettings = true }, placeholder: $profile.barPlaceholder)
-            }
-
-            // Soft canvas-colored frost under header (no material grey aura)
-            HeaderBlurBand(safeTop: safeTop, frostBlur: frostBlur)
-
-            // Floating toolbar — transparent chrome
-            VStack {
-                liveHeader
-                    .padding(.horizontal, 12)
-                    .padding(.top, 6)
-                    .padding(.bottom, 10)
-                Spacer(minLength: 0)
+        Group {
+            switch route {
+            case .list:
+                chatListRoot
+            case .thread:
+                threadRoot
             }
         }
         .preferredColorScheme(.dark)
@@ -709,14 +701,23 @@ struct ContentView: View {
             .preferredColorScheme(.dark)
         }
         .sheet(isPresented: Binding(get: { pickerRef != nil }, set: { if !$0 { pickerRef = nil } })) { dateBucketSheet }
-        .sheet(isPresented: $showChatList) { chatListSheet }
         .onAppear {
+            // List-first: restore sessions/profile/look/settings but do NOT open a thread.
             chatStore.openDefault(elements: elements, title: profile.username)
-            if let saved = chatStore.current, !saved.elements.isEmpty, saved.elements != elements {
-                elements = saved.elements
-            }
             if let p = IGPersistence.loadProfile() { profile = p }
-            if UserDefaults.standard.object(forKey: "igchat.showStatusAlways") != nil {
+            if let jpeg = IGPersistence.loadAvatarJPEG() {
+                avatarImage = ChatImageCodec.image(from: jpeg)
+            }
+            if let s = IGPersistence.loadSettings() {
+                showFollow = s.showFollow
+                following = s.following
+                seenEnabled = s.seenEnabled
+                seenHoursAgo = s.seenHoursAgo
+                learnLinkEnabled = s.learnLinkEnabled
+                heartHintsEnabled = s.heartHintsEnabled
+                showStatusAlways = s.showStatusAlways
+            } else if UserDefaults.standard.object(forKey: "igchat.showStatusAlways") != nil {
+                // migrate legacy single-key toggle
                 showStatusAlways = UserDefaults.standard.bool(forKey: "igchat.showStatusAlways")
             }
             if let l = IGPersistence.loadLook() {
@@ -744,18 +745,54 @@ struct ContentView: View {
         }
         .onChange(of: profile, perform: { IGPersistence.saveProfile($0) })
         .onChange(of: elements, perform: { chatStore.snapshotCurrent($0) })
-        .onChange(of: showStatusAlways, perform: { UserDefaults.standard.set($0, forKey: "igchat.showStatusAlways") })
+        .onChange(of: showFollow, perform: { _ in saveSettings() })
+        .onChange(of: following, perform: { _ in saveSettings() })
+        .onChange(of: seenEnabled, perform: { _ in saveSettings() })
+        .onChange(of: seenHoursAgo, perform: { _ in saveSettings() })
+        .onChange(of: learnLinkEnabled, perform: { _ in saveSettings() })
+        .onChange(of: heartHintsEnabled, perform: { _ in saveSettings() })
+        .onChange(of: showStatusAlways, perform: { _ in saveSettings() })
         .onChange(of: gradA, perform: { _ in saveLook() })
         .onChange(of: gradB, perform: { _ in saveLook() })
-                .onChange(of: frostBlur, perform: { _ in saveLook() })
+        .onChange(of: frostBlur, perform: { _ in saveLook() })
         .onChange(of: gradTop, perform: { _ in saveLook() })
         .onChange(of: gradBottom, perform: { _ in saveLook() })
         .onChange(of: subtitleFontSize, perform: { _ in saveLook() })
-                .onChange(of: photoWindow, perform: { _ in saveLook() })
+        .onChange(of: photoWindow, perform: { _ in saveLook() })
         .onChange(of: photoFocusX, perform: { _ in saveLook() })
         .onChange(of: photoFocusY, perform: { _ in saveLook() })
         .onChange(of: photoZoom, perform: { _ in saveLook() })
         .onChange(of: photoMaxWidth, perform: { _ in saveLook() })
+        .onChange(of: scenePhase, perform: { phase in
+            if phase == .background || phase == .inactive {
+                chatStore.flush(elements)
+                saveSettings()
+                saveLook()
+                IGPersistence.saveProfile(profile)
+            }
+        })
+    }
+
+    private var threadRoot: some View {
+        ZStack {
+            Theme.black.ignoresSafeArea()
+            VStack(spacing: 0) {
+                chatArea
+                InputBarView(tap: { showSettings = true }, placeholder: $profile.barPlaceholder)
+            }
+
+            // Soft canvas-colored frost under header (no material grey aura)
+            HeaderBlurBand(safeTop: safeTop, frostBlur: frostBlur)
+
+            // Floating toolbar — transparent chrome
+            VStack {
+                liveHeader
+                    .padding(.horizontal, 12)
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
+                Spacer(minLength: 0)
+            }
+        }
     }
 
     @ViewBuilder
@@ -1087,7 +1124,7 @@ struct ContentView: View {
         HStack(spacing: 12) {
             Button {
                 chatStore.snapshotCurrent(elements)
-                showChatList = true
+                route = .list
             } label: {
                 GlassCircle(size: 46) {
                     BackButtonArt(height: 19)
@@ -1164,7 +1201,10 @@ struct ContentView: View {
             Task {
                 if let data = try? await newItem.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
-                    await MainActor.run { avatarImage = image }
+                    await MainActor.run {
+                        avatarImage = image
+                        IGPersistence.saveAvatarJPEG(ChatImageCodec.jpeg(image))
+                    }
                 }
             }
         }
@@ -1528,112 +1568,184 @@ struct ContentView: View {
         showEditor = false
     }
 
-    // MARK: Chat list (v1.18) — back button opens this
+    // MARK: Chat list (root) — launch screen
 
-    private var chatListSheet: some View {
+    private var chatListRoot: some View {
         NavigationStack {
-            List {
-                ForEach(chatStore.chats) { chat in
-                    Button {
-                        chatStore.snapshotCurrent(elements)
-                        chatStore.currentId = chat.id
-                        elements = chat.elements
-                        showChatList = false
-                    } label: {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(LinearGradient(colors: [gradA, gradB], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                Text(String(chat.title.prefix(1)).uppercased())
-                                    .font(.system(size: 20, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                            .frame(width: 56, height: 56)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(chat.title)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.white)
-                                Text(lastMessage(in: chat))
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Theme.secondaryText)
-                                    .lineLimit(1)
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            chatStore.deleteChat(chat.id)
-                        } label: { Label("Delete", systemImage: "trash") }
-                    }
-                }
-
-
-                Button {
-                    chatStore.snapshotCurrent(elements)
-                    let chat = chatStore.createChat(
-                        title: "patricia",
-                        elements: IGSeed.patriciaKimchiElements()
-                    )
-                    elements = chat.elements
-                    profile = IGSeed.patriciaProfile()
-                    showChatList = false
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "text.bubble.fill")
-                            .foregroundColor(Theme.barPurple)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("New: Patricia (Kimchi)")
+            ZStack {
+                Theme.black.ignoresSafeArea()
+                if chatStore.chats.isEmpty {
+                    VStack(spacing: 18) {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.system(size: 44))
+                            .foregroundColor(Theme.secondaryText)
+                        Text("No chats yet")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text("Start a new conversation to mock an IG inbox thread.")
+                            .font(.system(size: 14))
+                            .foregroundColor(Theme.secondaryText)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 36)
+                        Button {
+                            openNewBlankChat()
+                        } label: {
+                            Text("New Chat")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
-                            Text("Load script · Me / Them")
-                                .font(.system(size: 12))
-                                .foregroundColor(Theme.secondaryText)
+                                .padding(.horizontal, 28)
+                                .padding(.vertical, 12)
+                                .background(Capsule().fill(Theme.barPurple))
                         }
-                        Spacer(minLength: 0)
+                        .buttonStyle(.plain)
                     }
-                    .padding(.vertical, 4)
-                }
-                .buttonStyle(.plain)
-                .listRowBackground(Theme.black)
+                } else {
+                    List {
+                        ForEach(chatStore.chats) { chat in
+                            Button {
+                                openChat(chat)
+                            } label: {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(LinearGradient(
+                                                colors: [gradA, gradB],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ))
+                                        Text(String(chat.title.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased())
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                    .frame(width: 56, height: 56)
 
-                Button {
-                    chatStore.snapshotCurrent(elements)
-                    var chat = chatStore.createChat()
-                    if let i = chatStore.chats.firstIndex(where: { $0.id == chat.id }) {
-                        chatStore.chats[i].title = profile.username.isEmpty ? chat.title : profile.username
-                        chat = chatStore.chats[i]
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(alignment: .firstTextBaseline) {
+                                            Text(chat.title)
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(.white)
+                                                .lineLimit(1)
+                                            Spacer(minLength: 8)
+                                            Text(listTime(for: chat))
+                                                .font(.system(size: 12))
+                                                .foregroundColor(Theme.secondaryText)
+                                        }
+                                        Text(lastMessage(in: chat))
+                                            .font(.system(size: 14))
+                                            .foregroundColor(Theme.secondaryText)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Theme.black)
+                            .listRowSeparatorTint(Color.white.opacity(0.08))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    chatStore.deleteChat(chat.id)
+                                    if chatStore.chats.isEmpty {
+                                        elements = IGSeed.defaultElements()
+                                    }
+                                } label: { Label("Delete", systemImage: "trash") }
+                            }
+                        }
                     }
-                    elements = chat.elements
-                    showChatList = false
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(Theme.barPurple)
-                        Text("New chat")
-                            .font(.system(size: 16, weight: .semibold))
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .navigationTitle("Chats")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            openNewBlankChat()
+                        } label: {
+                            Label("New Chat", systemImage: "plus.bubble")
+                        }
+                        Button {
+                            openPatriciaChat()
+                        } label: {
+                            Label("Patricia (Kimchi) script", systemImage: "text.bubble")
+                        }
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.white)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
                 }
-                .buttonStyle(.plain)
-                .listRowBackground(Theme.black)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(Theme.black.ignoresSafeArea())
-            .navigationTitle("Chats")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { showChatList = false }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        openNewBlankChat()
+                    } label: {
+                        Text("New Chat")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Theme.barPurple)
+                    }
                 }
             }
         }
         .preferredColorScheme(.dark)
+    }
+
+    private func openChat(_ chat: ChatSession) {
+        if route == .thread {
+            chatStore.snapshotCurrent(elements)
+        }
+        chatStore.currentId = chat.id
+        elements = chat.elements
+        route = .thread
+    }
+
+    private func openNewBlankChat() {
+        if route == .thread {
+            chatStore.snapshotCurrent(elements)
+        }
+        let title = profile.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let chat = chatStore.createChat(
+            title: title.isEmpty ? "New chat" : title,
+            elements: IGSeed.defaultElements()
+        )
+        elements = chat.elements
+        route = .thread
+    }
+
+    private func openPatriciaChat() {
+        if route == .thread {
+            chatStore.snapshotCurrent(elements)
+        }
+        let chat = chatStore.createChat(
+            title: "patricia",
+            elements: IGSeed.patriciaKimchiElements()
+        )
+        elements = chat.elements
+        profile = IGSeed.patriciaProfile()
+        route = .thread
+    }
+
+    private func listTime(for chat: ChatSession) -> String {
+        if let stamp = chat.elements.last(where: { $0.style == .date })?.text, !stamp.isEmpty {
+            return stamp
+        }
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f.string(from: chat.updatedAt).uppercased()
+    }
+
+    private func saveSettings() {
+        IGPersistence.saveSettings(.init(
+            showFollow: showFollow,
+            following: following,
+            seenEnabled: seenEnabled,
+            seenHoursAgo: seenHoursAgo,
+            learnLinkEnabled: learnLinkEnabled,
+            heartHintsEnabled: heartHintsEnabled,
+            showStatusAlways: showStatusAlways
+        ))
+        UserDefaults.standard.set(showStatusAlways, forKey: "igchat.showStatusAlways")
     }
 
     private func saveLook() {
